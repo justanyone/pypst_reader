@@ -50,3 +50,6 @@ htmlcov/
 
 # rtk upstream checkout, if the rtk skill is bootstrapped here
 .claude/skills/rtk/upstream/
+
+# Per-row agent worktrees (docs/AGENTS.md). Branches live in .git; the dirs are scratch.
+.worktrees/

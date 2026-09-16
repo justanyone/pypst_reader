@@ -27,7 +27,7 @@ could be a lint already is one.
 
 | file | rule |
 |---|---|
-| `MasterToDo.md` | edit **only your row's line**; never reorder or renumber; new rows go at the end with the next free id |
+| `MasterToDo.md` | edit **only your row's line**; never reorder or renumber; new rows go at the end with the next free id. **When an orchestrator is landing rows** (it says so in your brief), do not touch this file at all — put the evidence in your `todo/` block and the orchestrator moves the row when it lands your branch |
 | `todo/T*.md` | edit only your block; add a new block at the end of the cluster file |
 | `docs/INTERFACES.md` | the contract between layers. Changing a signature another row depends on is a message to that row's agent *before* the change, and a note in the file's changelog |
 | `src/pypst/errors.py`, `limits.py` | additive only — add an exception or a constant; never rename one |
@@ -36,6 +36,13 @@ could be a lint already is one.
 | `tests/fixtures/public/` | only via the procedure in its README; the hook and CI enforce the manifest |
 | `docs/UPSTREAM.txt` | moving the pin is its own row; it invalidates every golden and every `Upstream:` header |
 | `.gitignore`, `scripts/git-hooks/pre-commit`, CI `no-mail-stores` | do not weaken; extend only through ADR-0004's manifest |
+
+## Worktrees
+
+Each in-flight row gets `.worktrees/<ID>/` (gitignored) on branch `row/<ID>`,
+created by the orchestrator with `reference/` symlinked from the main tree so
+`scripts/oracle.sh` works there. Run `uv sync` once in the worktree; it gets
+its own `.venv`. Never `cd` into another row's worktree or into the main tree.
 
 ## What runs in parallel
 
