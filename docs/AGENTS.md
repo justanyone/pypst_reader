@@ -52,6 +52,15 @@ property-type decoders, P23 id types, P11 limits, P12 corruption generator,
 P17–P20 test infrastructure, P28 spec vectors) touch no NDB code and can all
 run beside it. Two agents never hold the same module.
 
+**The box is shared.** Memory, not the dependency graph, is the usual limit:
+on 2026-09-16 the kernel OOM killer took a VS Code window while this repo and
+another autonomous session each ran three agents. The orchestrator keeps at
+most three agents, and **at most two whenever another autonomous Claude
+session is live on the machine**; it checks `free -m` before every spawn and
+waits while `MemAvailable` is under 6 GiB or the load average is above 8.
+Agents run pytest single-process under `choom -n 900` (so the kernel kills the
+test run before an editor) and never build Rust while the box is loaded.
+
 ## Interfaces are written before the code
 
 `docs/INTERFACES.md` gives every layer's public surface — module, class,

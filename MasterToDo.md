@@ -43,9 +43,8 @@ can start today.
 
 | Id | Pri | State | One line | Work |
 |---|---|---|---|---|
-| P04-HEAP | 2 | ⏳ in flight — agent/p04-heap 2026-09-16 | `ltp/heap.py` + `ltp/tree.py` — heap-on-node and the BTree-on-heap. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p04-heap) |
-| P05-PC | 2 | ✗ blocked on P04 | `ltp/prop_context.py` — property contexts over the P22 decoders. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p05-pc) |
-| P06-TC | 2 | ✗ blocked on P04 | `ltp/table_context.py` — table contexts. Largest LTP file; split if it overruns. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p06-tc) |
+| P05-PC | 2 | ⏳ in flight — agent/p05-pc 2026-09-16 | `ltp/prop_context.py` — property contexts over the P22 decoders. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p05-pc) |
+| P06-TC | 2 | ready (P04 done; waiting for an agent slot) | `ltp/table_context.py` — table contexts. Largest LTP file; split if it overruns. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p06-tc) |
 | P24-CONTRACT | 2 | ⏳ in flight — agent/p24-contract 2026-09-16 | The `PstError`-or-nothing harness: every public entry point × every corrupt file × every fixture; any other exception type is a failure. | [`todo/T06-testing.md`](todo/T06-testing.md#p24-contract) |
 | P25-HYPOTHESIS | 5 | ✗ not started | Decide (ADR paragraph) and add `hypothesis` as a dev-only dependency; first property tests over encode/crc/ids. | [`todo/T06-testing.md`](todo/T06-testing.md#p25-hypothesis) |
 | P26-COVERAGE | 5 | ✗ not started | `pytest-cov` + a coverage floor ratchet beside the ruff ratchet. A number that may not go down, never cited as evidence of correctness. | [`todo/T06-testing.md`](todo/T06-testing.md#p26-coverage) |
@@ -83,6 +82,7 @@ can start today.
 | P19-ORACLE-DUMP | ✅ 2026-09-15 | `oracle/` crate + `dump_messages` example (links the pinned crate, copies nothing): folders, messages, recipients, attachments, body lengths+CRCs, embedded-message recursion; goldens 10/10 fixtures, deterministic; 45 tests. **Found an upstream bug at the pin:** `PropertyType::try_from` lacks `PtypObject` (0x000D), so upstream cannot open any embedded-message attachment — the oracle cannot arbitrate that case (see P09). Also: upstream reads both ANSI stores and opens `pstd-inline-cid` at message level. |
 | P12-FUZZ | ✅ 2026-09-16 | `tests/corrupt.py` mutation generator (8 families, ~400–470 mutations per base store, seeded, deterministic) + `corruption_harness.py` (LEAK/TYPE/SILENT/HANG verdicts, watchdog) + `scripts/fuzz_sweep.py`. 18,527 mutations × header/BTree/DL entry points: **0 leaks, 0 hangs, 0 wrong types.** 67 tests (+~5 s); P03/P04 mutation stubs importorskip-guarded. |
 | P03-BLOCK | ✅ 2026-09-16 | `ndb/block.py`: data blocks, XBLOCK/XXBLOCK trees, SLBLOCK/SIBLOCK sub-node trees, `BlockReader.node_data` — the first real bytes out of a real file; `debug btrees` now prints the full upstream output, `debug node` gives length+CRC without content. Goldens **byte-identical 8/8**, private 2/2 per node live, ~45 denial cases incl. the size-boundary trap and 4 GiB lcbTotal refused before any read, 33/35 mutants red. Matches exactly upstream's trailer checks (no wSig). P12's block stubs now live. |
+| P04-HEAP | ✅ 2026-09-16 | `ltp/heap.py` (`HeapId`/`HeapNodeId` distinct types, `HeapNode.from_node`, `get`/`get_hnid` incl. the sub-node arm) + `ltp/tree.py` (`HeapTree` iteration/`find`); `BlockReader.read_data_blocks`; `debug heap`, `debug bth`. Store-PC BTH == `read_store_props` key-for-key on 7/7 goldens, every heap-borne value decodes to the golden's value; row-index keys == golden `Row:` ids; NID 0x61 entry stream 8× the golden count on 8/8; private 2/2 structure-only. 261 tests, 27 mutants all red after one boundary test was added; `heap_lies` family (22 lies) in the corruption sweep; P12's P04 stubs live. Divergences documented: undecodable BTH tail/typed record HID → `PstFormatError` (the P19 upstream bug), offsets past the block and freed items refused. |
 
 ## Still the user's call
 
