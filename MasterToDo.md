@@ -45,7 +45,7 @@ can start today.
 |---|---|---|---|---|
 | P02-BTREE | 1 | ⏳ in flight — agent/p02-btree 2026-09-15 | `ndb/page.py` + `ndb/btree.py` — the node and block B-trees, with a depth limit and a cycle guard that upstream does not need. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p02-btree) |
 | P03-BLOCK | 2 | ✗ blocked on P02 | `ndb/block.py` — data blocks, XBLOCK/XXBLOCK trees, subnode BTrees; wire in `encode.py` and `crc.py`. First point at which real bytes come out of a real file. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p03-block) |
-| P19-ORACLE-DUMP | 2 | ✗ not started | `oracle/dump_messages.rs` — our own non-interactive Rust example against the pinned crate: every folder, message, recipient, attachment, embedded message. Captured to goldens like the others. Replaces the `browse_pst` TUI as P08/P09's oracle. | [`todo/T06-testing.md`](todo/T06-testing.md#p19-oracle-dump) |
+| P19-ORACLE-DUMP | 2 | ⏳ in flight — agent/p19-oracle-dump 2026-09-15 | `oracle/dump_messages.rs` — our own non-interactive Rust example against the pinned crate: every folder, message, recipient, attachment, embedded message. Captured to goldens like the others. Replaces the `browse_pst` TUI as P08/P09's oracle. | [`todo/T06-testing.md`](todo/T06-testing.md#p19-oracle-dump) |
 | P04-HEAP | 2 | ✗ blocked on P03 | `ltp/heap.py` + `ltp/tree.py` — heap-on-node and the BTree-on-heap. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p04-heap) |
 | P05-PC | 2 | ✗ blocked on P04 | `ltp/prop_context.py` — property contexts over the P22 decoders. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p05-pc) |
 | P06-TC | 2 | ✗ blocked on P04 | `ltp/table_context.py` — table contexts. Largest LTP file; split if it overruns. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p06-tc) |
