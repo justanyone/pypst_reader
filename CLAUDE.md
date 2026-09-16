@@ -15,10 +15,13 @@ No write support: this reads mail stores, it never produces one.
 
 ## Repo state
 
-The encoding and CRC layers are ported, tested, and green (`uv run pytest`).
-Nothing above them exists yet: **this package cannot open a PST**. The next
-move is P23 (the packed id types) then `ndb/header.py`, deliberately first
-because it is the smallest thing the oracle can contradict.
+Every layer of the read path is ported and green (`uv run pytest`): NDB
+(header, pages, B-trees, blocks), LTP (heap, BTH, property and table
+contexts), and messaging (store, named properties, folders, messages,
+recipients, attachments, embedded messages). `pypst.open()` opens a Unicode
+PST and walks it; `python -m pypst.debug messages <file>` reproduces the
+Rust oracle's dump byte for byte on every corpus store. What is left is
+P10 (EML export, not a port) and the backlog in `MasterToDo.md`.
 
 Two decisions are already made and are not re-litigated in a row:
 **Unicode stores only** (ADR-0003; ANSI is refused and belongs to a sibling

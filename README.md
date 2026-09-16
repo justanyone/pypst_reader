@@ -3,9 +3,10 @@
 A port of the **read path** of [microsoft/outlook-pst-rs](https://github.com/microsoft/outlook-pst-rs)
 (MIT) into Python, with no dependencies outside the standard library.
 
-> **Status: early.** The encoding and CRC layers are ported and tested. The
-> NDB, LTP and messaging layers are not. It cannot open a PST yet. See
-> [docs/PORTING-PLAN.md](docs/PORTING-PLAN.md).
+> **Status:** the read path is fully ported and verified against the Rust
+> oracle: `pypst.open()` opens a Unicode PST and walks folders, messages,
+> recipients and attachments. EML export (P10) is in progress. See
+> `MasterToDo.md`.
 
 ## Why this exists
 
