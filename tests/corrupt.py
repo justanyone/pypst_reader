@@ -281,6 +281,157 @@ def file_with_pages(pages: dict[int, bytes], size: int | None = None) -> bytes:
     return bytes(out)
 
 
+# --- blocks (P03) ------------------------------------------------------------
+#
+# [MS-PST] 2.2.2.8. As above, these duplicate the constants in pypst.ndb.block
+# on purpose. Every builder returns the WHOLE 64-byte-aligned allocation —
+# data, padding, 16-byte trailer — ready to drop into `file_with_blocks` at
+# the offset a BBT entry names. P12 (the corruption generator) imports them;
+# keep the signatures simple.
+
+BLOCK_TRAILER_SIZE = 16
+MAX_BLOCK_DATA_SIZE = 8192 - BLOCK_TRAILER_SIZE
+BTYPE_DATA_TREE = 0x01
+BTYPE_SUBNODE = 0x02
+BID_INTERNAL = 0x2  # bit 1 of a BID: XBLOCK/XXBLOCK/SLBLOCK/SIBLOCK
+
+
+def block_alloc_size(cb: int) -> int:
+    """[MS-PST] 2.2.2.8: the smallest multiple of 64 holding `cb` data bytes plus the trailer."""
+    total = cb + BLOCK_TRAILER_SIZE
+    return -(-total // 64) * 64
+
+
+def block_sig(index: int, block_id: int) -> int:
+    """[MS-PST] 5.5 for a block: the same fold as `page_sig`."""
+    return page_sig(index, block_id)
+
+
+def block_trailer(cb: int, block_id: int, index: int, crc: int, *, signature: int | None = None) -> bytes:
+    """A 16-byte Unicode BLOCKTRAILER: cb, wSig, dwCRC, bid. `signature` defaults to the correct one."""
+    sig = block_sig(index, block_id) if signature is None else signature
+    return struct.pack("<HHIQ", cb, sig, crc, block_id)
+
+
+def _sealed_block(
+    body: bytes,
+    block_id: int,
+    index: int,
+    *,
+    cb: int | None = None,
+    crc: int | None = None,
+    trailer_bid: int | None = None,
+    signature: int | None = None,
+    trailer_offset: int | None = None,
+) -> bytes:
+    """`body` padded to its allocation with the trailer last (or at `trailer_offset`)."""
+    n = len(body) if cb is None else cb
+    alloc = block_alloc_size(len(body))
+    out = bytearray(alloc)
+    out[: len(body)] = body
+    crc_value = compute_crc(0, body) if crc is None else crc
+    bid = block_id if trailer_bid is None else trailer_bid
+    at = alloc - BLOCK_TRAILER_SIZE if trailer_offset is None else trailer_offset
+    out[at : at + BLOCK_TRAILER_SIZE] = block_trailer(n, bid, index, crc_value, signature=signature)
+    return bytes(out)
+
+
+def data_block(
+    payload: bytes,
+    block_id: int,
+    index: int,
+    *,
+    cb: int | None = None,
+    crc: int | None = None,
+    trailer_bid: int | None = None,
+    signature: int | None = None,
+) -> bytes:
+    """A whole data block: `payload` (already encoded, if the store encodes), padding, trailer.
+
+    `cb` overrides the trailer's count (default `len(payload)`), `crc` the
+    trailer's CRC (default the correct one over `payload`), `trailer_bid`
+    the trailer's bid (default `block_id`), `signature` the wSig (default
+    the correct one for `index`). The BBT entry that names this block
+    should carry `len(payload)` as its cb and `block_id` as its bid.
+    """
+    if not 1 <= len(payload) <= MAX_BLOCK_DATA_SIZE:
+        raise ValueError(f"a data block holds 1..{MAX_BLOCK_DATA_SIZE} bytes, not {len(payload)}")
+    return _sealed_block(payload, block_id, index, cb=cb, crc=crc, trailer_bid=trailer_bid, signature=signature)
+
+
+def xblock(
+    entries: list[int],
+    block_id: int,
+    index: int,
+    *,
+    level: int = 1,
+    total_size: int = 0,
+    count: int | None = None,
+    btype: int = BTYPE_DATA_TREE,
+    cb: int | None = None,
+    crc: int | None = None,
+    trailer_bid: int | None = None,
+) -> bytes:
+    """A whole XBLOCK (`level` 1) or XXBLOCK (`level` 2): btype, cLevel, cEnt, lcbTotal, rgbid, padding, trailer.
+
+    `entries` are raw BIDs. `count` overrides cEnt (default `len(entries)`);
+    `cb` overrides the trailer's cb (default the header + entries size).
+    The block's own `block_id` should have the internal bit (`BID_INTERNAL`)
+    set, as should the BBT entry's; `trailer_bid` can disagree on purpose.
+    """
+    n = len(entries) if count is None else count
+    body = struct.pack("<BBHI", btype, level, n, total_size) + struct.pack(f"<{len(entries)}Q", *entries)
+    return _sealed_block(body, block_id, index, cb=cb, crc=crc, trailer_bid=trailer_bid)
+
+
+def slblock(
+    entries: list[tuple[int, int, int]],
+    block_id: int,
+    index: int,
+    *,
+    level: int = 0,
+    count: int | None = None,
+    padding: int = 0,
+    btype: int = BTYPE_SUBNODE,
+    cb: int | None = None,
+    crc: int | None = None,
+    trailer_bid: int | None = None,
+) -> bytes:
+    """A whole SLBLOCK: btype, cLevel 0, cEnt, dwPadding, then (nid, bidData, bidSub) SLENTRYs of 24 bytes."""
+    n = len(entries) if count is None else count
+    body = struct.pack("<BBHI", btype, level, n, padding) + b"".join(struct.pack("<QQQ", *e) for e in entries)
+    return _sealed_block(body, block_id, index, cb=cb, crc=crc, trailer_bid=trailer_bid)
+
+
+def siblock(
+    entries: list[tuple[int, int]],
+    block_id: int,
+    index: int,
+    *,
+    level: int = 1,
+    count: int | None = None,
+    padding: int = 0,
+    btype: int = BTYPE_SUBNODE,
+    cb: int | None = None,
+    crc: int | None = None,
+    trailer_bid: int | None = None,
+) -> bytes:
+    """A whole SIBLOCK: btype, cLevel 1, cEnt, dwPadding, then (nid, bidNextLevel) SIENTRYs of 16 bytes."""
+    n = len(entries) if count is None else count
+    body = struct.pack("<BBHI", btype, level, n, padding) + b"".join(struct.pack("<QQ", *e) for e in entries)
+    return _sealed_block(body, block_id, index, cb=cb, crc=crc, trailer_bid=trailer_bid)
+
+
+def file_with_blocks(blocks: dict[int, bytes], size: int | None = None) -> bytes:
+    """An in-memory file holding each block (or page) at its offset, zero elsewhere.
+
+    The same shape as `file_with_pages`: a synthetic store for the block
+    reader is a BBT leaf page (`btree_page(PTYPE_BBT, 0, [bbt_entry(...)],
+    …)`) plus the blocks its entries name, and no header — `BlockReader`
+    takes the crypt method from a `Header` the test supplies.
+    """
+    return file_with_pages(blocks, size)
+
 # --- the mutation generator (P12) -------------------------------------------------
 #
 # Everything below turns one *good* Unicode store into a stream of bad ones.

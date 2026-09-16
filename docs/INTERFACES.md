@@ -342,26 +342,87 @@ extends the dumper. `python -m pypst.debug density_list` prints
 `read_density_list`'s seven lines; a store without the page is refused (exit 1)
 where upstream prints an `Error:` line with exit 0.
 
-## `pypst.ndb.block` — P03
+## `pypst.ndb.block` — landed (P03)
+
+Unicode arm only. One block at a time through the block B-tree, the
+XBLOCK/XXBLOCK data trees and the SLBLOCK/SIBLOCK subnode trees over them.
 
 ```python
-MAX_BLOCK_SIZE = 8192
-def block_size(size: int) → int      # data size → 64-byte-aligned allocation incl. 16-byte trailer
+MAX_BLOCK_SIZE = 8192; BLOCK_TRAILER_SIZE = 16; MAX_BLOCK_DATA_SIZE = 8176; TREE_HEADER_SIZE = 8
+BTYPE_DATA_TREE = 0x01; BTYPE_SUBNODE_TREE = 0x02
+BLOCK_TRAILER_FORMAT = "<HHIQ"; DATA_TREE_HEADER_FORMAT = SUBNODE_HEADER_FORMAT = "<BBHI"
+DATA_TREE_ENTRY_FORMAT = "<Q"; SUBNODE_LEAF_ENTRY_FORMAT = "<QQQ"; SUBNODE_INTERMEDIATE_ENTRY_FORMAT = "<QQ"
+
+def block_size(size: int) → int      # DATA size (BBT cb) → 64-byte-aligned allocation INCLUDING the 16-byte trailer;
+                                     # !PstFormatError outside 1..=8176 (upstream's block_size takes cb+16 and asserts)
 
 @dataclass(frozen=True, slots=True)
-class BlockTrailer:  size: int; signature: int; crc: int; block_id: BlockId
-    cyclic_key → int                 # low 32 bits of block_id, for CryptMethod.CYCLIC
+class BlockTrailer:  size: int; signature: int; crc: int; block_id: BlockId;  SIZE = 16
+    unpack_from(buf, offset=0) → BlockTrailer        # !PstFormatError cb outside 1..=8176, short buffer
+    cyclic_key → int                                 # search_key & 0xFFFFFFFF (upstream's `as u32`)
+    verify_block_id(self, is_internal: bool) → None  # !PstFormatError when the bid's internal bit disagrees
+    verify_crc(self, data) → None                    # !PstFormatError; over the cb bytes only
+    expected_signature(self, index: ByteIndex) → int # informational — NOT enforced (upstream ignores wSig)
+
+@dataclass(frozen=True, slots=True)
+class DataBlock:  data: bytes (decoded); trailer: BlockTrailer
+@dataclass(frozen=True, slots=True)
+class XBlock:     level: int (1 XBLOCK, 2 XXBLOCK — one class, as upstream's DataTreeBlock); total_size: int (lcbTotal);
+                  entries: tuple[BlockId, ...]; trailer: BlockTrailer
+@dataclass(frozen=True, slots=True)
+class SubNodeLeafEntry:          node: NodeId; data: BlockId; sub_node: BlockId | None;  SIZE = 24;  unpack_from
+                                 # nid is the 8-byte field truncated to 32 bits (upstream `as u32`); sub_node None when bidSub == 0
+@dataclass(frozen=True, slots=True)
+class SubNodeIntermediateEntry:  node: NodeId; next_level: BlockId;  SIZE = 16;  unpack_from
+@dataclass(frozen=True, slots=True)
+class SubNodeLeafBlock:          level: int (0); entries: tuple[SubNodeLeafEntry, ...]; trailer
+@dataclass(frozen=True, slots=True)
+class SubNodeIntermediateBlock:  level: int (> 0); entries: tuple[SubNodeIntermediateEntry, ...]; trailer
 
 class BlockReader:
-    __init__(self, f: BinaryIO, header: Header, bbt: BlockBTree, limits: Limits)
-    read_block(self, ref: BlockRef, size: int, *, is_internal: bool) → bytes   # raw, trailer-verified, DEcoded unless internal
-    read_data(self, block: BlockId) → bytes        # follows XBLOCK/XXBLOCK; total > limits.MAX_ALLOCATION → PstLimitError
-    read_subnode_tree(self, block: BlockId) → dict[NodeId, SubNodeEntry]      # SLBLOCK/SIBLOCK, depth-limited
-    node_data(self, entry: NodeBTreeEntry) → bytes                             # the convenience every layer above uses
-
-@dataclass(frozen=True, slots=True)
-class SubNodeEntry:  node: NodeId; data: BlockId; sub_node: BlockId | None
+    __init__(self, f: BinaryIO, header: Header, bbt: BlockBTree, limits: Limits = DEFAULT_LIMITS)
+    limits → Limits; crypt_method → CryptMethod
+    find(self, block: BlockId) → BlockBTreeEntry                     # the BBT lookup; !PstNotFoundError
+    read_block(self, ref: BlockRef, size: int, *, is_internal: bool) → bytes
+        # the `size` (= cb) bytes, one seek + one read of block_size(size); data: trailer cb == size, bid not internal,
+        # CRC, then DEcoded (cyclic key = trailer bid); internal: bid internal, CRC, trailer located from the header's
+        # implied size as upstream, NEVER decoded. !PstFormatError short read, ref + allocation > limits.max_file_size
+    read_data_tree(self, block: BlockId) → DataBlock | XBlock         # one block; the BBT bid's internal bit decides
+    read_subnode_block(self, block: BlockId) → SubNodeLeafBlock | SubNodeIntermediateBlock   # cLevel > 0 → SIBLOCK
+    read_data(self, block: BlockId) → bytes            # leaves of the tree in order; !PstLimitError lcbTotal > max_allocation
+                                                       # (checked BEFORE any child read), assembled > max_allocation,
+                                                       # internal depth > max_xblock_depth (root = 1), a revisited internal block
+    read_subnode_tree(self, block: BlockId) → dict[NodeId, SubNodeLeafEntry]   # first entry per NID wins;
+                                                       # !PstLimitError depth > max_subnode_depth, cycle, entries > max_items
+    node_data(self, entry: NodeBTreeEntry) → bytes    # read_data(entry.data); a zero bidData is !PstNotFoundError (as upstream)
 ```
+
+Verified on a block, exactly upstream's checks in upstream's order (module
+docstring): trailer `cb` in 1..=8176; data block `cb` == BBT `cb`, bid not
+internal, CRC; tree block type byte, `cEnt × entry ≤ cb − 8`, bid internal,
+CRC, subnode `dwPadding == 0`. Not verified, as upstream: `wSig`, the
+trailer bid's index, XBLOCK `cLevel`, `lcbTotal` against the assembled
+length, slack in a tree block's `cb`. `PstNotFoundError` from the BBT
+propagates unwrapped for every absent bid.
+
+`python -m pypst.debug btrees` now prints upstream's `read_btrees` output in
+full — data trees (`Data Tree Level:`/`Total Size:`/`Block:`, a data
+block's TRAILER bid and decoded length) and sub-node trees (`Sub-Node Block
+Entries:`, `PageRef:`, nested `Sub-Node Block:`), quirks included — byte-
+identical on 8/8 Unicode corpus stores. `python -m pypst.debug node <file>
+<nid-hex>` prints `Node:`, `Data Length:`, `Data CRC32:` (zlib), `Sub-Nodes:`
+— the way to compare a node's bytes without printing them. `main` now passes
+extra positional arguments to a dumper that declares them.
+
+Changes from the draft, and why: `block_size` takes the data size and adds
+the trailer itself (the draft said so; upstream's takes cb+16 — noted so a
+reader of both is not misled). `SubNodeEntry` became `SubNodeLeafEntry`
+(upstream's `LeafSubNodeTreeEntry`) beside `SubNodeIntermediateEntry`; the
+per-block readers `read_data_tree` / `read_subnode_block`, `find`, the
+four block dataclasses and the trailer's `verify_*` split were added because
+the dumper and the tests need one block at a time. `limits` defaults to
+`DEFAULT_LIMITS`. `tests/corrupt.py` gained the block builders (`data_block`,
+`xblock`, `slblock`, `siblock`, `block_trailer`, `file_with_blocks`) for P12.
 
 ## `pypst.ltp.heap` + `pypst.ltp.tree` — P04
 
@@ -678,3 +739,12 @@ __all__ = [...]                      # the P24 contract harness iterates this
   non-int with `TypeError` (ruff's default TRY004; the draft said ValueError
   for both). `prop_type.DEFAULT_MAX_ITEMS` is now `limits.MAX_MV_ITEMS`,
   value unchanged.
+- 2026-09-16 — P03 landed `pypst.ndb.block`; its section now describes what
+  was built. Changes from the draft: `SubNodeEntry` → `SubNodeLeafEntry` plus
+  `SubNodeIntermediateEntry`; `DataBlock`/`XBlock`/`SubNodeLeafBlock`/
+  `SubNodeIntermediateBlock` and the per-block `read_data_tree` /
+  `read_subnode_block` / `find` added; `BlockTrailer.verify` is
+  `verify_block_id` + `verify_crc` (upstream checks them at different points);
+  `limits` defaults; the module constants named. `debug btrees` prints the
+  full `read_btrees` output; `debug node` registered; `debug.main` passes
+  extra positional arguments through.
