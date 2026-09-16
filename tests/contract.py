@@ -23,8 +23,9 @@ once, under the module that defines it.
 **Reach** — `ADAPTERS` maps each entry point to a builder that, given a
 `Store` (the bytes, a `Limits`, and lazily the parsed header, the two
 B-trees, a `BlockReader`, the NBT and BBT entries, a handful of pages,
-every node opened as a heap and the BTH over each of those, a temp file
-for the dumpers), yields the argument tuples to call it with.
+every node opened as a heap, the BTH over each of those and the property
+context of each heap that is one, a temp file for the dumpers), yields the
+argument tuples to call it with.
 `NOT_STORE_INPUT` names, with a reason, every public callable that takes
 no store-derived input (a check helper, a dataclass over already-parsed
 values, an id's `pack`). Three rules exclude classes automatically:
@@ -86,8 +87,10 @@ import pypst
 from pypst import block_sig, crc, debug, encode, limits, rtf
 from pypst.errors import PstError
 from pypst.limits import DEFAULT_LIMITS, Limits
-from pypst.ltp import heap, prop_type, tree
+from pypst.ltp import heap, prop_context, prop_type, tree
 from pypst.ltp.heap import HeapId, HeapNode, HeapNodeId
+from pypst.ltp.prop_context import PropertyContext, PropertyRecord
+from pypst.ltp.prop_type import PropType
 from pypst.ndb import block, btree, header, ids, page, root
 from pypst.ndb.block import SubNodeLeafEntry
 from pypst.ndb.ids import BlockId, ByteIndex, NodeId
@@ -233,6 +236,7 @@ TCINFO_FORMAT = "<BB4HIII"
 MAX_HEAP_BLOCK_INDEX = 0xFFFF  # [MS-PST] 2.3.1.1 `hidBlockIndex` is 16 bits; past this `HeapId.from_parts` refuses
 MAX_SUBNODE_HEAPS = 8  # sub-node heaps opened per store: an attachment's or an embedded message's own PC
 ABSENT_SUBNODE = 0xFFFF_FFE2  # an HNID with type bits, naming a sub-node no tree holds
+BAD_CODEPAGE = "no-such-codepage"  # a PC built on it must refuse when it decodes a string, never raise LookupError
 
 
 @dataclass(frozen=True, slots=True)
@@ -415,6 +419,71 @@ class Store:
             out.append((f"{h.label} block 0", h.heap.block(0)))
             with contextlib.suppress(PstError):
                 out.append((f"{h.label} user root", bytes(h.heap.get(h.heap.user_root))))
+        return out
+
+    def _open_contexts(self) -> list[tuple[str, PropertyContext]]:
+        """The PC over every heap that is one; a TABLE or TREE heap refuses, and that refusal is judged at the constructor's own adapter."""
+        out: list[tuple[str, PropertyContext]] = []
+        for h in self.heaps if self.thorough else self.heaps[:2]:
+            with contextlib.suppress(PstError):
+                out.append((h.label, PropertyContext(h.heap, self.limits)))
+        return out
+
+    @property
+    def contexts(self) -> list[tuple[str, PropertyContext]]:
+        """Every node's property context, where the node has one (`PropertyContext(heap)`)."""
+        return self._lazy("contexts", self._open_contexts)
+
+    def _read_pc_records(self) -> list[tuple[str, PropertyContext, int, PropertyRecord]]:
+        out: list[tuple[str, PropertyContext, int, PropertyRecord]] = []
+        for label, pc in self.contexts:
+            try:
+                items = list(pc.records.items())
+            except PstError:
+                continue  # the walk's refusal is judged at `__iter__`/`get`, which parse the same records
+            for prop_id, record in items if self.thorough else items[:4]:
+                out.append((label, pc, prop_id, record))
+        return out
+
+    @property
+    def pc_records(self) -> list[tuple[str, PropertyContext, int, PropertyRecord]]:
+        """Every record of every property context: (label, its PC, its id, the record)."""
+        return self._lazy("pc_records", self._read_pc_records)
+
+    def _decode_pc_values(self) -> list[tuple[str, int, PropertyRecord, object]]:
+        out: list[tuple[str, int, PropertyRecord, object]] = []
+        for label, pc, prop_id, record in self.pc_records:
+            with contextlib.suppress(PstError):  # a value that refuses is judged at `PropertyContext.read`
+                out.append((label, prop_id, record, pc.read(record)))
+        return out
+
+    @property
+    def pc_values(self) -> list[tuple[str, int, PropertyRecord, object]]:
+        """Every record decoded, for the dumper's formatters.
+
+        Empty when no PC opens — `format_property_value` and `property_lines`
+        are `wire` entry points, which must be reached on every store, ANSI
+        included, so this swallows the refusal instead of raising it.
+        """
+        try:
+            return self._lazy("pc_values", self._decode_pc_values)
+        except Unreachable:
+            return []
+
+    @property
+    def bth_leaves(self) -> list[tuple[str, bytes, bytes]]:
+        """Raw BTH leaves to read as PC records — real (key, value) pairs, a TC's 4-byte keys included."""
+        try:
+            trees = self.trees
+        except Unreachable:
+            return []
+        out: list[tuple[str, bytes, bytes]] = []
+        for label, t in trees[: 3 if self.thorough else 1]:
+            with contextlib.suppress(PstError):  # the walk's refusal is judged at `HeapTree.__iter__`
+                for i, (key, value) in enumerate(t):
+                    if i >= (4 if self.thorough else 1):
+                        break
+                    out.append((f"{label} #{i}", key, value))
         return out
 
     @property
@@ -603,6 +672,90 @@ def _heap_records(size: int) -> Builder:
     return build
 
 
+# --- the property context over a heap (P05) -------------------------------------------
+
+
+def _pc_from_node_calls(s: Store) -> Iterator[Call]:
+    """`PropertyContext.from_node` over every node and the first sub-node leaves: a TC, a BTH or a non-heap node must refuse."""
+    for i, entry in enumerate(s.nbt_entries if s.thorough else s.nbt_entries[:4]):
+        yield call(s.reader, entry, label=str(entry.node))
+        if i >= 4 or entry.sub_node is None:
+            continue
+        leaves: list[SubNodeLeafEntry] = []
+        with contextlib.suppress(PstError):  # the subnode tree's own refusal is judged at read_subnode_tree
+            leaves = list(s.reader.read_subnode_tree(entry.sub_node).values())[:2]
+        for leaf in leaves:
+            yield call(s.reader, leaf, label=f"{entry.node}/{leaf.node}")
+    if s.thorough and s.nbt_entries:
+        yield call(s.reader, s.nbt_entries[0], codepage=BAD_CODEPAGE, label="bad codepage")
+
+
+def _forged_records(prop_id: int) -> Iterator[tuple[str, PropertyRecord]]:
+    """Records no store wrote: an HNID naming a sub-node no tree holds, type bits on a heap-only type, a null HNID, an HID past cAlloc."""
+    yield "absent sub-node", PropertyRecord(prop_id, PropType.BINARY, ABSENT_SUBNODE)
+    yield "type bits on a GUID", PropertyRecord(prop_id, PropType.GUID, ABSENT_SUBNODE)
+    yield "null HNID", PropertyRecord(prop_id, PropType.UNICODE, 0)
+    yield "HID past cAlloc", PropertyRecord(prop_id, PropType.BINARY, HeapId.from_parts(heap.MAX_HEAP_ITEM_INDEX, 0).raw)
+
+
+def _pc_read_calls(s: Store) -> Iterator[Call]:
+    """Every record of every PC, the forged records on each PC, and the first PC read through a code page that does not exist."""
+    for label, pc, prop_id, record in s.pc_records:
+        yield call(pc, record, label=f"{label} 0x{prop_id:04X}")
+    for label, pc in s.contexts if s.thorough else s.contexts[:1]:
+        for why, forged in _forged_records(0x3001):
+            yield call(pc, forged, label=f"{label} {why}")
+    if s.thorough and s.contexts:
+        # The same records through a code page that does not exist: a String8
+        # must refuse as a `PstError`, never as the `LookupError` the codecs raise.
+        label, pc = s.contexts[0]
+        broken: list[tuple[PropertyContext, PropertyRecord]] = []
+        with contextlib.suppress(PstError):
+            other = PropertyContext(pc.heap, s.limits, codepage=BAD_CODEPAGE)
+            broken = [(other, record) for record in other.records.values()]
+        for other, record in broken:
+            yield call(other, record, label=f"{label} 0x{record.prop_id:04X} bad codepage")
+
+
+def _pc_get_calls(s: Store) -> Iterator[Call]:
+    """A property id the PC holds, one whose HNID is 0, one it does not hold, and 0."""
+    for label, pc in s.contexts:
+        ids_: list[int] = []
+        with contextlib.suppress(PstError):  # the walk's refusal is judged at `__iter__`
+            records = pc.records
+            ids_ = list(records)[:1] + [prop_id for prop_id, record in records.items() if record.is_null][:1]
+        for prop_id in ids_:
+            yield call(pc, prop_id, label=f"{label} 0x{prop_id:04X}")
+        yield call(pc, 0xFFFE, label=f"{label} absent")
+        yield call(pc, 0, label=f"{label} 0x0000")
+
+
+def _pc_unpack_calls(s: Store) -> Iterator[Call]:
+    """Real BTH leaves, truncated and doubled on both sides, and every wire type code in a record."""
+    for label, key, value in s.bth_leaves:
+        yield call(key, value, label=label)
+        yield call(key[:1], value, label=f"{label} short key")
+        yield call(key, value[: prop_context.PC_RECORD_SIZE - 1], label=f"{label} short value")
+        yield call(key + key, value + value, label=f"{label} doubled")
+    for code in s.wire_codes:
+        yield call(b"\x01\x30", struct.pack(prop_context.PC_RECORD_FORMAT, code, 0x20), label=f"type {code:#06x}")
+    yield call(b"", b"", label="empty")
+
+
+def _format_value_calls(s: Store) -> Iterator[Call]:
+    """Every value a store's PCs decoded to, and `None` under every type — what `dump_pc` prints with."""
+    for label, prop_id, record, value in s.pc_values:
+        yield call(record.prop_type, value, label=f"{label} 0x{prop_id:04X}")
+    for t in PropType:
+        yield call(t, None, label=f"{t.name} null")
+
+
+def _property_line_calls(s: Store) -> Iterator[Call]:
+    for label, prop_id, record, value in s.pc_values:
+        yield call(prop_id, record, value, label=f"{label} 0x{prop_id:04X}")
+    yield call(0, PropertyRecord(0, PropType.NULL, 0), None, label="null record")
+
+
 def _dumper_calls(dumper: Callable[..., None]) -> Builder:
     """A registered dumper over the store on disk, its extra positional arguments built by parameter name."""
     extras = list(inspect.signature(dumper).parameters)[1:]
@@ -714,6 +867,15 @@ ADAPTERS: dict[object, Builder] = {
     tree.HeapTree.__iter__: lambda s: [call(t, label=label) for label, t in s.trees],
     tree.HeapTree.entries: lambda s: [call(t, label=label) for label, t in s.trees],
     tree.HeapTree.find: _find_calls,
+    # the property context over a heap, and the two formatters `pc` prints with (P05)
+    prop_context.PropertyContext: lambda s: [call(h.heap, s.limits, label=h.label) for h in s.heaps],
+    prop_context.PropertyContext.from_node: _pc_from_node_calls,
+    prop_context.PropertyContext.read: _pc_read_calls,
+    prop_context.PropertyContext.get: _pc_get_calls,
+    prop_context.PropertyContext.__iter__: lambda s: [call(pc, label=label) for label, pc in s.contexts],
+    prop_context.PropertyRecord.unpack: _pc_unpack_calls,
+    debug.format_property_value: _format_value_calls,
+    debug.property_lines: _property_line_calls,
     # the CLI's dispatch, and every registered dumper, in-process
     debug.main: _main_calls,
     **{dumper: _dumper_calls(dumper) for dumper in debug.DUMPERS.values()},
@@ -749,6 +911,7 @@ NOT_STORE_INPUT: dict[object, str] = {
     block.BlockTrailer.verify_block_id: "reached through BlockReader.read_block on every block",
     block.BlockTrailer.verify_crc: "as verify_block_id",
     ids.NodeIdType.from_debug_name: "golden-parser helper over a str upstream printed",
+    prop_type.PropType.from_debug_name: "as NodeIdType.from_debug_name",
     ids.NodeId.from_parts: "typed parts, checked by the dataclass",
     ids.BlockId.from_parts: "as NodeId.from_parts",
     ids.NodeId.pack: "serialises a checked value",
