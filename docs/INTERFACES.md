@@ -422,13 +422,33 @@ class Attachment:                     # P09
     embedded_message() → Message | None   # EMBEDDED_MESSAGE; depth > limits.MAX_EMBEDDED_MESSAGE_DEPTH → PstLimitError
 ```
 
-## `pypst.rtf` — P21 (leaf)
+## `pypst.rtf` — P21 (landed)
 
 ```python
-def decompress_rtf(data: bytes, *, max_output: int = limits.MAX_ALLOCATION) → bytes
-    # [MS-OXRTFCP]; LZFu and MELA; !PstFormatError bad magic/CRC/token; !PstLimitError RAWSIZE > max_output
-# tests/rtf_compress.py (tests only): compress_rtf(raw: bytes) → bytes — the round-trip partner
+class CompressionType(IntEnum):   COMPRESSED = 0x75465A4C ("LZFu"); UNCOMPRESSED = 0x414C454D ("MELA")
+
+@dataclass(frozen=True, slots=True)
+class CompressedRtfHeader:  comp_size: int; raw_size: int; comp_type: CompressionType; crc: int
+
+def read_header(data: bytes) → CompressedRtfHeader
+    # the 16-byte header, validated against the buffer: < 16 bytes, COMPSIZE + 4 != len(data),
+    # or a COMPTYPE that is neither magic → PstFormatError
+def decompress_rtf(data: bytes, *, max_output: int = 256 * 2**20) → bytes
+    # [MS-OXRTFCP] 2.2. Returns the algorithm's output verbatim — NO NUL trimming (upstream cuts its
+    # String at the first NUL; Outlook writes one NUL for an empty body). The messaging layer applies
+    # `split(b"\0", 1)[0]` if it wants upstream's text, so its golden diffs match.
+    # !PstFormatError: header as above; CRC mismatch (COMPRESSED only — 2.2.3.1 forbids checking it
+    #   for MELA); payload ending before the terminator token, or inside a token; a reference into
+    #   the unwritten part of the dictionary; MELA RAWSIZE past the buffer
+    # !PstLimitError: RAWSIZE > max_output, and also the bytes actually produced > max_output
+HEADER_SIZE = 16; DICTIONARY_SIZE = 4096
+# tests/rtf_compress.py (tests only, not part of the package):
+#   compress_rtf(raw: bytes, *, exhaustive: bool = False) → bytes   — upstream's compressor, byte-exact
+#   encode_rtf_uncompressed(raw: bytes) → bytes                       — the MELA wrapper
 ```
+
+Once `limits.py` lands (P11), `max_output` should default to `limits.MAX_ALLOCATION`;
+the literal is the same value.
 
 ## `pypst.eml` — P10 (not a port)
 
@@ -513,3 +533,6 @@ __all__ = [...]                      # the P24 contract harness iterates this
   and, following upstream against the spec, MV_GUID. **`ObjectRef.node` is a
   raw `int`**, not `NodeId`, because P23 is being built in parallel; P05 wraps
   it (or P23 lands first and P05 changes the annotation here in one line).
+- 2026-09-15 — P21: `pypst.rtf` built. Adds `read_header`, `CompressedRtfHeader`,
+  `CompressionType`; `decompress_rtf` returns bytes with no NUL trimming (P09
+  note above); `max_output` is a literal until P11's `limits.py` exists.
