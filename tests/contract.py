@@ -23,9 +23,9 @@ once, under the module that defines it.
 **Reach** — `ADAPTERS` maps each entry point to a builder that, given a
 `Store` (the bytes, a `Limits`, and lazily the parsed header, the two
 B-trees, a `BlockReader`, the NBT and BBT entries, a handful of pages,
-every node opened as a heap, the BTH over each of those and the property
-context of each heap that is one, a temp file for the dumpers), yields the
-argument tuples to call it with.
+every node opened as a heap, the BTH over each of those, and the property
+or table context of each heap that is one, a temp file for the dumpers),
+yields the argument tuples to call it with.
 `NOT_STORE_INPUT` names, with a reason, every public callable that takes
 no store-derived input (a check helper, a dataclass over already-parsed
 values, an id's `pack`). Three rules exclude classes automatically:
@@ -87,10 +87,11 @@ import pypst
 from pypst import block_sig, crc, debug, encode, limits, rtf
 from pypst.errors import PstError
 from pypst.limits import DEFAULT_LIMITS, Limits
-from pypst.ltp import heap, prop_context, prop_type, tree
+from pypst.ltp import heap, prop_context, prop_type, table_context, tree
 from pypst.ltp.heap import HeapId, HeapNode, HeapNodeId
 from pypst.ltp.prop_context import PropertyContext, PropertyRecord
 from pypst.ltp.prop_type import PropType
+from pypst.ltp.table_context import CellKind, CellRecord, TableContext, TableRow
 from pypst.ndb import block, btree, header, ids, page, root
 from pypst.ndb.block import SubNodeLeafEntry
 from pypst.ndb.ids import BlockId, ByteIndex, NodeId
@@ -237,6 +238,7 @@ MAX_HEAP_BLOCK_INDEX = 0xFFFF  # [MS-PST] 2.3.1.1 `hidBlockIndex` is 16 bits; pa
 MAX_SUBNODE_HEAPS = 8  # sub-node heaps opened per store: an attachment's or an embedded message's own PC
 ABSENT_SUBNODE = 0xFFFF_FFE2  # an HNID with type bits, naming a sub-node no tree holds
 BAD_CODEPAGE = "no-such-codepage"  # a PC built on it must refuse when it decodes a string, never raise LookupError
+MAX_TABLE_ROWS = 8  # rows per table kept for the per-row and per-cell adapters; `rows()` still walks every one
 
 
 @dataclass(frozen=True, slots=True)
@@ -486,6 +488,71 @@ class Store:
                     out.append((f"{label} #{i}", key, value))
         return out
 
+    def _open_tables(self) -> list[tuple[str, TableContext]]:
+        """The TC over every heap that is one; a PC or a bare BTH refuses, and that refusal is judged at the constructor's own adapter."""
+        out: list[tuple[str, TableContext]] = []
+        for h in self.heaps if self.thorough else self.heaps[:2]:
+            with contextlib.suppress(PstError):
+                out.append((h.label, TableContext(h.heap, self.limits)))
+        return out
+
+    @property
+    def tables(self) -> list[tuple[str, TableContext]]:
+        """Every node's table context, where the node has one (`TableContext(heap)`)."""
+        return self._lazy("tables", self._open_tables)
+
+    def _read_table_rows(self) -> list[tuple[str, TableContext, int, TableRow]]:
+        out: list[tuple[str, TableContext, int, TableRow]] = []
+        for label, tc in self.tables:
+            try:
+                rows = list(tc.rows())
+            except PstError:
+                continue  # the walk's refusal is judged at `rows`/`__iter__`
+            for index, row in enumerate(rows[: MAX_TABLE_ROWS if self.thorough else 2]):
+                out.append((label, tc, index, row))
+        return out
+
+    @property
+    def table_rows(self) -> list[tuple[str, TableContext, int, TableRow]]:
+        """The first rows of every table, decoded: (label, its TC, its matrix index, the row)."""
+        return self._lazy("table_rows", self._read_table_rows)
+
+    def _read_table_cells(self) -> list[tuple[str, table_context.ColumnDescriptor, CellRecord | None, object]]:
+        out: list[tuple[str, table_context.ColumnDescriptor, CellRecord | None, object]] = []
+        for label, tc, index, row in self.table_rows:
+            for column, record in zip(tc.columns, row.records, strict=False):
+                if record is None:
+                    out.append((f"{label} #{index}", column, None, None))
+                    continue
+                with contextlib.suppress(PstError):  # a cell that refuses is judged at `read_cell`
+                    out.append((f"{label} #{index}", column, record, tc.read_cell(record, column.prop_type)))
+        return out
+
+    @property
+    def table_cells(self) -> list[tuple[str, table_context.ColumnDescriptor, CellRecord | None, object]]:
+        """Every cell of those rows, decoded, for the dumper's formatters; empty when no table opens (as `pc_values`)."""
+        try:
+            return self._lazy("table_cells", self._read_table_cells)
+        except Unreachable:
+            return []
+
+    @property
+    def tcinfo_buffers(self) -> list[tuple[str, bytes]]:
+        """Real TCINFO items ([MS-PST] 2.3.4.1) — the user root of each of the first table heaps."""
+        try:
+            heaps = self.heaps
+        except Unreachable:
+            return []
+        out: list[tuple[str, bytes]] = []
+        for h in heaps:
+            if h.heap.client_signature is not heap.HeapNodeType.TABLE:
+                continue
+            with contextlib.suppress(PstError):
+                out.append((h.label, bytes(h.heap.get(h.heap.user_root))))
+            if len(out) >= (3 if self.thorough else 1):
+                break
+        return out
+
     @property
     def path(self) -> Path:
         """The store on disk, for the dumpers: written once, into `workdir` (a temp dir if none was given)."""
@@ -675,8 +742,12 @@ def _heap_records(size: int) -> Builder:
 # --- the property context over a heap (P05) -------------------------------------------
 
 
-def _pc_from_node_calls(s: Store) -> Iterator[Call]:
-    """`PropertyContext.from_node` over every node and the first sub-node leaves: a TC, a BTH or a non-heap node must refuse."""
+def _context_from_node_calls(s: Store) -> Iterator[Call]:
+    """`PropertyContext.from_node` / `TableContext.from_node` over every node and the first sub-node leaves.
+
+    Both take `(reader, entry, *, codepage=)`, and both must refuse — never
+    leak — for a node whose heap is the other kind, or no heap at all.
+    """
     for i, entry in enumerate(s.nbt_entries if s.thorough else s.nbt_entries[:4]):
         yield call(s.reader, entry, label=str(entry.node))
         if i >= 4 or entry.sub_node is None:
@@ -754,6 +825,133 @@ def _property_line_calls(s: Store) -> Iterator[Call]:
     for label, prop_id, record, value in s.pc_values:
         yield call(prop_id, record, value, label=f"{label} 0x{prop_id:04X}")
     yield call(0, PropertyRecord(0, PropType.NULL, 0), None, label="null record")
+
+
+# --- the table context over a heap (P06) ----------------------------------------------
+
+
+def _tables_or_none(s: Store) -> list[tuple[str, TableContext]]:
+    """`Store.tables`, or none when the store refused: for the `bytes` and `wire` entry points, which must be reached anyway."""
+    try:
+        return s.tables
+    except Unreachable:
+        return []
+
+
+def _rows_or_none(s: Store) -> list[tuple[str, TableContext, int, TableRow]]:
+    """`Store.table_rows`, or none when the store refused (as `_tables_or_none`)."""
+    try:
+        return s.table_rows
+    except Unreachable:
+        return []
+
+
+def _forged_cells() -> Iterator[tuple[str, CellRecord, PropType]]:
+    """Cell records no matrix wrote: an HID past `cAlloc`, a sub-node no tree holds, a null HNID, an inline cell too short for its type."""
+    yield "HID past cAlloc", CellRecord(CellKind.HEAP, HeapId.from_parts(heap.MAX_HEAP_ITEM_INDEX, 0).raw), PropType.BINARY
+    yield "absent sub-node", CellRecord(CellKind.NODE, ABSENT_SUBNODE), PropType.BINARY
+    yield "null HNID", CellRecord(CellKind.HEAP, 0), PropType.UNICODE
+    yield "short inline cell", CellRecord(CellKind.SMALL, data=b"\x01"), PropType.SYSTIME
+
+
+def _tc_row_calls(s: Store) -> Iterator[Call]:
+    """Row 0, the last row, one past the last, and a negative index — the last two must refuse."""
+    for label, tc in s.tables:
+        count = 0
+        with contextlib.suppress(PstError):  # the matrix's own refusal is judged at `rows`
+            count = tc.row_count
+        for index in dict.fromkeys([0, count - 1, count, -1]):
+            yield call(tc, index, label=f"{label} row {index}")
+
+
+def _tc_find_row_calls(s: Store) -> Iterator[Call]:
+    """A row id the index holds, one it does not, and 0."""
+    for label, tc in s.tables:
+        held: list[int] = []
+        with contextlib.suppress(PstError):  # the index's own refusal is judged at `rows`
+            held = list(tc.row_index)[:1]
+        for row_id in (*held, 0xFFFF_FFFF, 0):
+            yield call(tc, row_id, label=f"{label} 0x{row_id:08X}")
+
+
+def _tc_read_cell_calls(s: Store) -> Iterator[Call]:
+    """Every present cell of the rows kept, and the forged records on every table."""
+    for label, tc, index, row in s.table_rows:
+        for column, record in zip(tc.columns, row.records, strict=False):
+            if record is not None:
+                yield call(tc, record, column.prop_type, label=f"{label} #{index} 0x{column.prop_id:04X}")
+    for label, tc in s.tables if s.thorough else s.tables[:1]:
+        for why, record, cell_type in _forged_cells():
+            yield call(tc, record, cell_type, label=f"{label} {why}")
+
+
+def _table_row_get_calls(s: Store) -> Iterator[Call]:
+    """A property id the row has and one it does not — `get` answers `default` for an absent column, never raises.
+
+    A `wire` entry point, so the refusal of a store with no table is
+    swallowed: only the readers may SKIP (`test_fixture_never_leaks`).
+    """
+    for label, _tc, index, row in _rows_or_none(s):
+        for prop_id in (*list(row.cells)[:1], 0xFFFE):
+            yield call(row, prop_id, label=f"{label} #{index} 0x{prop_id:04X}")
+    yield call(TableRow(0, 0, {}, ()), 0x3001, label="empty row")
+
+
+def _tcinfo_calls(s: Store) -> Iterator[Call]:
+    """Real TCINFO items whole, short and doubled, and the store's own bytes — `unpack` takes the whole item, no offset."""
+    for label, buf in s.tcinfo_buffers:
+        yield call(buf, label=label)
+        yield call(buf[: table_context.TCINFO_SIZE - 1], label=f"{label} short")
+        yield call(buf[:-1], label=f"{label} truncated")
+        yield call(buf + buf, label=f"{label} doubled")
+    for sl in s.slices:
+        yield call(sl, label=f"[:{len(sl)}]")
+
+
+def _tcoldesc_calls(s: Store) -> Iterator[Call]:
+    """A TCOLDESC at every edge of a real TCINFO, and one carrying every wire type code."""
+    size = table_context.TCOLDESC_SIZE
+    for label, buf in s.tcinfo_buffers:
+        for off in dict.fromkeys([0, table_context.TCINFO_SIZE, max(len(buf) - size + 1, 0), len(buf), len(buf) + 1]):
+            yield call(buf, off, label=f"{label}@{off}")
+    for code in s.wire_codes:
+        yield call(struct.pack(table_context.TCOLDESC_FORMAT, code, 0x3001, 8, 4, 2), 0, label=f"type {code:#06x}")
+    yield call(b"", 0, label="empty")
+
+
+def _existence_bitmap_calls(s: Store) -> Iterator[Call]:
+    """Every column's `iBit` against a full and an empty bitmap of the schema's own width, and three bits past it.
+
+    The column index is `iBit`, a u8 out of a TCOLDESC, so it is never
+    negative here: a negative index is a caller's bug, not a file's — the
+    reason `HeapPageMap.size` is in `NOT_STORE_INPUT`.
+    """
+    tables = _tables_or_none(s)
+    for label, tc in tables if s.thorough else tables[:1]:
+        width = tc.info.bitmap_size
+        for bitmap in (b"\xff" * width, bytes(width)):
+            for column in tc.columns:
+                yield call(column.existence_bit, bitmap, label=f"{label} bit {column.existence_bit}")
+            for bit in (0, width * 8, 0xFF):
+                yield call(bit, bitmap, label=f"{label} bit {bit} of {width}")
+    yield call(0, b"\x80", label="bit 0 set")
+    yield call(8, b"\x80", label="bit past a one-byte bitmap")
+
+
+def _cell_record_calls(s: Store) -> Iterator[Call]:
+    """Every present cell the corpus decoded, plus the three kinds under a synthetic record."""
+    for label, column, record, value in s.table_cells:
+        if record is not None:
+            yield call(column.prop_type, record, value, label=label)
+    for kind in CellKind:
+        yield call(PropType.BINARY, CellRecord(kind, 0x20, b"\x00\x00\x00\x00"), None, label=kind.name)
+
+
+def _cell_line_calls(s: Store) -> Iterator[Call]:
+    """Every cell of every row kept, absent columns included — two lines for those, three for a present one."""
+    for label, column, record, value in s.table_cells:
+        yield call(column, record, value, label=label)
+    yield call(table_context.ColumnDescriptor(PropType.LONG, 0x67F2, 0, 4, 0), None, None, label="absent cell")
 
 
 def _dumper_calls(dumper: Callable[..., None]) -> Builder:
@@ -869,13 +1067,29 @@ ADAPTERS: dict[object, Builder] = {
     tree.HeapTree.find: _find_calls,
     # the property context over a heap, and the two formatters `pc` prints with (P05)
     prop_context.PropertyContext: lambda s: [call(h.heap, s.limits, label=h.label) for h in s.heaps],
-    prop_context.PropertyContext.from_node: _pc_from_node_calls,
+    prop_context.PropertyContext.from_node: _context_from_node_calls,
     prop_context.PropertyContext.read: _pc_read_calls,
     prop_context.PropertyContext.get: _pc_get_calls,
     prop_context.PropertyContext.__iter__: lambda s: [call(pc, label=label) for label, pc in s.contexts],
     prop_context.PropertyRecord.unpack: _pc_unpack_calls,
     debug.format_property_value: _format_value_calls,
     debug.property_lines: _property_line_calls,
+    # the table context over a heap, and the two formatters `tc` prints with (P06)
+    table_context.existence_bitmap_size: lambda s: [call(v, label=str(v)) for v in (0, 1, 8, 9, 255, 256, 2**32, -1)],
+    table_context.check_existence_bitmap: _existence_bitmap_calls,
+    table_context.TableContextInfo.unpack: _tcinfo_calls,
+    table_context.ColumnDescriptor.unpack_from: _tcoldesc_calls,
+    table_context.TableContext: lambda s: [call(h.heap, s.limits, label=h.label) for h in s.heaps],
+    table_context.TableContext.from_node: _context_from_node_calls,
+    table_context.TableContext.row: _tc_row_calls,
+    table_context.TableContext.rows: lambda s: [call(tc, label=label) for label, tc in s.tables],
+    table_context.TableContext.__iter__: lambda s: [call(tc, label=label) for label, tc in s.tables],
+    table_context.TableContext.find_row: _tc_find_row_calls,
+    table_context.TableContext.read_cell: _tc_read_cell_calls,
+    table_context.TableRow.get: _table_row_get_calls,
+    heap.HeapNode.get_hnid_blocks: _hnid_calls,  # the same HNIDs as get_hnid: a heap item, a sub-node, one no tree holds
+    debug.format_cell_record: _cell_record_calls,
+    debug.cell_lines: _cell_line_calls,
     # the CLI's dispatch, and every registered dumper, in-process
     debug.main: _main_calls,
     **{dumper: _dumper_calls(dumper) for dumper in debug.DUMPERS.values()},
@@ -895,6 +1109,7 @@ STORE_FREE: frozenset[object] = frozenset(
         root.AmapStatus.from_byte_lenient,
         block.block_size,
         heap.HeapNodeType.from_wire,
+        table_context.existence_bitmap_size,
     }
 )
 
