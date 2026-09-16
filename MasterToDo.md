@@ -43,8 +43,7 @@ can start today.
 
 | Id | Pri | State | One line | Work |
 |---|---|---|---|---|
-| P02-BTREE | 1 | ✗ blocked on P11 (landing) | `ndb/page.py` + `ndb/btree.py` — the node and block B-trees, with a depth limit and a cycle guard that upstream does not need. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p02-btree) |
-| P11-LIMITS | 2 | ⏳ in flight — agent/p11-limits 2026-09-15 | `limits.py`: recursion depth, allocation ceiling, item counts, `PstLimitError` everywhere they bite. Deliberate divergence — CLAUDE.md § untrusted input. | [`todo/T04-hardening.md`](todo/T04-hardening.md#p11-limits) |
+| P02-BTREE | 1 | ⏳ in flight — agent/p02-btree 2026-09-15 | `ndb/page.py` + `ndb/btree.py` — the node and block B-trees, with a depth limit and a cycle guard that upstream does not need. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p02-btree) |
 | P03-BLOCK | 2 | ✗ blocked on P02 | `ndb/block.py` — data blocks, XBLOCK/XXBLOCK trees, subnode BTrees; wire in `encode.py` and `crc.py`. First point at which real bytes come out of a real file. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p03-block) |
 | P19-ORACLE-DUMP | 2 | ✗ not started | `oracle/dump_messages.rs` — our own non-interactive Rust example against the pinned crate: every folder, message, recipient, attachment, embedded message. Captured to goldens like the others. Replaces the `browse_pst` TUI as P08/P09's oracle. | [`todo/T06-testing.md`](todo/T06-testing.md#p19-oracle-dump) |
 | P04-HEAP | 2 | ✗ blocked on P03 | `ltp/heap.py` + `ltp/tree.py` — heap-on-node and the BTree-on-heap. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p04-heap) |
@@ -83,6 +82,7 @@ can start today.
 | P22-PROPTYPE | ✅ 2026-09-15 | `ltp/prop_type.py`: 30 PropType members checked against [MS-OXCDATA] 2.11.1, table-driven `decode` per type incl. all MV_* forms, FILETIME/GUID edge cases pinned, `max_items` → PstLimitError. 225 tests, 20/20 mutants caught. Six documented divergences (strict widths, strict UTF-16, named codepage). MV_GUID follows upstream's count prefix against the spec — flagged to P05. |
 | P21-RTF | ✅ 2026-09-15 | `rtf.py` + generated `_rtf_dictionary.py` (207 bytes, three invariants incl. the spec's own string): LZFu/MELA decompression; upstream's CRC proven to be zlib's three ways; 4/4 spec vectors, 4/4 upstream twins, round-trip over 42 size×seed cases, 1500-mutation fuzz leaks only PstError; 17/17 mutants caught. Four documented divergences, two of them where the spec says MUST and upstream is lenient. |
 | P01-HEADER | ✅ 2026-09-15 | `ndb/header.py` + `ndb/root.py`, `debug header` dumper, `tests/corrupt.py` seed. Goldens 7/7 Unicode stores (text and values), ANSI refused 2/2 on real bytes, private stores match the live oracle 2/2 (structure only), 110 denial cases incl. truncation at every 8-byte boundary, 30/30 mutants caught; upstream's magic twin landed. Validates exactly upstream's set; wVer 36/37 (4 KB pages) refused as unsupported. |
+| P11-LIMITS | ✅ 2026-09-15 | `limits.py`: 15 ceilings each justified from [MS-PST] field widths or Outlook's documented caps (MAX_ITEMS raised to 2^27 = the 27-bit node index — a 50 GiB store's BBT alone exceeds the draft's 1e6), frozen `Limits`, `check_depth/count/allocation`, bounded `VisitedSet`; PstLimitError proven disjoint from PstFormatError; 32 tests, 18/18 mutants caught. Not yet wired into any walk — that is P02+. |
 
 ## Still the user's call
 
