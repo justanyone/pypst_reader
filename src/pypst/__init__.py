@@ -13,11 +13,13 @@ store on top of them: `pypst.open(path)` returns a `Store` whose name,
 record key, entry ids and named-property map can be read, its folder tree
 walked (`store.root_folder.walk()` yields every `Folder`), and every
 `Message` in a folder opened — its subject, sender, times and bodies, its
-`Recipient`s, and its `Attachment`s, embedded messages included. What is
-still missing is the `.eml` assembler (P10) — see
-docs/INTERFACES.md § "pypst — the top level" for the rest of the promise,
-docs/PORTING-PLAN.md for the order of work and MasterToDo.md for what is
-actually next.
+`Recipient`s, and its `Attachment`s, embedded messages included. P10 closed
+the last promise on the list: `to_eml`/`eml_bytes`/`write_eml` assemble one
+message into RFC 5322, `export_folder` writes a directory of `<nid>.eml`
+and `export_mbox` writes one mbox per folder, which is the deliverable
+everything else exists to enable. See docs/INTERFACES.md
+§ "pypst — the top level" for the rest of the promise, docs/PORTING-PLAN.md
+for the order of work and MasterToDo.md for what is actually next.
 
 `__all__` is the contract, kept sorted and deliberately small: the exception
 family every caller catches, the limits a caller tunes, and the readers that
@@ -33,6 +35,7 @@ list joins that contract.
 
 from __future__ import annotations
 
+from pypst.eml import eml_bytes, export_folder, to_eml, write_eml
 from pypst.errors import (
     PstError,
     PstFormatError,
@@ -41,6 +44,7 @@ from pypst.errors import (
     PstUnsupportedError,
 )
 from pypst.limits import DEFAULT_LIMITS, Limits
+from pypst.mbox import export_mbox
 from pypst.messaging.attachment import Attachment, AttachMethod
 from pypst.messaging.folder import Folder
 from pypst.messaging.message import Message, Recipient, RecipientType
@@ -68,6 +72,11 @@ __all__ = [  # noqa: RUF022 — plain `sorted()`, as the docstring says and test
     "RecipientType",
     "Store",
     "__version__",
+    "eml_bytes",
+    "export_folder",
+    "export_mbox",
     "open",
     "read_header",
+    "to_eml",
+    "write_eml",
 ]

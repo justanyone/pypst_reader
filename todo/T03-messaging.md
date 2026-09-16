@@ -174,10 +174,197 @@ golden shows upstream's refusal so a fixed pin is noticed.
   stray `\x01`.
 
 ### P10-EML
-status: ✗ not started
-upstream: nothing — **this is ours**, and the module docstring must say `not a port`
+status: ✅ 2026-09-16 — `src/pypst/eml.py` (`to_eml`, `eml_bytes`, `write_eml`, `eml_name`, `folder_paths`, `readable_messages`, `export_folder`) and `src/pypst/mbox.py` (`export_mbox`, `mbox_name`), both `Ported from: not a port`; `to_eml`/`eml_bytes`/`write_eml`/`export_folder`/`export_mbox` exported from `pypst.__all__`; `python -m pypst.debug eml <file> <nid-hex>` and `python -m pypst.debug export <file> <dir> [--eml]`. **EVIDENCE BELOW.**
+upstream: nothing — **this is ours**, and both module docstrings say `not a port`
 oracle:   none; this is where we stop having one
 blocked on: P09
+
+**The deliverable, as shipped: MBOX first, EML as the building block.**
+Upstream ships **no export format at all** — ten example binaries that dump
+each layer as text and nothing that produces mail — which is why the format
+was the user's choice rather than a port's: MBOX (RFC 4155), one file per
+folder, because it is what mutt, Thunderbird, `formail`, `readpst`, every
+e-discovery loader and Python's own `mailbox` already read, and because one
+file per folder keeps the store's shape that a directory of loose `.eml`
+files loses. Per-message `.eml` is what each mbox record contains, and is
+available on its own (`export_folder`, `--eml`).
+
+**The header policy, as implemented, and the measurement it rests on.** P09
+counted: **6 of the 12 openable corpus messages carry
+`PidTagTransportMessageHeaders`, and 1 of the 1 openable private message
+does**, and the split follows the message CLASS, not the store — every
+delivered `IPM.Note` has them; the appointment, the free/busy item, the two
+`IPM.Post`s and the EMLtoPST-written message have none. So the module does
+both and says which: transport headers are **parsed and passed through**
+(minus `Content-*`/`MIME-Version`, which describe the ORIGINAL body and would
+mislabel the one being re-assembled), what is then missing is **synthesised
+from MAPI**, and **every header added is named in `X-Pypst-Synthesized`**
+(absent when nothing was added, so its presence is the signal). A
+`Message-ID` is `PidTagInternetMessageId` when the store kept one — a real id
+under an added header — else invented deterministically from the store record
+key and the node id under `@pypst.invalid` (RFC 2606), so a reconstructed id
+is recognisable by inspection as well as by the marker and is never presented
+as original. The measurement is re-taken by the test suite
+(`test_six_of_the_twelve_openable_messages_carry_transport_headers`), so it
+cannot silently stop being true. It is still a small corpus: **re-take it
+over a larger private corpus before anything downstream threads on it.**
+
+**Round trip: the one message of the corpus whose expected output is a file
+in this repository.** `synth-basics.pst` was built by EMLtoPST from
+`tests/fixtures/synthetic/basics/**/*.eml`, and its Sent folder's message
+(`NormalMessage: 0x2B`; the Inbox's six are unreachable by this reader and
+upstream alike, P09's `UNREADABLE_CONTENTS`) comes back out equal to
+`Sent/01-reply.eml` in `Subject`, `From` and `To` (display name and
+addr-spec), `Date` to the second, decoded text body, content type and
+attachment list (none, on both sides) — and equal again after a round trip
+through `mailbox.mbox`. Every header of it is synthesised (`From, To,
+Subject, Date, Message-ID`) because EMLtoPST stores neither transport headers
+nor `PidTagInternetMessageId`, and each reproduces the source's value except
+the `Message-ID`, which the store simply does not contain and which therefore
+comes out under `pypst.invalid` — which is the case the marker exists for,
+pinned as such.
+
+**Per-store export counts, 12/12 openable messages, all 8 Unicode stores:**
+Empty 0, javalibpst-dist-list 3 (of 4 message nodes — the fourth has no
+sub-node tree and is skipped, or refused under `strict=True`), pstd-inline-cid
+0 (no readable folder below its root, P06/P08 — so its inline-`cid:` message
+is NOT this row's witness and the inline case is built in the test file
+instead), pstsdk-sample1 1, pstsdk-submessage 1, pstsdk-test_unicode 2,
+synth-basics 1 (of 7 authored — the Inbox contents table is refused),
+tika-variousBodyTypes 4. Every one assembles, serialises to **pure ASCII with
+CRLF**, re-parses to the same headers and the same part tree with every
+payload decodable, and **two `eml_bytes` calls agree byte for byte** (MIME
+boundaries are `----=_pypst.<nid>.<n>` precisely because `email` draws them
+from `random`; a body that contains its own boundary pushes it aside, and one
+that contains every counter the search would try — the tag comes from a node
+id the FILE chose, so the sequence is predictable — ends the search with a
+SHA-256 of the payload, which the payload cannot contain). `export_mbox` over each store writes one `<nid>.mbox` per
+folder plus `folders.txt`, `mailbox.mbox` reads back exactly the count
+`readable_messages` yielded for that folder, and two exports of one store are
+byte-identical (no clock anywhere: a message with no time gets the epoch).
+Private stores, structure only: both export, counts and part counts only, no
+header value or body asserted, printed or logged.
+
+**The body shapes, from `tika-variousBodyTypes.pst`, one message per kind:**
+0x10001 and 0x10002 → `multipart/alternative` [`text/plain`, `text/html`],
+0x10003 → [`text/plain`, `application/rtf`] (the RTF decompressed by P21 and
+starting `{\rtf1`), 0x10004 → `text/plain` alone. Least faithful first, as
+RFC 2046 § 5.1.4 requires. RTF alone (no corpus witness; built by removing
+the text body from 0x10003) is `application/rtf` plus `X-Pypst-Body:
+rtf-only` and **no invented text**; no body at all is an empty `text/plain`
+plus `X-Pypst-Body: none`. HTML is decoded with `PidTagInternetCodepage`
+(0x3FDE — 20127/us-ascii on every corpus message that has HTML), else the
+store's code page, else UTF-8, always `errors="replace"`, and re-encoded as
+UTF-8 because a part's declared charset must match its bytes and re-encoding
+to the original can fail where decoding replaced.
+
+**Attachments and embedded messages.** `pstsdk-sample1.pst`'s
+`leah_thumper.jpg` becomes a part with its 93 142 bytes verbatim, named from
+`PidTagAttachLongFilename`, typed `application/octet-stream` because the
+store kept no `PidTagAttachMimeTag`. `pstsdk-submessage.pst`'s embedded
+message becomes a `message/rfc822` part whose inner `Subject` is `"This is an
+embedded message"` and whose body starts `"This is the body of an embedded
+message"` — **the P09 divergence carried through to the export: upstream at
+the pin cannot open this attachment at all**. That embedded message kept
+transport headers of its own, so its `Message-ID` is passed through; with
+them removed (and `PidTagInternetMessageId` with them) its synthetic id is
+prefixed with its carrier's, because sub-node ids are unique only inside
+their own tree. An attachment whose method carries no bytes in this store
+(`NONE`, `BY_REFERENCE`, `BY_REF_RESOLVE`, `BY_REF_ONLY`) is recorded as
+`X-Pypst-Attachment-Skipped: <METHOD> <filename>` — never dropped silently,
+never an exception.
+
+**Denial, and the injection cases, which is where an exporter is actually
+dangerous.** An attachment over the CALLER's `max_allocation` is
+`PstLimitError` (the store's limits let `data()` return; `to_eml`'s own
+`limits` is checked after, and the boundary value passes); embedding deeper
+than `max_embedded_message_depth` counted **from `Message.depth`** is
+`PstLimitError` from the exporter's own check, and a carrier one under the
+ceiling still exports; an accessor that refuses propagates its
+`PstFormatError`; a non-`Message` or non-`Limits` argument is `TypeError`.
+**Every value that reaches a header is stripped of control characters
+first** — `email.policy` answers a linefeed with `ValueError`, which is a
+refusal in the wrong currency, and `PidTagAttachMimeTag` of
+`"text/plain\r\nBcc: victim@example.test"` is header injection: 8 mime-tag
+vectors and 4 filename vectors (`../../etc/passwd`, `..\..\windows\...`, a
+CRLF, a NUL) produce no `Bcc`, no `\r\nBcc:` sequence and no second
+`Content-Disposition`. A `mime_tag` that is not two RFC 2045 tokens becomes
+`application/octet-stream`. **Nothing from a message ever reaches a path**:
+`.eml` files are `<nid>.eml`, mboxes are `<nid>.mbox`, display names appear
+only inside `folders.txt` with `/` and `\` replaced, and a folder renamed
+`../../../etc` writes neither a directory nor a file outside `dest_dir`.
+`ValueError`/`LookupError` from the `email` package is re-raised as
+`PstFormatError` (documented divergence): everything that flows into it came
+out of the file. The corruption harness gained an `eml.export` entry point
+(bounded by `EML_BYTES_PER_SWEEP` = 256 KiB of output per store so the sweep
+does not pay a base64 of a 93 KB attachment per mutation), and every mutation
+of the `message_lies` and `attachment_lies` families over
+`javalibpst-dist-list.pst` yields an `.eml` or a `PstError` and nothing else.
+
+**Tests: 116 new cases in `tests/test_eml.py` (49 functions) and
+`tests/test_mbox.py` (15 functions).** Whole suite `-m "not slow"`: **2600
+passed, 14 skipped, 7 xfailed** (2480 before this row); slow lane
+(`-m "slow and not oracle"`, so no `cargo`): **21 passed in 37m34**. Two slow
+tests had to be told about this row: `test_debug_cli_never_tracebacks` counts
+a dumper's arguments with `debug.dumper_arguments` now, because `export`'s
+`as_eml` is a FLAG and not a positional argument (it was passing two `21`s
+and getting argparse's exit 2), and `test_nightly_script.py`'s subprocess
+guard went 1800 s → 2400 s: the nightly script's `tests` step IS this lane,
+and this row added an entry point to the corruption sweep, nine adapters
+(two of which write files) to the contract sweep and two dumpers to the CLI
+sweep. It is a hang guard, not a performance budget. `tests/contract.py`
+gained nine adapters (`to_eml`, `eml_bytes`, `write_eml`, `eml_name`,
+`folder_paths`, `readable_messages`, `export_folder`, `export_mbox`,
+`mbox_name`), a `workdir` on its fixture object, an `EXTRA_ARGS["dest"]`, and
+`debug.dumper_arguments` in `NOT_STORE_INPUT`; `uncovered()` and `stale()`
+are both empty. `scripts/check_provenance.py` (27 modules), 
+`check_quality_ratchet.py`, `check_upstream_parity.py` (15 upstream tests, 14
+twinned, 1 pending P27-NU, 0 missing) and `ruff check src tests scripts` all
+exit 0. **31/31 deliberate single-point bugs seen red**
+(`PYTHONDONTWRITEBYTECODE=1`, `-p no:cacheprovider`, `__pycache__` cleared
+between mutants): the 7-bit policy, the control-character strip, the dropped
+body headers, the synthesis order, the marker itself, the stored id, the
+invalid domain, the embedded id prefix, the body order, the rtf-only marker,
+the charset fallback, the mime-type validation, the content-id brackets, the
+`cid:` match, both ceilings, the deterministic boundaries, the sub-part
+`MIME-Version` strip, the walk that must not cross into an encapsulated
+message, the `.eml` name, `strict`, the display-path replacement, the mbox
+From_ line (address, clock, and the stdlib default), the mbox file name, the
+mbox line endings, the replace-not-append, the X.500 sender, `dumper_arguments`, and both halves of the boundary search
+(the counter, and the hash that ends it). The first pass left three survivors and each was closed by
+a test that reaches the branch rather than by weakening the code: the
+`_charset` fallback needed a message with NO `PidTagInternetCodepage` AND a
+store code page Python has no codec for; `strict` needed a store with an
+unreadable MESSAGE (`javalibpst-dist-list.pst`) and not only an unreadable
+FOLDER; and the X.500 From_ fallback needed a sender with an X.500 address
+and no SMTP one. Two more cases had no corpus witness at all and are built in
+the test file with a stated reason: the original body's `Content-*` headers
+(Exchange strips them before storing) and an inline `cid:` image
+(`pstd-inline-cid.pst`'s message is unreachable through either reader).
+
+**Divergences and decisions, each also in its module docstring:** the policy
+is `email.policy.SMTP` with `cte_type="7bit"` (RFC 5322 CRLF, and every part
+encoded down to ASCII so an `.eml` survives any transport — an 8-bit body is
+no less correct but only where everything downstream is 8-bit clean, and a
+reader cannot know that for its caller); mbox records are LF, which is what
+the format has meant since it was a Unix mailbox and what `mailbox.mbox`
+re-reads without surprises; the stdlib quotes a body line beginning `From ` to
+`>From ` and does not unquote on read, which is **mboxo, not the mboxrd RFC
+4155 § 4 prefers** — the ambiguity is the format's, it is pinned by a test on
+a body written to contain the line, and what is guaranteed is that no body
+line can be mistaken for a record separator; `export_folder` and
+`export_mbox` skip what refuses by default (`strict=True` propagates) because
+a store with one unreadable folder among fifty should still export the other
+forty-nine, and the mbox index records the refusal by exception TYPE; an
+existing `<nid>.mbox` is replaced rather than appended to, so a second run is
+not a trap.
+
+**Left undone, deliberately:** no `multipart/report`/DSN handling, no TNEF
+(`winmail.dat`) expansion, no `PidTagMessageClass`-specific rendering
+(an appointment exports as its properties, not as an iCalendar part), and no
+`.mbx`/Maildir writer. `folders.txt` is this module's own index format, not a
+standard one. And the header measurement wants re-taking over a corpus larger
+than twelve messages before anything downstream relies on the 50/50 split.
 
 One message → one RFC-822 `.eml`, via `email.message.EmailMessage` from the
 standard library. The deliverable everything else exists to enable.

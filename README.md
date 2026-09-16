@@ -5,8 +5,52 @@ A port of the **read path** of [microsoft/outlook-pst-rs](https://github.com/mic
 
 > **Status:** the read path is fully ported and verified against the Rust
 > oracle: `pypst.open()` opens a Unicode PST and walks folders, messages,
-> recipients and attachments. EML export (P10) is in progress. See
-> `MasterToDo.md`.
+> recipients and attachments — and exports them as `.eml` files or as one
+> **mbox per folder**, which is what the reader is for. See `MasterToDo.md`.
+
+## Reading a store, and getting the mail out
+
+```python
+import pypst
+
+with pypst.open("store.pst") as store:
+    for folder in store.root_folder.walk():
+        print(folder.display_name, folder.content_count)
+        for message in folder.messages():
+            print("  ", message.subject, "from", message.sender_name)
+
+    # One mbox per folder (`<nid>.mbox`, plus `folders.txt` naming them),
+    # which mutt, Thunderbird, formail and `mailbox` all read as-is:
+    pypst.export_mbox(store.root_folder, "out/")
+
+    # ...or one RFC 5322 `.eml` per message, named by node id:
+    pypst.export_folder(store.root_folder, "out-eml/")
+
+    # ...or one message at a time, as an `email.message.EmailMessage`:
+    message = next(iter(store.root_folder.messages()))
+    eml = pypst.to_eml(message)           # headers, bodies, attachments
+    pypst.write_eml(message, "one.eml")   # or pypst.eml_bytes(message)
+```
+
+From the command line:
+
+```bash
+python -m pypst.debug export store.pst out/          # one mbox per folder
+python -m pypst.debug export store.pst out/ --eml    # one .eml per message
+python -m pypst.debug eml store.pst 10001            # one message, on stdout
+```
+
+**Where the headers come from.** A message that arrived over SMTP keeps its
+internet headers in a MAPI property, and those are passed through verbatim —
+`Message-ID`, `Date`, the `Received` chain, `In-Reply-To`, `References`.
+A message composed locally has none, so `From`, `To`/`Cc`/`Bcc`, `Subject`,
+`Date` and `Message-ID` are rebuilt from MAPI properties, and **every header
+that was rebuilt is listed in `X-Pypst-Synthesized:`**. An invented
+`Message-ID` lives under `@pypst.invalid` and is deterministic, so a
+reconstructed thread is never mistaken for a delivered one. (In the test
+corpus the split is 6 messages of 12 either way, and it follows the message
+class: delivered `IPM.Note`s have headers, appointments and locally-composed
+items do not.)
 
 ## Why this exists
 

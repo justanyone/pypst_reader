@@ -170,7 +170,7 @@ def test_every_registered_dumper_is_adapted() -> None:
     adapted = {contract._key(k) for k in contract.ADAPTERS}
     for name, dumper in debug.DUMPERS.items():
         assert dumper in adapted, f"dumper {name!r} has no adapter"
-        for param in list(contract.inspect.signature(dumper).parameters)[1:]:
+        for param in debug.dumper_arguments(dumper):
             assert param in contract.EXTRA_ARGS, f"dumper {name!r} takes {param!r}; tests/contract.py EXTRA_ARGS does not know how to build it"
 
 
@@ -339,7 +339,13 @@ def _cli(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
 
 
 def _cli_extras(dumper: object) -> list[str]:
-    return ["21" for _ in list(contract.inspect.signature(dumper).parameters)[1:]]  # NID_MESSAGE_STORE, hex
+    """One command-line argument per extra POSITIONAL parameter: a hex nid, or a directory to write into.
+
+    `debug.dumper_arguments` and not the raw signature, because P10's
+    `export` takes a keyword-only `as_eml` that the CLI supplies as a flag
+    and that is not a positional argument.
+    """
+    return ["21" for _ in debug.dumper_arguments(dumper)]  # NID_MESSAGE_STORE as hex, or a dest directory
 
 
 def _cli_stores(tmp_path: Path) -> list[tuple[str, Path]]:

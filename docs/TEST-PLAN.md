@@ -178,6 +178,31 @@ may not go down. A coverage percentage is not evidence of correctness and the
 ratchet must never be cited as such; it exists to catch a module that landed
 with its tests forgotten. Row P26.
 
+### T11 — the export round trip, where there is no oracle at all
+
+P10 (`pypst.eml`, `pypst.mbox`) is the one layer with **nothing upstream to
+diff against**: outlook-pst-rs produces no mail, only text dumps, so T2's
+method does not apply and no golden can. Three substitutes, all in
+`tests/test_eml.py` and `tests/test_mbox.py`:
+
+- **The round trip.** `synth-basics.pst` was built by EMLtoPST from
+  `tests/fixtures/synthetic/basics/**/*.eml` (T8), so for the message of that
+  store this reader can reach, the source `.eml` **is** the expected output:
+  same `Subject`, same `From`/`To` addresses, same `Date` to the second, same
+  decoded body, same attachments. The same message goes out through
+  `export_mbox` and back in through the stdlib's `mailbox.mbox`.
+- **Self-consistency over the corpus.** Every openable message of every
+  Unicode store is assembled, serialised, re-parsed with `email.parser` and
+  compared with itself — same headers, same part tree, every payload
+  decodable, pure ASCII, and two calls byte-identical. Counts are pinned per
+  store (`OPENABLE`), so a message that stops opening fails rather than
+  quietly lowering a number.
+- **Injection and traversal, which is where an exporter is dangerous.** The
+  layer turns attacker-chosen text into header values and file names:
+  `PidTagAttachMimeTag` with a CRLF in it, a filename of `../../etc/passwd`,
+  a folder whose display name is `../..`. Those cases have no corpus witness
+  and are built in the test file rather than left untested.
+
 ### The discipline that makes any of this mean something
 
 From the `test-harness` skill, and repeated because it is the one that gets
@@ -194,6 +219,7 @@ differential test, corrupt one byte of the golden and watch it go red.
 | corruption / adversarial input | none | T4 + T5 |
 | message-level automated check | none (TUI) | T7 |
 | content assertions on known mail | none | T8 |
+| an export format at all | none (text dumps only) | `.eml` and mbox, round-tripped — T11 |
 | what it has that we do not | **the compiler** | tier-1 ruff rules (F821 etc.) catch the porting slip that a type checker would; consider `mypy --strict` as a row once the API settles |
 
 "Better than upstream" is achievable on every row but the last, and the last

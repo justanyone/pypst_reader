@@ -29,6 +29,7 @@ from collections.abc import Callable, Iterator
 from datetime import datetime
 from pathlib import Path
 
+from pypst.eml import eml_bytes, export_folder, folder_paths
 from pypst.errors import PstError, PstFormatError
 from pypst.limits import DEFAULT_LIMITS
 from pypst.ltp.heap import HeapId, HeapNode
@@ -42,6 +43,7 @@ from pypst.ltp.table_context import (
     TableRow,
 )
 from pypst.ltp.tree import HeapTree
+from pypst.mbox import export_mbox
 from pypst.messaging import attachment as attachment_mod
 from pypst.messaging import folder as folder_mod
 from pypst.messaging import message as message_mod
@@ -1200,6 +1202,64 @@ def dump_messages(path: Path) -> None:
 DUMPERS["messages"] = dump_messages
 
 
+# --- P10: the .eml and mbox exporters ----------------------------------------------
+
+
+def dump_eml(path: Path, nid: str) -> None:
+    """`eml <file> <nid-hex>`: one message as RFC 5322, on stdout.
+
+    The bytes `pypst.eml.eml_bytes` produces, which are pure ASCII with CRLF
+    line endings, written through the text stream so that a terminal and a
+    `>` redirect agree. The nid is hex, with or without `0x` — the raw NID,
+    as `messages` prints it in `Message: NodeId { NormalMessage: 0x…}` shifted
+    left five bits, or as `export` names the file.
+    """
+    node = _parse_nid(nid)
+    with Store.open(path, codepage=DUMP_CODEPAGE) as store:
+        data = eml_bytes(store.open_message(node))
+    sys.stdout.write(data.decode("ascii"))
+
+
+DUMPERS["eml"] = dump_eml
+
+
+def dump_export(path: Path, dest: str, *, as_eml: bool = False) -> None:
+    """`export <file> <dir>`: every folder of the store as `<nid>.mbox`, plus `folders.txt`.
+
+    `--eml` writes one `<nid>.eml` per message into the same directory
+    instead. Both walk the whole store from the root folder and skip what
+    refuses (`pypst.eml.export_folder`'s `strict=False`), so one unreadable
+    folder does not cost the export; the counts printed are what was
+    written, and the mbox index records which folders were skipped.
+    """
+    target = Path(dest)
+    with Store.open(path, codepage=DUMP_CODEPAGE) as store:
+        root = store.root_folder
+        folders = sum(1 for _ in folder_paths(root))
+        written = export_folder(root, target) if as_eml else export_mbox(root, target)
+    print(f"Format: {'eml' if as_eml else 'mbox'}")
+    print(f"Folders: {folders}")
+    print(f"Messages: {written}")
+
+
+DUMPERS["export"] = dump_export
+
+
+def dumper_arguments(dumper: Callable[..., None]) -> list[str]:
+    """The names of a dumper's extra POSITIONAL parameters, after the store's path.
+
+    Keyword-only parameters are the CLI's flags (`export`'s `as_eml`), not
+    its positional arguments, so they are not counted here — `main` maps a
+    flag to one, and `tests/contract.py` builds the positional ones by name.
+    """
+    positional = (
+        param
+        for param in inspect.signature(dumper).parameters.values()
+        if param.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    )
+    return [param.name for param in positional][1:]
+
+
 def main(argv: list[str] | None = None) -> int:
     names = ", ".join(sorted(DUMPERS)) or "(none registered yet)"
     parser = argparse.ArgumentParser(
@@ -1208,6 +1268,11 @@ def main(argv: list[str] | None = None) -> int:
         epilog=f"registered layers: {names}",
     )
     parser.add_argument("--list", action="store_true", help="print the registered layer names and exit")
+    parser.add_argument(
+        "--eml",
+        action="store_true",
+        help="`export`: write one .eml per message instead of one .mbox per folder",
+    )
     parser.add_argument("layer", nargs="?", help="which layer to dump")
     parser.add_argument("file", nargs="?", type=Path, help="the .pst to read")
     parser.add_argument("extra", nargs="*", help="layer-specific arguments (`node` takes a hex nid)")
@@ -1222,11 +1287,16 @@ def main(argv: list[str] | None = None) -> int:
     dumper = DUMPERS.get(args.layer)
     if dumper is None:
         parser.error(f"unknown layer {args.layer!r}; registered layers: {names}")
-    wanted = len(inspect.signature(dumper).parameters) - 1
+    wanted = len(dumper_arguments(dumper))
     if len(args.extra) != wanted:
         parser.error(f"layer {args.layer!r} takes {wanted} extra argument(s), got {len(args.extra)}")
+    options: dict[str, bool] = {}
+    if args.eml:
+        if "as_eml" not in inspect.signature(dumper).parameters:
+            parser.error(f"--eml applies to the `export` layer, not to {args.layer!r}")
+        options["as_eml"] = True
     try:
-        dumper(args.file, *args.extra)
+        dumper(args.file, *args.extra, **options)
     except PstError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

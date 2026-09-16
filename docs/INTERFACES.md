@@ -1115,13 +1115,103 @@ HEADER_SIZE = 16; DICTIONARY_SIZE = 4096
 Once `limits.py` lands (P11), `max_output` should default to `limits.MAX_ALLOCATION`;
 the literal is the same value.
 
-## `pypst.eml` — P10 (not a port)
+## `pypst.eml` — P10 (landed; not a port)
 
 ```python
-def to_eml(message: Message, *, synthesize_missing: bool = True) → email.message.EmailMessage
-def write_eml(message: Message, path) → None
-# Synthesised headers (Message-ID etc.) are marked with X-Pypst-Synthesized: <header names>
+POLICY = email.policy.SMTP.clone(cte_type="7bit")   # CRLF, RFC 2047 headers, 7-bit-clean output
+SYNTHESIZED_HEADER = "X-Pypst-Synthesized"; BODY_HEADER = "X-Pypst-Body"
+SKIPPED_HEADER = "X-Pypst-Attachment-Skipped"; SYNTHETIC_ID_DOMAIN = "pypst.invalid"
+PID_TAG_INTERNET_MESSAGE_ID = 0x1035; PID_TAG_INTERNET_CODEPAGE = 0x3FDE
+
+def to_eml(message: Message, *, synthesize_missing: bool = True, limits: Limits | None = None)
+        → email.message.EmailMessage
+    # !TypeError a non-Message / a non-Limits; !PstLimitError an attachment over limits.max_allocation,
+    #   or embedding deeper than limits.max_embedded_message_depth COUNTED FROM `message.depth`;
+    #   !PstFormatError for any property this layer cannot use — and for `email`'s own ValueError,
+    #   which is a refusal about file content (module docstring)
+def eml_bytes(message, *, synthesize_missing=True, limits=None) → bytes   # deterministic, pure ASCII, CRLF
+def write_eml(message, path, *, synthesize_missing=True, limits=None) → Path     # binary write
+def eml_name(message) → str                        # "<nid>.eml", 8 hex digits — never the subject
+def folder_paths(folder, *, recurse=True, strict=False) → Iterator[(Folder, str)]
+    # pre-order, `Folder.walk`'s ceiling and cycle guard, carrying the display path for an index;
+    # strict=False treats a folder whose HIERARCHY table refuses as a leaf
+def readable_messages(folder, *, strict=False) → Iterator[Message]
+    # a CONTENTS table that will not parse refuses whatever `strict` says (it is a folder-level
+    # answer); a single message that will not open is skipped unless strict
+def export_folder(folder, dest_dir, *, recurse=True, strict=False, limits=None) → int   # count written
 ```
+
+**The header policy, and the measurement it rests on** (P09 counted: 6 of the
+12 openable corpus messages carry `PidTagTransportMessageHeaders`, 1 of 1
+openable private message, and the split follows the message class):
+
+1. `transport_headers` present → parsed with `email.parser` and **passed
+   through** in source order, minus the headers that describe the ORIGINAL
+   MIME body (`Content-*`, `MIME-Version`), which would mislabel the body
+   this module re-assembles.
+2. What is then missing is synthesised from MAPI: `From` (name + SMTP,
+   falling back to the X.500 address in angle brackets), `To`/`Cc`/`Bcc` by
+   `RecipientType`, `Subject`, `Date` (`client_submit_time` else
+   `delivery_time`, RFC 5322, UTC), `Message-ID`.
+3. **Every header added is named in `X-Pypst-Synthesized`** (absent when
+   nothing was). A `Message-ID` comes from `PidTagInternetMessageId` when the
+   store kept one — a real id under an added header — else it is invented
+   deterministically from the store record key and the node id under
+   `@pypst.invalid`, so an invented id is recognisable by inspection as well
+   as by the marker. `synthesize_missing=False` writes only what the file
+   holds.
+
+**Bodies**: `multipart/alternative` in increasing fidelity — `text/plain`,
+`application/rtf` (`body_rtf_decompressed()`), `text/html` — a single
+representation as a single part. RTF alone is `application/rtf` plus
+`X-Pypst-Body: rtf-only` and **no invented text body**; no body at all is an
+empty `text/plain` plus `X-Pypst-Body: none`. HTML is decoded with
+`PidTagInternetCodepage`, else the store's code page, else UTF-8, always
+`errors="replace"`, and re-encoded as UTF-8 (a part's charset must match its
+bytes, and re-encoding to the original can fail where decoding replaced).
+
+**Attachments**: `BY_VALUE`/`OLE` → a part, `Content-Type` from a VALIDATED
+`mime_tag` (two RFC 2045 tokens, parameters dropped) else
+`application/octet-stream`, filename `long_filename` else `filename`,
+`Content-ID` from `content_id`, `Content-Disposition: inline` inside a
+`multipart/related` under the HTML part when the HTML has a matching `cid:`
+URL, else `attachment`. `EMBEDDED_MESSAGE` → a `message/rfc822` part holding
+the recursion (whose synthetic ids are prefixed with the carrier's, since
+sub-node ids are unique only inside their tree). Every other method → an
+`X-Pypst-Attachment-Skipped: <METHOD> <filename>` header, never an exception.
+
+**Divergences from the rest of the package, all deliberate and all in the
+module docstring**: every value that reaches a header is stripped of control
+characters first (this is the layer where attacker-controlled text becomes
+header text); `ValueError`/`LookupError` from the `email` package is re-raised
+as `PstFormatError`; MIME boundaries are deterministic
+(`----=_pypst.<nid>.<n>`) because `email` draws them from `random`; and file
+names on disk are node ids, never `PidTagSubject` or
+`PidTagAttachLongFilename`, both of which may say `../`.
+
+## `pypst.mbox` — P10 (landed; not a port)
+
+```python
+MBOX_POLICY = POLICY.clone(linesep="\n")     # records are LF; an .eml on disk is CRLF
+INDEX_NAME = "folders.txt"; MAILER_DAEMON = "MAILER-DAEMON"; EPOCH = 1970-01-01T00:00Z
+
+def mbox_name(folder) → str        # "<nid>.mbox" — never the display name
+def export_mbox(folder, dest_dir, *, recurse=True, strict=False, limits=None) → int
+    # one <nid>.mbox per folder of the subtree plus `folders.txt`
+    # ("<nid>.mbox\t<display path>\t<count>", or "# skipped: <PstError type>"); an existing
+    # file is REPLACED, not appended to; returns the messages written
+```
+
+RFC 4155 records built from `to_eml`, written with the stdlib's
+`mailbox.mbox`. The From_ line is `<sender SMTP, else PidTagSenderEmailAddress
+when it is an addr-spec, else MAILER-DAEMON> <time.asctime of
+client_submit_time, else delivery_time, else the epoch, in UTC>` — no clock,
+because two exports of one store must be byte-identical. The stdlib quotes a
+body line beginning `From ` to `>From ` and does not unquote on read, which is
+**mboxo and not the mboxrd RFC 4155 prefers**: agreeing with the reader
+everybody has is worth more than being reversible and read wrongly by default.
+What is guaranteed is that no body line can be mistaken for a record
+separator, so the message count survives.
 
 ## `pypst.debug` — P29 (built), then every layer registers
 
@@ -1138,7 +1228,14 @@ Expected names, one per upstream example: `header`, `btrees`, `density_list`,
 `store` (the draft said `store_props`; P07 registered it as `store`, beside
 `pc`, `heap` and `bth`, which are named for the layer and not the example),
 `named_props`, `root_folder`, `ipm_subtree`, `search_updates`,
-and later `messages` (P19). A dumper prints upstream's example output for its
+and later `messages` (P19). P10 adds two that have no upstream example at
+all: `eml <file> <nid-hex>` prints one message as RFC 5322 on stdout, and
+`export <file> <dir>` writes the whole store — one `<nid>.mbox` per folder
+by default, one `<nid>.eml` per message with `--eml` — and prints
+`Format:`/`Folders:`/`Messages:`. `debug.dumper_arguments(dumper)` is what
+`main` and `tests/contract.py` count a dumper's extra POSITIONAL arguments
+with, so a keyword-only flag (`export`'s `as_eml`) is not mistaken for one.
+A dumper prints upstream's example output for its
 layer and raises only `PstError`; `tests/golden_parsers.py` parses both sides
 with one parser and the test compares values.
 
@@ -1176,7 +1273,8 @@ limits, and the readers that exist:
 from pypst import (
     AttachMethod, Attachment, DEFAULT_LIMITS, EntryId, Folder, Header, Limits, Message,
     PstError, PstFormatError, PstLimitError, PstNotFoundError, PstUnsupportedError,
-    Recipient, RecipientType, Store, __version__, open, read_header,
+    Recipient, RecipientType, Store, __version__, eml_bytes, export_folder, export_mbox,
+    open, read_header, to_eml, write_eml,
 )
 __all__ == sorted(__all__)           # tests/test_contract.py asserts it, and that every name resolves
 ```
@@ -1187,8 +1285,12 @@ like `gzip.open`), and `tests/test_contract.py` pins that it is not the
 builtin. `EntryId` is exported with it, because it is what `ipm_subtree`
 and the other entry-id accessors return and a caller holds one.
 
-The last promise still outstanding is P10's `pypst.eml`, which is not a
-port and is not stubbed early.
+P10 closed the last promise on the list and joined this surface: `to_eml`,
+`eml_bytes` and `write_eml` from `pypst.eml`, `export_folder` from the same
+module and `export_mbox` from `pypst.mbox`. They are exported here, and not
+only from their modules, because they are what the reader is FOR — a caller
+who has a store and wants the mail out of it should not have to know which
+module assembles it.
 
 `__all__` is the enumerable contract, but not the whole of it: the T5
 harness (`tests/contract.py`) discovers **every** public callable under the
@@ -1200,6 +1302,20 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
 
 ## Changelog
 
+- 2026-09-16 — P10 landed `pypst.eml` and `pypst.mbox`, the first modules in
+  this package with **no upstream counterpart at all** (upstream produces
+  text dumps, never mail), and added `to_eml`, `eml_bytes`, `write_eml`,
+  `export_folder` and `export_mbox` to `pypst.__all__` plus the `eml` and
+  `export` dumpers to `pypst.debug.DUMPERS`. Changes from the draft above:
+  `to_eml` gained a `limits` argument (the caller's ceilings, not only the
+  store's); `write_eml` returns the `Path` it wrote; `export_folder` gained
+  `recurse`/`strict`/`limits` and the two walk helpers `folder_paths` and
+  `readable_messages` that it and `export_mbox` share; and the marker header
+  is emitted only when something WAS synthesised rather than always, so its
+  presence is the signal. `tests/contract.py` gained nine adapters and a
+  `workdir` on its fixture object, `tests/corruption_harness.py` gained the
+  `eml.export` entry point (bounded by `EML_BYTES_PER_SWEEP`), and
+  `debug.main` learned `--eml` and `dumper_arguments`.
 - 2026-09-16 — P09 landed `pypst.messaging.message` and
   `pypst.messaging.attachment`, and added `Store.open_message`,
   `Folder.messages()` / `Folder.associated()`; `Message`, `Recipient`,

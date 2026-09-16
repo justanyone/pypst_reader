@@ -43,6 +43,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
+from pypst.eml import eml_bytes
 from pypst.errors import PstError
 from pypst.limits import DEFAULT_LIMITS, Limits
 from pypst.ltp.heap import HeapNode, HeapNodeId
@@ -166,6 +167,9 @@ def exercise(data: bytes, shape: BaseShape, limits: Limits = DEFAULT_LIMITS) -> 
         # every attachment of every message that opened.
         outcomes.append(_attempt("message.open", lambda: read_messages(f, limits)))
         outcomes.append(_attempt("message.attachments", lambda: read_attachments(f, limits)))
+        # P10: every message that opens, assembled into an `.eml` — the whole
+        # of `pypst.eml` over whatever the mutation made of the store.
+        outcomes.append(_attempt("eml.export", lambda: export_eml(f, limits)))
     return outcomes
 
 
@@ -178,6 +182,13 @@ def exercise(data: bytes, shape: BaseShape, limits: Limits = DEFAULT_LIMITS) -> 
 # payload read, per mutation, over thousands of mutations.
 MESSAGES_PER_SWEEP = 16
 ATTACHMENTS_PER_SWEEP = 4
+
+# `eml.export` walks the same messages as `message.open`, but pays for a
+# base64 of every attachment on top. The budget is on OUTPUT rather than on a
+# message count so that the cheap stores are swept whole and one store with a
+# 93 KB attachment (`pstsdk-sample1.pst`) cannot make every mutation cost a
+# megabyte; the first message is always assembled, whatever it costs.
+EML_BYTES_PER_SWEEP = 256 * 1024
 
 
 def _message_nodes(store: Store) -> list[NodeId]:
@@ -251,6 +262,30 @@ def read_attachments(f: io.BytesIO, limits: Limits) -> int:
             if seen >= ATTACHMENTS_PER_SWEEP:
                 return seen
     return seen
+
+
+def export_eml(f: io.BytesIO, limits: Limits) -> int:
+    """Every message that opens, assembled into an `.eml`; the count assembled.
+
+    Nothing about the assembly is suppressed: `pypst.eml` promises
+    `PstError` or an `EmailMessage`, and a `ValueError` out of the `email`
+    package over a mutated `PidTagAttachMimeTag` is exactly what this
+    harness exists to catch. Opening is suppressed because `message.open`
+    judges it.
+    """
+    store = Store(f, limits=limits)
+    made = 0
+    produced = 0
+    for node in _message_nodes(store):
+        try:
+            message = store.open_message(node)
+        except PstError:
+            continue  # judged by `message.open`, which does not suppress it
+        produced += len(eml_bytes(message))
+        made += 1
+        if produced >= EML_BYTES_PER_SWEEP:
+            break
+    return made
 
 
 def read_store(f: io.BytesIO, limits: Limits) -> int:

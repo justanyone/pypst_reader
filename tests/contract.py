@@ -85,7 +85,7 @@ from types import ModuleType
 from typing import Any
 
 import pypst
-from pypst import block_sig, crc, debug, encode, limits, rtf
+from pypst import block_sig, crc, debug, eml, encode, limits, mbox, rtf
 from pypst.errors import PstError, PstFormatError
 from pypst.limits import DEFAULT_LIMITS, Limits
 from pypst.ltp import heap, prop_context, prop_type, table_context, tree
@@ -755,6 +755,12 @@ class Store:
             p.write_bytes(self.data)
             self._cache["path"] = p
         return self._cache["path"]  # type: ignore[return-value]
+
+    @property
+    def workdir(self) -> Path:
+        """The directory the store was written into — where P10's exporters write their output."""
+        _ = self.path  # creates the temp directory if this store has not been written yet
+        return self._workdir  # type: ignore[return-value]
 
     def close(self) -> None:
         opened = self._cache.pop("store", None)
@@ -1525,9 +1531,38 @@ def _debug_attachment_accessor_calls(s: Store) -> Iterator[Call]:
             yield call(a, prop_id, refuse, label=f"{a.node} 0x{prop_id:04X} refused")
 
 
+def _eml_calls(s: Store) -> Iterator[Call]:
+    """`to_eml` / `eml_bytes` over every message, both header policies."""
+    for m in _messages(s):
+        yield call(m, label=str(m.node))
+        if s.thorough:
+            yield call(m, synthesize_missing=False, label=f"{m.node} verbatim")
+
+
+def _write_eml_calls(s: Store) -> Iterator[Call]:
+    """`write_eml` into the workdir, under the name `export_folder` would use."""
+    for m in _messages(s):
+        yield call(m, s.workdir / f"contract-{m.node.raw:08x}.eml", label=str(m.node))
+
+
+def _export_calls(s: Store) -> Iterator[Call]:
+    """Every folder exported on its own (`recurse=False`, so the cost stays one folder's).
+
+    The whole-subtree walk is judged by the `export` dumper, once per store.
+    """
+    folders = _folders(s)
+    for folder in folders if s.thorough else folders[:1]:
+        yield call(folder, s.workdir / f"export-{folder.node.raw:08x}", recurse=False, label=str(folder.node))
+
+
+def _folder_paths_calls(s: Store) -> Iterator[Call]:
+    for folder in _folders(s) if s.thorough else _folders(s)[:1]:
+        yield call(folder, label=str(folder.node))
+
+
 def _dumper_calls(dumper: Callable[..., None]) -> Builder:
     """A registered dumper over the store on disk, its extra positional arguments built by parameter name."""
-    extras = list(inspect.signature(dumper).parameters)[1:]
+    extras = debug.dumper_arguments(dumper)
 
     def build(s: Store) -> Iterator[Call]:
         variants: list[list[str]] = [[]]
@@ -1547,6 +1582,7 @@ def _main_calls(s: Store) -> list[Call]:
 
 EXTRA_ARGS: dict[str, Callable[[Store], list[str]]] = {
     "nid": lambda s: [f"{s.nids[0]:x}", "0x21", "zz", "0"],
+    "dest": lambda s: [str(s.workdir / "dump-export")],
 }
 
 _WIRE_RNG = random.Random(0x5054)  # a fixed sample of u16 property codes, the same every run
@@ -1726,6 +1762,16 @@ ADAPTERS: dict[object, Builder] = {
     debug.folder_lines: _debug_folder_calls,
     debug.folder_table: _folder_table_calls,
     debug.folder_accessor: _debug_folder_accessor_calls,
+    # the .eml assembler and the mbox exporter (P10)
+    eml.to_eml: _eml_calls,
+    eml.eml_bytes: _eml_calls,
+    eml.write_eml: _write_eml_calls,
+    eml.eml_name: _message_calls,
+    eml.folder_paths: _folder_paths_calls,
+    eml.readable_messages: _folder_paths_calls,
+    eml.export_folder: _export_calls,
+    mbox.export_mbox: _export_calls,
+    mbox.mbox_name: _folder_paths_calls,
     # the CLI's dispatch, and every registered dumper, in-process
     debug.main: _main_calls,
     **{dumper: _dumper_calls(dumper) for dumper in debug.DUMPERS.values()},
@@ -1751,6 +1797,7 @@ STORE_FREE: frozenset[object] = frozenset(
 )
 
 NOT_STORE_INPUT: dict[object, str] = {
+    debug.dumper_arguments: "reflection over a registered dumper's own signature; no file is involved",
     limits.VisitedSet: "a walk's own bookkeeping; its keys come from the walk, not the file",
     limits.VisitedSet.add: "as VisitedSet",
     limits.check_depth: "caller-side check; both arguments are the reader's own numbers",

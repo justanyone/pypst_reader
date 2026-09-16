@@ -104,8 +104,12 @@ def test_python_half_runs_green_with_rust_skipped() -> None:
         # grows with the package: at P09 it is ~16 minutes on this box, and
         # the parity/goldens/fixture steps run before it. The timeout is a
         # hang guard, not a performance budget — it is raised when a layer
-        # lands, and the row that raises it says so.
-        timeout=1800,
+        # lands, and the row that raises it says so. **P10** added an
+        # `eml.export` entry point to the corruption sweep, nine adapters
+        # (two of which write files) to the contract sweep and two dumpers
+        # to the CLI sweep, so 1800 s is no longer the comfortable margin it
+        # was: 2400 s.
+        timeout=2400,
     )
     # The script's output is lint summaries, the fixture byte count, and a
     # pytest tail: nothing from a private store is ever printed by any step.
