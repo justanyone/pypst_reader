@@ -65,16 +65,28 @@ uv run pytest                    # everything
 uv run pytest -m "not oracle"    # skip differential tests (no Rust needed)
 ```
 
-## Mail stores are never committed
+## Mail stores in the repository
 
-`tests/fixtures/Empty.pst` — Microsoft's MIT-licensed empty store — is the only
-mail store in this repository and the only one that may ever be committed.
+Two kinds, both pinned by hash, nothing else:
+
+- `tests/fixtures/Empty.pst` — Microsoft's MIT-licensed empty store.
+- `tests/fixtures/public/` — a small corpus of **licensed test stores**
+  (Microsoft's PST SDK samples, Apache Tika's, java-libpst's, and a synthetic
+  MIT one), 29 KB–265 KB each, every one listed with its SHA-256, source
+  commit and licence in [that directory's README](tests/fixtures/public/README.md).
+  The Rust oracle's output over each is captured in `tests/golden/`, so the
+  differential tests run without a Rust toolchain.
+
 Real stores live in `tests/fixtures/private/`, which is gitignored, and a
-`pre-commit` hook refuses any commit containing one. A PST is somebody's
-correspondence; a public repository that has ever held one has published it.
+`pre-commit` hook (and CI) refuses any commit containing a store that is not
+in the manifest. A PST is somebody's correspondence; a public repository that
+has ever held one has published it.
 
 Tests may assert that a private store *parses*. They may not assert, print, or
 log what it *says* — a CI log is a publication channel.
+
+**Unicode stores only.** Stores written by Outlook 97–2002 (ANSI format) are
+refused with `PstUnsupportedError`; see ADR-0003.
 
 ## Licence and attribution
 

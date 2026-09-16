@@ -10,8 +10,19 @@ description: pytest conventions for this port — the fixture policy that keeps 
 | fixture | where | may a test print its content? |
 |---|---|---|
 | `Empty.pst` | `tests/fixtures/` (committed) | **yes** — Microsoft's, MIT, holds no mail |
+| the public corpus | `tests/fixtures/public/` (committed, SHA-256 pinned) | **yes** — licensed vendor/synthetic test data; see its README for what each exercises |
+| oracle goldens | `tests/golden/<fixture>/<example>.txt` | yes — derived from the corpus; never hand-edit, regenerate with `scripts/capture_oracle.py` |
 | real stores | `tests/fixtures/private/` (gitignored) | **no** — structure only, never content |
 | large stores | outside the repo entirely | no; absolute path, profiling only |
+
+Parametrise over the corpus so a failure names the store:
+
+```python
+from tests.conftest import public_fixture_ids, public_fixture_paths
+
+@pytest.mark.parametrize("store", public_fixture_paths(), ids=public_fixture_ids())
+def test_header_matches_golden(store): ...
+```
 
 A test may assert that a private store **parses**. It may never assert, print,
 or log **what it says** — not a subject, not an address, not a body. A failing
@@ -19,10 +30,13 @@ assertion prints its operands and CI output is a publication channel.
 
 Three guards, and none of them may be weakened:
 
-- `.gitignore` ignores every `*.pst` except `tests/fixtures/Empty.pst` by name
-- `scripts/git-hooks/pre-commit` blocks a staged store, and checks the exempt
-  fixture's md5 so the exemption cannot be used as a smuggling slot
-- CI's `no-mail-stores` job, which `--no-verify` cannot bypass
+- `.gitignore` ignores every `*.pst` except `Empty.pst` and `tests/fixtures/public/*.pst`
+- `scripts/git-hooks/pre-commit` blocks a staged store unless it is `Empty.pst`
+  (by md5) or its SHA-256 is in `tests/fixtures/public/MANIFEST.sha256`
+- CI's `no-mail-stores` job re-checks the manifest, which `--no-verify` cannot bypass
+
+Adding a store is the five-step procedure in `tests/fixtures/public/README.md`
+(licence from the LICENSE file, no real mail, oracle-vetted, manifest, NOTICE).
 
 ## Markers
 
@@ -55,19 +69,30 @@ Assert the **exception type**, not merely that something raised.
 
 ## Differential tests
 
-```python
-from tests.conftest import run_oracle
+Two forms. The everyday one reads a **committed golden** and needs no Rust:
 
-@pytest.mark.oracle
-def test_header_matches_upstream(oracle, empty_pst):
-    expected = run_oracle(oracle, "read_header", str(empty_pst))
+```python
+from tests.golden_parsers import parse_read_header   # P29
+from tests.conftest import public_fixture_ids, public_fixture_paths
+
+@pytest.mark.parametrize("store", public_fixture_paths(), ids=public_fixture_ids())
+def test_header_matches_golden(store, golden):
+    expected = parse_read_header(golden(store, "read_header"))
     ...
 ```
+
+The `oracle`-marked one runs the Rust live (`run_oracle` in conftest) and is
+for private stores, and for the drift check that the goldens still match the
+built oracle (`scripts/capture_oracle.py --check`).
 
 Parse the oracle's text into values and compare **values**, not strings:
 formatting is upstream's choice and will change under you, while the facts will
 not. And name the fixture in the assertion message — "matches the oracle" is
 not a claim until you say on what.
+
+The tiers — parity, spec vectors, goldens, denial, the contract harness,
+limits, property tests — are in `docs/TEST-PLAN.md`. A layer is done when it
+has tests in every tier that applies.
 
 ## What "done" means for a test
 

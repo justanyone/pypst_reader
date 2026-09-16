@@ -37,8 +37,27 @@ would imply Microsoft authorship or endorsement is a bug.
 pinned above. It is covered by the same MIT licence and the same Microsoft
 copyright, and it is redistributed here under that grant. It contains no mail.
 
-**It is the only mail store in this repository, and the only one that may ever
-be committed.** See the first block of `.gitignore`.
+## Test fixture corpus
+
+`tests/fixtures/public/` holds redistributable test stores, each pinned by
+SHA-256 in `MANIFEST.sha256` and documented with source, commit and licence in
+the README there (ADR-0004). None ships in the package. Their licences:
+
+- **Apache License 2.0** — `pstsdk-*.pst` (5 files): from the Microsoft PST
+  File Format SDK, Copyright (c) Microsoft Corporation, via the
+  enrondata/pstsdk mirror; `tika-variousBodyTypes.pst`: from Apache Tika,
+  Copyright (c) The Apache Software Foundation; `javalibpst-dist-list.pst`:
+  from java-libpst (Richard Johnson), under the Apache-2.0 option of its
+  dual licence. The licence text is at
+  `tests/fixtures/public/LICENSES/Apache-2.0.txt`, as §4 of that licence
+  requires.
+- **MIT** — `pstd-inline-cid.pst`: Copyright (c) 2026 andrew3stedall
+  (PSTD), a synthetic store generated with EMLtoPST (MIT). Text at
+  `tests/fixtures/public/LICENSES/MIT-PSTD.txt`.
+
+Together with `Empty.pst` these are the only mail stores that may be
+committed, and only through the manifest procedure. See the first block of
+`.gitignore`.
 
 ## The specification
 

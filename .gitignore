@@ -16,6 +16,10 @@
 *.ost
 *.pab
 !tests/fixtures/Empty.pst
+# The public corpus: every file here is licensed, synthetic-or-vendor test
+# data, and SHA-256 pinned in tests/fixtures/public/MANIFEST.sha256. The hook
+# and CI refuse any .pst whose hash is not in that manifest. ADR-0004.
+!tests/fixtures/public/*.pst
 
 # Private fixtures — real mail, used locally, never shared.
 tests/fixtures/private/

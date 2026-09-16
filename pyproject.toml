@@ -51,7 +51,7 @@ packages = ["src/pypst"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]  # "." so tests can `from tests.conftest import ...`
 markers = [
     "oracle: differential test against the built Rust binary; skips when reference/ is absent",
     "private: needs a real mail store under tests/fixtures/private/; skips when absent",

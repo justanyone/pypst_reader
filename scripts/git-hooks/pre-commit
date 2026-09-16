@@ -1,26 +1,39 @@
 #!/usr/bin/env bash
-# pre-commit — refuse to commit somebody's mail.
+# pre-commit — refuse to commit a mail store.
 #
-# .gitignore already ignores every mail store. This hook exists because
-# `git add -f` defeats .gitignore silently, and because the cost of the
-# mistake is not recoverable: a store pushed to a public remote has been
-# published, and `git rm` does not unpublish it.
+# .gitignore already ignores *.pst; this hook exists because `git add -f`
+# silently defeats .gitignore, and a PST is somebody's correspondence: a public
+# repository that has ever held one has published it, `git rm` notwithstanding.
 #
-# Exactly one mail store may be committed: tests/fixtures/Empty.pst, which is
-# Microsoft's MIT-licensed empty store (see NOTICE). Its content hash is
-# checked too, so that the exemption cannot be used as a smuggling slot by
-# putting a real store at that path.
+# Exactly two things may pass:
+#   1. tests/fixtures/Empty.pst — Microsoft's MIT empty store, by md5, so the
+#      exemption cannot be used as a smuggling slot.
+#   2. tests/fixtures/public/<name>.pst — the licensed public corpus, each file
+#      by SHA-256 as recorded in tests/fixtures/public/MANIFEST.sha256, which
+#      must itself be committed (or staged) alongside. See ADR-0004.
 #
-# Installed by scripts/setup.sh. To bypass in a genuine emergency you would
-# have to pass --no-verify, which you should not do.
+# Installed by scripts/setup.sh as a symlink into .git/hooks. CI re-checks all
+# of this in the `no-mail-stores` job, which --no-verify cannot bypass.
 
 set -euo pipefail
 
 ALLOWED_PATH="tests/fixtures/Empty.pst"
-ALLOWED_SHA="13a1f7eb9e35fcac72cf37360e3a96bc"
+ALLOWED_MD5="13a1f7eb9e35fcac72cf37360e3a96bc"
+CORPUS_DIR="tests/fixtures/public"
+MANIFEST="$CORPUS_DIR/MANIFEST.sha256"
 
 staged="$(git diff --cached --name-only --diff-filter=ACMR)"
 fail=0
+
+# The manifest as it will exist after this commit: staged version if staged,
+# else the committed one. A store is allowed only if THAT manifest names it.
+manifest_content() {
+    if grep -qxF "$MANIFEST" <<< "$staged"; then
+        git show ":$MANIFEST"
+    elif git cat-file -e "HEAD:$MANIFEST" 2>/dev/null; then
+        git show "HEAD:$MANIFEST"
+    fi
+}
 
 while IFS= read -r file; do
     [[ -z $file ]] && continue
@@ -28,9 +41,18 @@ while IFS= read -r file; do
         *.pst|*.ost|*.pab)
             if [[ $file == "$ALLOWED_PATH" ]]; then
                 actual="$(git show ":$file" | md5sum | cut -d' ' -f1)"
-                if [[ $actual != "$ALLOWED_SHA" ]]; then
+                if [[ $actual != "$ALLOWED_MD5" ]]; then
                     echo "BLOCKED: $file is not the MIT fixture it claims to be." >&2
-                    echo "  expected md5 $ALLOWED_SHA, staged content is $actual" >&2
+                    echo "  expected md5 $ALLOWED_MD5, staged content is $actual" >&2
+                    fail=1
+                fi
+            elif [[ $file == "$CORPUS_DIR"/*.pst && $file != "$CORPUS_DIR"/*/* ]]; then
+                name="${file#"$CORPUS_DIR"/}"
+                actual="$(git show ":$file" | sha256sum | cut -d' ' -f1)"
+                if ! manifest_content | grep -qxF "$actual  $name"; then
+                    echo "BLOCKED: $file is not in $MANIFEST with sha256 $actual." >&2
+                    echo "  A corpus store must be licensed, documented in $CORPUS_DIR/README.md," >&2
+                    echo "  and pinned in the manifest BEFORE it is staged. See ADR-0004." >&2
                     fail=1
                 fi
             else
@@ -41,8 +63,7 @@ while IFS= read -r file; do
     esac
 done <<< "$staged"
 
-# Belt and braces: anything under the private fixture directory, whatever it
-# is called. A renamed .pst is still a .pst.
+# Nothing from the private directory, ever, other than its README.
 if grep -qE '^tests/fixtures/private/' <<< "$staged"; then
     offenders="$(grep -E '^tests/fixtures/private/' <<< "$staged" | grep -v 'README.md$' || true)"
     if [[ -n $offenders ]]; then
@@ -58,5 +79,4 @@ if (( fail )); then
     echo "This hook is the last line of defence. See tests/fixtures/private/README.md" >&2
     exit 1
 fi
-
 exit 0

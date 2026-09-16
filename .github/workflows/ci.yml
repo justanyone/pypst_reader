@@ -55,15 +55,23 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: No tracked mail store other than the MIT fixture
+      # Allowed: Empty.pst (MIT, Microsoft) and the public corpus, every
+      # member of which is SHA-256 pinned in MANIFEST.sha256 (ADR-0004).
+      - name: No tracked mail store outside the pinned public corpus
         run: |
           set -euo pipefail
-          tracked=$(git ls-files '*.pst' '*.ost' '*.pab' | grep -v '^tests/fixtures/Empty.pst$' || true)
+          tracked=$(git ls-files '*.pst' '*.ost' '*.pab' \
+            | grep -v '^tests/fixtures/Empty.pst$' \
+            | grep -v '^tests/fixtures/public/[^/]*\.pst$' || true)
           if [ -n "$tracked" ]; then
-            echo "A mail store is tracked by git:"; echo "$tracked"; exit 1
+            echo "A mail store is tracked by git outside the corpus:"; echo "$tracked"; exit 1
           fi
-          echo "clean: only tests/fixtures/Empty.pst (MIT, message-free)"
-      - name: The exempt fixture is the file it claims to be
+          echo "clean: only Empty.pst and tests/fixtures/public/"
+      - name: Every committed store is the file it claims to be
         run: |
           set -euo pipefail
           echo "13a1f7eb9e35fcac72cf37360e3a96bc  tests/fixtures/Empty.pst" | md5sum -c -
+          cd tests/fixtures/public
+          sha256sum -c --strict MANIFEST.sha256
+          # ...and nothing is present that the manifest does not list
+          for f in *.pst; do grep -q "  $f\$" MANIFEST.sha256 || { echo "$f is not in MANIFEST.sha256"; exit 1; }; done

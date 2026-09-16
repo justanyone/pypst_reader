@@ -1,8 +1,10 @@
 """Shared fixtures — and the one rule that matters about mail stores.
 
-`tests/fixtures/Empty.pst` is Microsoft's MIT-licensed empty store. It is the
-ONLY mail store in this repository and the only one that may ever be
-committed (see NOTICE and the first block of .gitignore).
+Two kinds of store may be committed, and both are pinned by hash:
+`tests/fixtures/Empty.pst` (Microsoft, MIT, no mail) and the public corpus in
+`tests/fixtures/public/` (licensed vendor test stores and synthetic stores,
+every one listed in MANIFEST.sha256 — see ADR-0004 and the README there).
+Tests may inspect those freely: they are published test data.
 
 Everything under `tests/fixtures/private/` is real correspondence, is ignored
 by git, is enforced-ignored by scripts/git-hooks/pre-commit, and MUST NOT be
@@ -32,6 +34,32 @@ def empty_pst() -> Path:
     if not path.exists():
         pytest.fail(f"{path} is missing — it is committed; check out the repo again")
     return path
+
+
+PUBLIC = FIXTURES / "public"
+
+
+def public_fixture_paths() -> list[Path]:
+    """Every store in the public corpus, in manifest order.
+
+    Module-level (not a fixture) so tests can parametrize over it: a
+    differential test should run once per fixture and report per fixture.
+    """
+    manifest = PUBLIC / "MANIFEST.sha256"
+    if not manifest.exists():
+        return []
+    names = [line.split("  ", 1)[1].strip() for line in manifest.read_text().splitlines() if "  " in line]
+    return [PUBLIC / name for name in names]
+
+
+def public_fixture_ids() -> list[str]:
+    return [p.stem for p in public_fixture_paths()]
+
+
+@pytest.fixture(scope="session")
+def public_stores() -> list[Path]:
+    """The public corpus plus Empty.pst. Never empty on a correct checkout."""
+    return [FIXTURES / "Empty.pst", *public_fixture_paths()]
 
 
 @pytest.fixture(scope="session")
