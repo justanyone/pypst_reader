@@ -14,9 +14,9 @@ not LZFu, and every ceiling. `PstLimitError`, `PstUnsupportedError`,
 `PstNotFoundError` and `PstFormatError` stay apart throughout.
 
 **Then the differential.** `python -m pypst.debug messages` against the
-committed `dump_messages` goldens — byte for byte on seven of the eight
-Unicode corpus stores (`synth-basics` differs in the six lines P08's
-`rgib[TCI_4b]` divergence explains and this file re-pins) — and then the same
+committed `dump_messages` goldens — byte for byte on all eight Unicode
+corpus stores (`synth-basics` differed in six `Associated Count` lines
+until P06b landed; that fix is now pinned here as identity) — and then the same
 goldens re-read as values through `tests.golden_parsers.parse_dump_messages`
 and compared message by message: class, the raw subject with its control
 bytes, both times as FILETIME ticks, each body's length and CRC-32, each
@@ -81,9 +81,9 @@ UNICODE_IDS = [p.stem for p in UNICODE_STORES]
 # The store whose root folder's tables this port refuses outright (P06/P08):
 # it has no readable folder below the root and therefore no message.
 NO_TABLES = "pstd-inline-cid"
-# `synth-basics.pst`: six `Associated Count: 0` lines that this port prints as
-# `Associated Table: None`, for the reason `tests/test_folder.py` pins.
-BYTE_IDENTICAL = [p for p in UNICODE_STORES if p.stem != "synth-basics"]
+# Every Unicode store, `synth-basics.pst` included: its six `Associated Count: 0`
+# lines matched once P06b let an empty table carry an under-width TCINFO.
+BYTE_IDENTICAL = list(UNICODE_STORES)
 BYTE_IDENTICAL_IDS = [p.stem for p in BYTE_IDENTICAL]
 
 SUBMESSAGE = "pstsdk-submessage"
@@ -558,22 +558,17 @@ def test_debug_messages_is_byte_identical_to_the_golden(
     assert status == golden_exit(store, EXAMPLE), store.stem
 
 
-def test_synth_basics_differs_only_in_the_documented_associated_lines(
-    golden, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """The one store that is not byte-identical, and the six lines that make it so (P06's `rgib[TCI_4b]`)."""
+def test_synth_basics_is_byte_identical_since_p06b(golden, capsys: pytest.CaptureFixture[str]) -> None:
+    """The store that used to differ (six `Associated Count: 0` lines, P06's `rgib[TCI_4b]`) no longer does.
+
+    Kept as its own test so that re-tightening the empty-table check in
+    `ltp/table_context.py` is caught here by name, not only in the sweep.
+    """
     store = _path("synth-basics")
-    expected = golden(store, EXAMPLE).splitlines()
     got, status = _dumper_output(store, capsys)
-    got_lines = got.splitlines()
-    assert len(got_lines) == len(expected)
-    differ = [i for i, (a, b) in enumerate(zip(expected, got_lines, strict=True)) if a != b]
-    assert [(expected[i], got_lines[i]) for i in differ] == [("  Associated Count: 0", "  Associated Table: None")] * 6
+    assert got == golden(store, EXAMPLE)
     assert status == 0
-    # ...and the store's one readable message block is identical.
-    assert [ln for i, ln in enumerate(got_lines) if i not in differ] == [
-        ln for i, ln in enumerate(expected) if i not in differ
-    ]
+    assert "Associated Table: None" not in got
 
 
 def test_the_dumper_is_registered_and_takes_no_extra_arguments() -> None:
