@@ -50,7 +50,6 @@ can start today.
 | P03-BLOCK | 2 | ✗ blocked on P02 | `ndb/block.py` — data blocks, XBLOCK/XXBLOCK trees, subnode BTrees; wire in `encode.py` and `crc.py`. First point at which real bytes come out of a real file. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p03-block) |
 | P21-RTF | 2 | ⏳ in flight — agent/p21-rtf 2026-09-15 | `rtf.py` — port `crates/compressed-rtf` (LZFu decompression; 207-entry dictionary transcribed mechanically). 4 upstream tests + [MS-OXRTFCP] vectors. Needed by P09, independent of everything. | [`todo/T03-messaging.md`](todo/T03-messaging.md#p21-rtf) |
 | P22-PROPTYPE | 2 | ⏳ in flight — agent/p22-proptype 2026-09-15 | `ltp/prop_type.py` — the MAPI property-type decoders as pure functions over bytes: PT_LONG…PT_SYSTIME (FILETIME→UTC datetime), PT_GUID, PT_UNICODE/STRING8, PT_BINARY, PT_MV_*. Unknown type → `PstUnsupportedError`. Split out of P05 so it can run now. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p22-proptype) |
-| P18-PARITY | 2 | ⏳ in flight — agent/p18-parity 2026-09-15 | `scripts/check_upstream_parity.py` + `tests/parity/`: every upstream `#[test]` has a tagged Python twin; the lint fails otherwise. Tests whose module is not yet ported land as `xfail(reason="P23")`. | [`todo/T06-testing.md`](todo/T06-testing.md#p18-parity) |
 | P19-ORACLE-DUMP | 2 | ✗ not started | `oracle/dump_messages.rs` — our own non-interactive Rust example against the pinned crate: every folder, message, recipient, attachment, embedded message. Captured to goldens like the others. Replaces the `browse_pst` TUI as P08/P09's oracle. | [`todo/T06-testing.md`](todo/T06-testing.md#p19-oracle-dump) |
 | P04-HEAP | 2 | ✗ blocked on P03 | `ltp/heap.py` + `ltp/tree.py` — heap-on-node and the BTree-on-heap. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p04-heap) |
 | P05-PC | 2 | ✗ blocked on P04, P22 | `ltp/prop_context.py` — property contexts over the P22 decoders. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p05-pc) |
@@ -83,6 +82,7 @@ can start today.
 | P13-ANSI | ✅ 2026-09-15 decided | Unicode only; ANSI refused with `PstUnsupportedError`; ANSI work is the sibling library, row P27-NU. ADR-0003. |
 | P00-PLAN | ✅ 2026-09-15 | ADR-0003/0004, `docs/TEST-PLAN.md` (ten tiers), `docs/AGENTS.md` (multi-agent protocol), `docs/INTERFACES.md` (layer contracts), rows P17–P31, lane table. |
 | P29-GOLDEN-HARNESS | ✅ 2026-09-15 | `pypst.debug` dispatcher, `tests/golden_parsers.py` (`parse_read_header` complete, 9/9 goldens; six value parsers; seven described stubs), `golden`/`golden_exit` fixtures, oracle drift test. 84 tests added, 125 passing; each seen red once. |
+| P18-PARITY | ✅ 2026-09-15 | `scripts/check_upstream_parity.py` + `scripts/parity-pending.txt`: 15 upstream tests — 5 twinned in place (encode ×4, tables ×1; upstream has no CRC tests), 10 pending by row; 12 lint tests each seen red; wired into CI lint (skips without `reference/`, bites nightly). |
 
 ## Still the user's call
 
