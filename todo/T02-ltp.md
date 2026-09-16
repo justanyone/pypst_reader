@@ -39,6 +39,16 @@ PT_BINARY, PT_SYSTIME (a Windows FILETIME → `datetime`, UTC, and beware the
 including types you did not expect to see. Unknown property types must raise
 `PstUnsupportedError` naming the type — never silently return raw bytes.
 
+**Two things P22 left for this row.** (1) `ObjectRef.node` is a raw `int`
+because P23's `NodeId` had not landed when P22 was built — wrap it (one-line
+annotation change in `prop_type.py` plus the tests). (2) **MV_GUID:** upstream
+reads a u32 count then GUIDs; [MS-PST] 2.3.3.4.1 names PtypGuid as a
+fixed-size (packed, no count) example, and pstsdk packs. P22 followed upstream
+and pinned it (`test_mv_guid_follows_upstream_count_prefix`). No corpus store
+carries an MV_GUID property. If a private store does, settle it there and
+record the answer in the module docstring; if not, leave upstream's reading
+and the pin.
+
 **Size note:** the type decoders are P22 and land before this row starts; if
 the contexts alone overrun a session, split the PT_MV_* wiring off.
 
