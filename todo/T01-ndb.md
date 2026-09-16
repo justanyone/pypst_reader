@@ -7,7 +7,7 @@ maybe two thirds. This is the largest cluster and the most mechanical.
 Read `.claude/skills/rust-port/SKILL.md` before starting any block here.
 
 ### P01-HEADER
-status: ✗ not started
+status: ✅ 2026-09-15 — `python -m pypst.debug header` parsed by `parse_read_header` equals the golden on 7/7 Unicode stores (Empty + 6 corpus), twice: dumper text and `Header` attributes compared as values; ANSI refused 2/2 (`pstsdk-test_ansi`, `pstsdk-sample2`, real bytes, `PstUnsupportedError` naming pypst_reader_nu, `debug header` exit 1); private stores matched the live oracle 2/2 (`scripts/oracle.sh read_header`, structure only); corruption: 110 denial cases in `tests/test_header.py` (72 truncations = every 8-byte boundary + one byte short, CRC flips in the partial and the full-only region, bad magic, bad wMagicClient, 6 unknown wVer, 2 ANSI wVer, 2 4K wVer, crypt 0x10 / 3 unknown, 8 fixed-field checks, 3 unknown fAMapValid, zero-length file); 142 tests in test_header.py + 1 parity twin (`test_magic_values`); 30/30 deliberate mutations went red (`__pycache__` cleared each time); `tests/corrupt.py` seeded for P12
 upstream: `crates/pst/src/ndb/header.rs` (640 lines, Unicode arms only), `ndb/root.rs` (292)
 oracle:   `tests/golden/*/read_header.txt` (captured), or live: `scripts/oracle.sh read_header tests/fixtures/public/pstsdk-test_unicode.pst`
 blocked on: P23 (the `BlockRef`/`ByteIndex`/`BlockId` types it returns)

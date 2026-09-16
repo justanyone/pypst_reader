@@ -24,8 +24,33 @@ from collections.abc import Callable
 from pathlib import Path
 
 from pypst.errors import PstError
+from pypst.ndb.header import read_header
 
 DUMPERS: dict[str, Callable[[Path], None]] = {}
+
+
+def dump_header(path: Path) -> None:
+    """The ten lines of upstream's `read_header` example (P01).
+
+    Prints the `__str__` forms from docs/INTERFACES.md § ids, which carry no
+    `Unicode` prefix; `parse_read_header` accepts both spellings.
+    """
+    with path.open("rb") as f:
+        header = read_header(f)
+    root = header.root
+    print(f"File Version: {header.version}")
+    print(f"Next Block: {header.next_block}")
+    print(f"Next Page: {header.next_page}")
+    print(f"File EOF Index: {root.file_eof_index}")
+    print(f"AMAP Last Index: {root.amap_last_index}")
+    print(f"AMAP Free Size: {root.amap_free_size}")
+    print(f"PMAP Free Size: {root.pmap_free_size}")
+    print(f"NBT BlockRef: {root.node_btree}")
+    print(f"BBT BlockRef: {root.block_btree}")
+    print(f"AMAP Valid: {root.amap_is_valid}")
+
+
+DUMPERS["header"] = dump_header
 
 
 def main(argv: list[str] | None = None) -> int:

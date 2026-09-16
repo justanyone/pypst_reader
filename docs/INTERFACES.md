@@ -162,12 +162,15 @@ Upstream's `Unicode*` prefix is dropped: there is only one variant here. Every
 `tests/test_ids.py` checks it against every id in the read_header and
 read_btrees goldens. Nothing here has `next()`: it has no read-path caller.
 
-## `pypst.ndb.header` + `pypst.ndb.root` — P01
+## `pypst.ndb.header` + `pypst.ndb.root` — landed (P01)
 
 ```python
-class Version(IntEnum):  ANSI_14 = 14, ANSI_15 = 15, UNICODE = 23, UNICODE_4K_36 = 36, UNICODE_4K_37 = 37
-class CryptMethod(IntEnum):  NONE = 0x00, PERMUTE = 0x01, CYCLIC = 0x02, WINDOWS_EFS = 0x10   # 0x10 → PstUnsupportedError on read
+# pypst.ndb.root
+ROOT_FORMAT = "<IQQQQQQQQBBH"
 class AmapStatus(IntEnum):  INVALID = 0x00, VALID1 = 0x01, VALID2 = 0x02
+    debug_name → str                 # "Invalid" | "Valid1" | "Valid2" — upstream's spelling; __str__ is the same
+    @classmethod from_byte(cls, value) → AmapStatus            # strict: unknown → PstFormatError
+    @classmethod from_byte_lenient(cls, value) → AmapStatus    # upstream's read: unknown → INVALID
 
 @dataclass(frozen=True, slots=True)
 class Root:                          # [MS-PST] 2.2.2.5, Unicode layout, 72 bytes
@@ -177,29 +180,60 @@ class Root:                          # [MS-PST] 2.2.2.5, Unicode layout, 72 byte
     pmap_free_size: ByteIndex
     node_btree: PageRef
     block_btree: PageRef
-    amap_is_valid: AmapStatus
+    amap_is_valid: AmapStatus        # via from_byte_lenient — an unknown byte reads as INVALID, as upstream
     SIZE = 72
-    @classmethod unpack_from(cls, buf, offset=0) → Root
+    @classmethod unpack_from(cls, buf, offset=0) → Root        # short buffer / bad offset → PstFormatError
+    # dwReserved, bReserved, wReserved are read and discarded (spec: readers SHOULD ignore)
+
+# pypst.ndb.header
+HEADER_MAGIC = 0x4E444221; HEADER_MAGIC_CLIENT = 0x4D53      # "!BDN" and "SM" read little-endian
+CLIENT_VERSION = 19; PLATFORM_CREATE = PLATFORM_ACCESS = 0x01; SENTINEL = 0x80
+CRYPT_METHOD_EDPCRYPTED = 0x10                                # the spec's name; refused by name
+HEADER_SIZE = 564
+from pypst.encode import CryptMethod                         # NONE/PERMUTE/CYCLIC live with the decoders; re-exported
+
+class Version(IntEnum):  ANSI_14 = 14, ANSI_15 = 15, UNICODE = 23, UNICODE_4K_36 = 36, UNICODE_4K_37 = 37
+    is_ansi → bool
+    debug_name → str                 # "Ansi" | "Unicode" (upstream's NdbVersion Debug); __str__ is the same
 
 @dataclass(frozen=True, slots=True)
 class Header:                        # [MS-PST] 2.2.2.6, Unicode layout, 564 bytes
-    version: Version                 # always a UNICODE member once constructed
-    client_version: int
+    version: Version                 # always Version.UNICODE once constructed
+    client_version: int              # wVerClient, always 19 once constructed
     crypt_method: CryptMethod
     next_block: BlockId
     next_page: PageId
-    unique_value: int
+    unique_value: int                # dwUnique
     root: Root
     SIZE = 564
-    @classmethod parse(cls, buf: bytes | memoryview) → Header
-        # !PstUnsupportedError  wVer 14/15 ("ANSI store; see pypst_reader_nu"), crypt 0x10
-        # !PstFormatError       bad magic, bad CRC (partial or full), unknown wVer, unknown crypt
+    @classmethod parse(cls, buf: bytes | bytearray | memoryview) → Header
+        # !PstUnsupportedError  wVer 14/15 ("ANSI (pre-2003) store, wVer=14; … see pypst_reader_nu"),
+        #                       wVer 36/37 (4 KB-page store), bCryptMethod 0x10 (EDP/WIP)
+        # !PstFormatError       short buffer, bad dwMagic, bad wMagicClient, unknown wVer, partial or full
+        #                       CRC mismatch, wVerClient ≠ 19, platform bytes ≠ 1, dwAlign ≠ 0,
+        #                       bSentinel ≠ 0x80, unknown bCryptMethod, rgbReserved ≠ 0
+        # Check order: length, dwMagic, wMagicClient, wVer, dwCRCPartial, dwCRCFull, the fixed fields.
+        # Read but NOT validated (as upstream): dwReserved1/2, bidUnused, qwUnused, rgbFM, rgbFP,
+        # rgbReserved2, bReserved, rgbReserved3; rgnid is read and not kept.
 
-read_header(f: BinaryIO) → Header    # reads SIZE bytes from offset 0; short read → PstFormatError
+read_header(f: BinaryIO) → Header    # seeks to 0, reads SIZE bytes; short read → PstFormatError; OSError is not caught
 ```
 
 `python -m pypst.debug header <file>` prints the ten `read_header` lines in
-upstream's format so `parse_read_header` compares values directly.
+upstream's format (`__str__` forms, no `Unicode` prefix) so `parse_read_header`
+compares values directly; on an ANSI store it exits 1 with the
+`PstUnsupportedError` message on stderr.
+
+Changes from the draft, and why: `wVer` 36/37 are **refused**
+(`PstUnsupportedError`), not parsed — they are the 4 KB-page layout, upstream
+refuses them too, and reading them with 512-byte-page assumptions is the
+plausible-garbage outcome. `CryptMethod` stays in `pypst.encode` (it was
+already an enum there) and gains no `WINDOWS_EFS` member: 0x10 is the constant
+`CRYPT_METHOD_EDPCRYPTED` and is refused before the enum is consulted, so
+`decode_block` can never be handed it. `AmapStatus` has the two conversions
+because upstream's read is lenient and the rest of this package is not.
+`tests/corrupt.py` (mutation helpers; `reseal_header` recomputes both CRCs)
+is the seed P12 extends.
 
 ## `pypst.ndb.page` + `pypst.ndb.btree` — P02
 
@@ -536,3 +570,10 @@ __all__ = [...]                      # the P24 contract harness iterates this
 - 2026-09-15 — P21: `pypst.rtf` built. Adds `read_header`, `CompressedRtfHeader`,
   `CompressionType`; `decompress_rtf` returns bytes with no NUL trimming (P09
   note above); `max_output` is a literal until P11's `limits.py` exists.
+- 2026-09-15 — P01 landed `pypst.ndb.header` and `pypst.ndb.root`; its section
+  now describes what was built. Changes from the draft: `wVer` 36/37 →
+  `PstUnsupportedError` (not parsed); `CryptMethod` stays in `pypst.encode`
+  with 0x10 refused as the constant `CRYPT_METHOD_EDPCRYPTED`; `AmapStatus`
+  gains `from_byte` / `from_byte_lenient` and `debug_name`; `Version` gains
+  `is_ansi` / `debug_name`; the module constants and the exact check order
+  are recorded. `python -m pypst.debug header` registered.

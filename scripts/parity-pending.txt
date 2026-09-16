@@ -4,10 +4,8 @@
 # Format: one entry per line, `<upstream ref>  <ROW-ID>`, where the ref is
 # `<path relative to reference/outlook-pst-rs>::<fn name>`. Blank lines and
 # `#` comments are ignored.
-#
 # An entry here is a debt, not a waiver: the lint fails the moment the twin
 # exists (the row landed — delete the line in that row's branch), and it fails
 # if the ref names no upstream test (the pin moved — re-check the row).
 
 crates/pst/src/ndb/block_id.rs::test_ansi_bid_index_overflow  P27-NU
-crates/pst/src/ndb/header.rs::test_magic_values  P01-HEADER
