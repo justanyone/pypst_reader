@@ -44,7 +44,6 @@ can start today.
 | Id | Pri | State | One line | Work |
 |---|---|---|---|---|
 | P23-IDS | 1 | ⏳ in flight — agent/p23-ids 2026-09-15 | `ndb/ids.py` + `block_sig.py` — the packed value types every layer above uses: `NodeId` (type + index), `BlockId` (internal bit + index), `ByteIndex`, `PageId`, `BlockRef`/`PageRef`, and `compute_sig`. Small, has 4 upstream tests, unblocks P01 and P02. | [`todo/T00-foundation.md`](todo/T00-foundation.md#p23-ids) |
-| P29-GOLDEN-HARNESS | 1 | ⏳ in flight — agent/p29-golden-harness 2026-09-15 | `pypst.debug` CLI skeleton + `tests/golden_parsers.py` + the `oracle`-marker drift test over `tests/golden/`. Each layer row then adds one parser and one dumper. | [`todo/T06-testing.md`](todo/T06-testing.md#p29-golden-harness) |
 | P01-HEADER | 1 | ✗ blocked on P23 | `ndb/header.py` + `ndb/root.py` — parse the Unicode PST header, CRC-verified; **refuse ANSI** with `PstUnsupportedError` (ADR-0003). Done = `read_header` goldens match on 7/7 Unicode fixtures, 2/2 ANSI refused, corrupted copies refused. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p01-header) |
 | P02-BTREE | 1 | ✗ blocked on P01 | `ndb/page.py` + `ndb/btree.py` — the node and block B-trees, with a depth limit and a cycle guard that upstream does not need. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p02-btree) |
 | P11-LIMITS | 2 | ✗ not started — land WITH P02 | `limits.py`: recursion depth, allocation ceiling, item counts, `PstLimitError` everywhere they bite. Deliberate divergence — CLAUDE.md § untrusted input. | [`todo/T04-hardening.md`](todo/T04-hardening.md#p11-limits) |
@@ -83,6 +82,7 @@ can start today.
 | P17-GOLDEN | ✅ 2026-09-15 | `scripts/capture_oracle.py`: 72 oracle goldens (9 fixtures × 8 examples) under `tests/golden/`, `--check` clean on a second independent run. |
 | P13-ANSI | ✅ 2026-09-15 decided | Unicode only; ANSI refused with `PstUnsupportedError`; ANSI work is the sibling library, row P27-NU. ADR-0003. |
 | P00-PLAN | ✅ 2026-09-15 | ADR-0003/0004, `docs/TEST-PLAN.md` (ten tiers), `docs/AGENTS.md` (multi-agent protocol), `docs/INTERFACES.md` (layer contracts), rows P17–P31, lane table. |
+| P29-GOLDEN-HARNESS | ✅ 2026-09-15 | `pypst.debug` dispatcher, `tests/golden_parsers.py` (`parse_read_header` complete, 9/9 goldens; six value parsers; seven described stubs), `golden`/`golden_exit` fixtures, oracle drift test. 84 tests added, 125 passing; each seen red once. |
 
 ## Still the user's call
 
