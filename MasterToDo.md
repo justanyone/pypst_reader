@@ -44,7 +44,6 @@ can start today.
 | Id | Pri | State | One line | Work |
 |---|---|---|---|---|
 | P03-BLOCK | 2 | ⏳ in flight — agent/p03-block 2026-09-15 | `ndb/block.py` — data blocks, XBLOCK/XXBLOCK trees, subnode BTrees; wire in `encode.py` and `crc.py`. First point at which real bytes come out of a real file. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p03-block) |
-| P19-ORACLE-DUMP | 2 | ⏳ in flight — agent/p19-oracle-dump 2026-09-15 | `oracle/dump_messages.rs` — our own non-interactive Rust example against the pinned crate: every folder, message, recipient, attachment, embedded message. Captured to goldens like the others. Replaces the `browse_pst` TUI as P08/P09's oracle. | [`todo/T06-testing.md`](todo/T06-testing.md#p19-oracle-dump) |
 | P04-HEAP | 2 | ✗ blocked on P03 | `ltp/heap.py` + `ltp/tree.py` — heap-on-node and the BTree-on-heap. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p04-heap) |
 | P05-PC | 2 | ✗ blocked on P04 | `ltp/prop_context.py` — property contexts over the P22 decoders. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p05-pc) |
 | P06-TC | 2 | ✗ blocked on P04 | `ltp/table_context.py` — table contexts. Largest LTP file; split if it overruns. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p06-tc) |
@@ -53,7 +52,7 @@ can start today.
 | P25-HYPOTHESIS | 5 | ✗ not started | Decide (ADR paragraph) and add `hypothesis` as a dev-only dependency; first property tests over encode/crc/ids. | [`todo/T06-testing.md`](todo/T06-testing.md#p25-hypothesis) |
 | P26-COVERAGE | 5 | ✗ not started | `pytest-cov` + a coverage floor ratchet beside the ruff ratchet. A number that may not go down, never cited as evidence of correctness. | [`todo/T06-testing.md`](todo/T06-testing.md#p26-coverage) |
 | P07-STORE | 5 | ✗ blocked on P05 | `messaging/store.py` + `messaging/named_prop.py` — the store object and the named-property map. **Must decide** what to do with `pstd-inline-cid.pst`, which upstream refuses for a missing property. | [`todo/T03-messaging.md`](todo/T03-messaging.md#p07-store) |
-| P08-FOLDER | 5 | ✗ blocked on P06, P07, P19 | `messaging/folder.py` — the folder hierarchy and its contents tables. First "open a PST and list the mail". | [`todo/T03-messaging.md`](todo/T03-messaging.md#p08-folder) |
+| P08-FOLDER | 5 | ✗ blocked on P06, P07 | `messaging/folder.py` — the folder hierarchy and its contents tables. First "open a PST and list the mail". | [`todo/T03-messaging.md`](todo/T03-messaging.md#p08-folder) |
 | P09-MESSAGE | 5 | ✗ blocked on P08 | `messaging/message.py` + `attachment.py` — properties, bodies (plain/HTML/RTF via P21), recipients, attachments, embedded messages (`pstsdk-submessage.pst`). | [`todo/T03-messaging.md`](todo/T03-messaging.md#p09-message) |
 | P10-EML | 5 | ✗ blocked on P09 | The RFC-822 assembler: one message → one `.eml`. **The actual deliverable.** Measure header survival first. | [`todo/T03-messaging.md`](todo/T03-messaging.md#p10-eml) |
 | P31-MYPY | 10 | ✗ blocked on P06 | `mypy --strict` over `src/` once the LTP API has settled — the closest thing to the compiler upstream had. | [`todo/T06-testing.md`](todo/T06-testing.md#p31-mypy) |
@@ -83,6 +82,7 @@ can start today.
 | P20-SYNTH | ✅ 2026-09-15 | `scripts/get_fixture_tools.sh` + `make_fixture.py` over pinned EMLtoPST with a conformance patch (its TCINFO offsets and booleans were wrong — the same defect that makes upstream refuse `pstd-inline-cid`); `synth-basics.pst` (35 KB, 7 authored messages, byte-reproducible) is read by the oracle through `read_ipm_subtree` (only `read_search_updates` refuses: no search queue node); goldens captured; 44 content tests (8 wait on P08/P09), 8/8 mutants caught. |
 | P02-BTREE | ✅ 2026-09-15 | `ndb/page.py` + `ndb/btree.py` incl. the density list; bounded iterative walks (VisitedSet, depth, counts) — first consumer of `limits.py`. `read_btrees` block tree byte-identical 7/7, node tree parsed-equal 7/7, DL 5/5 (+2 refused where upstream errors), private 2/2 live; 204 tests, 29/31 mutants red (2 equivalent). Checks exactly upstream's set (no signature/bid enforcement — pstd/synth stores write wSig=0); 4 documented divergences. |
 | P14-CI-ORACLE | 🔶 2026-09-15 | `.github/workflows/nightly-oracle.yml` + `scripts/nightly_oracle_local.sh` (single source of truth: fetch, build, parity, goldens `--check`, dump_messages when present, synthetic-fixture regen, live-oracle tests; failure-only artifact of the golden diff). Local `SKIP_RUST=1` run green; 7 tests. **Unproven until the first scheduled/dispatched run** (cargo on the runner, cache ordering, 45-min budget). |
+| P19-ORACLE-DUMP | ✅ 2026-09-15 | `oracle/` crate + `dump_messages` example (links the pinned crate, copies nothing): folders, messages, recipients, attachments, body lengths+CRCs, embedded-message recursion; goldens 10/10 fixtures, deterministic; 45 tests. **Found an upstream bug at the pin:** `PropertyType::try_from` lacks `PtypObject` (0x000D), so upstream cannot open any embedded-message attachment — the oracle cannot arbitrate that case (see P09). Also: upstream reads both ANSI stores and opens `pstd-inline-cid` at message level. |
 
 ## Still the user's call
 
@@ -92,6 +92,12 @@ can start today.
 - **Apache-2.0 fixtures.** ADR-0004 admits them (7 of the 8 corpus stores).
   If the corpus must be MIT/public-domain only, the pstsdk, Tika and
   java-libpst stores come out and P20 (synthetic fixtures) becomes priority 1.
+- **An upstream issue?** P19 found that `microsoft/outlook-pst-rs` at the pin
+  cannot open embedded-message attachments (`PtypObject` missing from
+  `PropertyType::try_from`, and `HeapTreeInner::entries` stops silently at the
+  first undecodable record). Filing that upstream is outward-facing and yours
+  to decide; the port will support PT_OBJECT regardless, as a documented
+  divergence arbitrated by the spec and `pstsdk-submessage.pst`.
 - **The EMLtoPST patch.** `scripts/patches/emltopst-oracle-conformance.patch`
   necessarily contains fragments of EMLtoPST's source. That project says MIT
   in its README but ships no LICENSE file (checked at the pin and at every

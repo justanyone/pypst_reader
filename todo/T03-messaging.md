@@ -48,6 +48,18 @@ Message properties (subject, sender, times, body in plain/HTML/RTF form),
 recipients (a TC on a subnode), and attachments (each its own subnode with its
 own PC, possibly containing an embedded message).
 
+**The oracle cannot see embedded messages — P19's finding.** Upstream at the
+pin has no `PtypObject` arm in `PropertyType::try_from`, and its BTH walk
+stops silently at the first undecodable record, so every embedded-message
+attachment (`PidTagAttachDataObject`, 0x3701) fails upstream with
+`AttachmentMethodNotFound`; `dump_messages` goldens carry the attachment
+row (`method=5 … size=11494` on `pstsdk-submessage`) and then an `Error:`.
+This row supports PT_OBJECT (P22 decodes it) as a **documented divergence**,
+arbitrated by [MS-PST] 2.3.3.4 + 2.4.6.3 and by the bytes of
+`pstsdk-submessage.pst` (the embedded message's own subject and body must
+decode to sensible text — assert on it, it is public). Pin a test that the
+golden shows upstream's refusal so a fixed pin is noticed.
+
 **Two traps worth knowing before you start:**
 - **Compressed RTF.** Bodies are often stored as RTF compressed with the LZFu
   scheme. That is P21 (`rtf.py`), a leaf row that lands before this one; here
