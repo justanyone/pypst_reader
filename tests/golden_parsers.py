@@ -19,16 +19,21 @@ Two rules every parser here keeps:
   ``__str__`` prints ``BlockId { leaf: 0x4C }`` (``docs/INTERFACES.md`` §
   ids). One parser reads both sides, so the prefix is stripped, not required.
 
-``parse_read_header``, ``parse_read_btrees`` and ``parse_read_density_list``
-are complete. The other six are stubs whose
-``NotImplementedError`` describes the golden's shape, so the layer row that
-lands the parser knows what it is parsing. ``PARSERS`` maps every captured
-example name to its parser, complete or stub.
+``parse_read_header``, ``parse_read_btrees``, ``parse_read_density_list``,
+``parse_read_store_props``, ``parse_read_named_props``,
+``parse_read_root_folder`` and ``parse_read_ipm_subtree`` are complete
+(the last four landed with P05, which also added ``parse_value`` — the
+``Debug`` grammar of upstream's ``PropertyValue`` — for every later layer
+that prints one). The other two are stubs whose ``NotImplementedError``
+describes the golden's shape, so the layer row that lands the parser knows
+what it is parsing. ``PARSERS`` maps every captured example name to its
+parser, complete or stub.
 """
 
 from __future__ import annotations
 
 import re
+import uuid
 from collections.abc import Callable
 from typing import Any
 
@@ -429,37 +434,413 @@ def parse_read_density_list(text: str) -> dict[str, Any] | None:
     }
 
 
-def parse_read_store_props(text: str) -> Any:
-    raise NotImplementedError(
-        "read_store_props (P07): `Display Name:`, then `IPM Subtree:`, `Deleted Items:`, `Finder:` each an "
-        "`EntryId { record_key: XX-XX-.., node_id: <NodeId> }`; then repeated pairs of "
-        "` Property ID: 0x...., Type: <PropType>` + `  Value: <Type>(<Debug value>)`. "
-        "pstd-inline-cid stops after `IPM Subtree:` with exit 1."
-    )
+# --- property values (P05): upstream's `Debug for PropertyValue` -------------------
+#
+# A small recursive-descent parser over the Debug text, because a `Multiple…`
+# list may hold strings that contain `, ` and `]`, which no split survives.
+# `parse_value` returns `(variant, value)`: the variant is upstream's name
+# (`Integer32`, `Unicode`, `MultipleBinary`, ...) and the value is the plain
+# Python form — int, float, bool, str (unescaped), bytes, uuid.UUID, None for
+# `Null`, {"node": <node_id>, "size": int} for `Object`, or a list of those.
+
+_INT_VARIANTS = {"Integer16", "Integer32", "Integer64", "Currency", "Time", "ErrorCode"}
+_FLOAT_VARIANTS = {"Floating32", "Floating64", "FloatingTime"}
+_GUID_RE = re.compile(r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$")
+_HEX_BYTES_RE = re.compile(r"^(?:[0-9A-Fa-f]{2}(?:-[0-9A-Fa-f]{2})*)?$")
+_IDENT_RE = re.compile(r"[A-Za-z][A-Za-z0-9]*")
 
 
-def parse_read_named_props(text: str) -> Any:
-    raise NotImplementedError(
-        "read_named_props (P07): repeated groups of `Named Property ID: 0x8xxx`, ` GUID Index: GuidIndex(n)|None`, "
-        "optional ` Other: GuidValue { <guid> }` or ` PS_PUBLIC_STRINGS: GuidValue { <guid> }`, then either "
-        "` Number: 0x........` or ` String[0x........]: \"<name>\"`. pstd-inline-cid: one group with GUID Index None."
-    )
+class _TextCursor:
+    """Position in a Debug string; every method raises ValueError naming the offset on a mismatch."""
+
+    __slots__ = ("pos", "text")
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.pos = 0
+
+    def fail(self, what: str) -> ValueError:
+        return ValueError(f"offset {self.pos}: expected {what} in {self.text!r}")
+
+    def peek(self, literal: str) -> bool:
+        return self.text.startswith(literal, self.pos)
+
+    def expect(self, literal: str) -> None:
+        if not self.peek(literal):
+            raise self.fail(repr(literal))
+        self.pos += len(literal)
+
+    def ident(self) -> str:
+        m = _IDENT_RE.match(self.text, self.pos)
+        if not m:
+            raise self.fail("an identifier")
+        self.pos = m.end()
+        return m.group(0)
+
+    def until(self, stop: str) -> str:
+        end = self.text.find(stop, self.pos)
+        if end < 0:
+            raise self.fail(repr(stop))
+        out = self.text[self.pos : end]
+        self.pos = end
+        return out
+
+    def string(self) -> str:
+        """A Rust `str` Debug literal at the cursor, unescaped."""
+        self.expect('"')
+        out: list[str] = []
+        while True:
+            if self.pos >= len(self.text):
+                raise self.fail("a closing quote")
+            ch = self.text[self.pos]
+            self.pos += 1
+            if ch == '"':
+                return "".join(out)
+            if ch != "\\":
+                out.append(ch)
+                continue
+            if self.pos >= len(self.text):
+                raise self.fail("an escape")
+            esc = self.text[self.pos]
+            self.pos += 1
+            if esc == "u":
+                self.expect("{")
+                digits = self.until("}")
+                self.pos += 1
+                if not digits or not all(c in "0123456789abcdefABCDEF" for c in digits):
+                    raise self.fail("hex digits in \\u{…}")
+                out.append(chr(int(digits, 16)))
+            elif esc in _RUST_SIMPLE_ESCAPES:
+                out.append(_RUST_SIMPLE_ESCAPES[esc])
+            else:
+                raise self.fail(f"a known escape, not \\{esc}")
+
+    def done(self) -> None:
+        if self.pos != len(self.text):
+            raise ValueError(f"offset {self.pos}: trailing text {self.text[self.pos:]!r} in {self.text!r}")
 
 
-def parse_read_root_folder(text: str) -> Any:
-    raise NotImplementedError(
-        "read_root_folder (P08): repeated row blocks of `Row: 0x....` + `Version: 0x..`, each followed by "
-        "` Column: Property ID: 0x...., Type: <PropType>` entries with an optional `  Record: Small(..)|Heap(HeapId(<NodeId>))` "
-        "and a `  Value: None|<Type>(<Debug value>)`. pstd-inline-cid: empty text, exit 1."
-    )
+_RUST_SIMPLE_ESCAPES = {"n": "\n", "r": "\r", "t": "\t", "\\": "\\", '"': '"', "'": "'", "0": "\0"}
 
 
-def parse_read_ipm_subtree(text: str) -> Any:
-    raise NotImplementedError(
-        "read_ipm_subtree (P08): same row-block shape as read_root_folder (`Row:`/`Version:` then ` Column:` "
-        "with optional `  Record:` and a `  Value:`), for the IPM subtree's hierarchy table. "
-        "pstd-inline-cid: empty text, exit 1."
-    )
+def _guid(text: str) -> uuid.UUID:
+    if not _GUID_RE.match(text):
+        raise ValueError(f"not a GUID: {text!r}")
+    return uuid.UUID(text)
+
+
+def _hex_bytes(text: str) -> bytes:
+    if not _HEX_BYTES_RE.match(text):
+        raise ValueError(f"not `AA-BB-…` bytes: {text!r}")
+    return bytes.fromhex(text.replace("-", ""))
+
+
+def _struct_value(cur: _TextCursor, name: str) -> Any:
+    """`UnicodeValue { "…" }`, `String8Value { "…" }`, `GuidValue { … }`, `BinaryValue { … }`, `ObjectValue { … }`."""
+    cur.expect(name)
+    cur.expect(" { ")
+    if name in ("UnicodeValue", "String8Value"):
+        value = cur.string()
+        cur.expect(" }")
+        return value
+    if name == "GuidValue":
+        value = _guid(cur.until(" }"))
+        cur.expect(" }")
+        return value
+    if name == "BinaryValue":
+        body = cur.until("}")
+        cur.expect("}")
+        # `BinaryValue { AA-BB }` — or `BinaryValue {  }` (two spaces) when empty.
+        if not body.endswith(" "):
+            raise cur.fail("a space before `}`")
+        return _hex_bytes(body[:-1])
+    if name == "ObjectValue":
+        node = parse_node_id(cur.until(", size: "))
+        cur.expect(", size: 0x")
+        size = cur.until(" }")
+        cur.expect(" }")
+        return {"node": node, "size": int(size, 16)}
+    raise cur.fail("a known struct value")
+
+
+_INT_RE = re.compile(r"-?\d+")
+_FLOAT_RE = re.compile(r"-?(?:\d+(?:\.\d+)?(?:e-?\d+)?|inf|NaN)")
+
+
+def _scalar(cur: _TextCursor, variant: str) -> Any:
+    """The payload of one non-list variant at the cursor, by the variant's kind."""
+    if variant in _INT_VARIANTS or variant in _FLOAT_VARIANTS:
+        m = (_INT_RE if variant in _INT_VARIANTS else _FLOAT_RE).match(cur.text, cur.pos)
+        if not m:
+            raise cur.fail(f"a number for {variant}")
+        cur.pos = m.end()
+        return int(m.group(0)) if variant in _INT_VARIANTS else float(m.group(0))
+    if variant == "Boolean":
+        for literal, value in (("true", True), ("false", False)):
+            if cur.peek(literal):
+                cur.pos += len(literal)
+                return value
+        raise cur.fail("true or false")
+    if variant == "Unicode":
+        return _struct_value(cur, "UnicodeValue")
+    if variant == "String8":
+        return _struct_value(cur, "String8Value")
+    if variant == "Guid":
+        return _struct_value(cur, "GuidValue")
+    if variant == "Binary":
+        return _struct_value(cur, "BinaryValue")
+    if variant == "Object":
+        return _struct_value(cur, "ObjectValue")
+    raise cur.fail(f"a known variant, not {variant!r}")
+
+
+def _list(cur: _TextCursor, variant: str) -> list[Any]:
+    """`[a, b, c]` of the scalar `variant`'s payload form; `[]` when empty."""
+    cur.expect("[")
+    items: list[Any] = []
+    if cur.peek("]"):
+        cur.pos += 1
+        return items
+    while True:
+        items.append(_scalar(cur, variant))
+        if cur.peek(", "):
+            cur.pos += 2
+            continue
+        cur.expect("]")
+        return items
+
+
+def _value_at(cur: _TextCursor) -> tuple[str, Any]:
+    variant = cur.ident()
+    if variant == "Null":
+        return variant, None
+    cur.expect("(")
+    if variant.startswith("Multiple"):
+        value = _list(cur, variant.removeprefix("Multiple"))
+    else:
+        value = _scalar(cur, variant)
+    cur.expect(")")
+    return variant, value
+
+
+def parse_value(text: str) -> tuple[str, Any]:
+    """``Integer32(0)`` → ``("Integer32", 0)``; ``Unicode(UnicodeValue { "x" })`` → ``("Unicode", "x")``; and so on.
+
+    The whole of upstream's ``Debug for PropertyValue``: the numbers bare,
+    ``Boolean(true)``, the four struct-wrapped values, ``Object(ObjectValue {
+    <NodeId>, size: 0x… })``, ``Null``, and ``Multiple…([…])`` as a list.
+    Strings are unescaped from Rust's ``escape_debug``. Anything else,
+    including trailing text, is ``ValueError``.
+    """
+    cur = _TextCursor(text)
+    result = _value_at(cur)
+    cur.done()
+    return result
+
+
+def parse_record(text: str) -> dict[str, Any]:
+    """A ``Record:`` line's value, in either of upstream's spellings.
+
+    A property context's ``PropertyValueRecord`` prints ``Small(0x%08X)``,
+    ``HeapId(NodeId { HeapNode: 0x5 })`` or ``NodeId { … }``; a table
+    context's column record prints ``Small(<typed value>)``,
+    ``Heap(HeapId(…))`` or ``Node(NodeId { … })``. Returns ``{"kind":
+    "small", "raw": int}`` / ``{"kind": "small", "value": (variant,
+    value)}`` / ``{"kind": "heap", "hid": int}`` (the raw HID) /
+    ``{"kind": "node", "node": <node_id>}``.
+    """
+    m = re.fullmatch(r"Small\((0x[0-9A-Fa-f]{8})\)", text)
+    if m:
+        return {"kind": "small", "raw": int(m.group(1), 16)}
+    m = re.fullmatch(r"Small\((.+)\)", text)
+    if m:
+        return {"kind": "small", "value": parse_value(m.group(1))}
+    m = re.fullmatch(r"(?:Heap\()?HeapId\(NodeId \{ HeapNode: 0x([0-9A-Fa-f]+) \}\)\)?", text)
+    if m and text.count("(") == text.count(")"):
+        return {"kind": "heap", "hid": int(m.group(1), 16) << 5}
+    m = re.fullmatch(r"(?:Node\()?(NodeId \{ .+ \})\)?", text)
+    if m and text.count("(") == text.count(")"):
+        return {"kind": "node", "node": parse_node_id(m.group(1))}
+    raise ValueError(f"not a property record: {text!r}")
+
+
+_PROPERTY_LINE = re.compile(r"^ (Column: )?Property ID: 0x([0-9A-Fa-f]{4}), Type: ([A-Za-z0-9]+)$")
+
+
+def _properties(lines: list[str], i: int, *, column: bool) -> tuple[list[dict[str, Any]], int]:
+    """Consecutive `Property ID:` groups from line `i`: each ``{"id", "type", "record", "value"}``; returns them and the next index.
+
+    ``record`` is ``parse_record``'s dict or None when the line is absent;
+    ``value`` is ``parse_value``'s pair, or None for the table examples'
+    ``Value: None`` (a cell the row does not have). Every group must end
+    in a ``Value:`` line: a golden cut between the two is refused.
+    """
+    out: list[dict[str, Any]] = []
+    while i < len(lines):
+        m = _PROPERTY_LINE.match(lines[i])
+        if not m or bool(m.group(1)) != column:
+            break
+        group: dict[str, Any] = {"id": int(m.group(2), 16), "type": m.group(3), "record": None, "value": None}
+        i += 1
+        if i < len(lines) and lines[i].startswith("  Record: "):
+            try:
+                group["record"] = parse_record(lines[i].removeprefix("  Record: "))
+            except ValueError as exc:
+                raise ValueError(f"line {i + 1}: {exc}") from None
+            i += 1
+        if i >= len(lines) or not lines[i].startswith("  Value: "):
+            raise ValueError(f"line {i + 1}: expected `  Value:` after property 0x{group['id']:04X}")
+        printed = lines[i].removeprefix("  Value: ")
+        if not (column and printed == "None"):
+            try:
+                group["value"] = parse_value(printed)
+            except ValueError as exc:
+                raise ValueError(f"line {i + 1}: {exc}") from None
+            if group["value"][0] != group["type"]:
+                raise ValueError(f"line {i + 1}: value variant {group['value'][0]} != Type: {group['type']}")
+        i += 1
+        out.append(group)
+    return out, i
+
+
+_ENTRY_ID = re.compile(r"^EntryId \{ record_key: ((?:[0-9A-Fa-f]{2}-){15}[0-9A-Fa-f]{2}), node_id: (NodeId \{ .+ \}) \}$")
+
+
+def parse_entry_id(text: str) -> dict[str, Any]:
+    """``EntryId { record_key: XX-…, node_id: NodeId { … } }`` → ``{"record_key": bytes, "node_id": <node_id>}``."""
+    m = _match(_ENTRY_ID, "an EntryId", text)
+    return {"record_key": _hex_bytes(m.group(1)), "node_id": parse_node_id(m.group(2))}
+
+
+def parse_read_store_props(text: str) -> dict[str, Any]:
+    """The ``read_store_props`` example (a PC dump, P05; the entry-id lines are P07's).
+
+    ``{"display_name": str, "ipm_subtree": <entry_id>|None, "deleted_items":
+    …, "finder": …, "properties": [<group>, …]}``. The four header lines
+    are read while present and in order — the oracle exits 1 part-way when
+    the store lacks one (pstd-inline-cid stops after ``IPM Subtree:``), and
+    the partial output is still a claim about what WAS printed. A property
+    group is ``_properties``' dict with ``record`` None (the example prints
+    no ``Record:`` line; ``python -m pypst.debug pc`` does, and parses here
+    too). Truncated or garbled input is ``ValueError``.
+    """
+    lines = _lines(text)
+    out: dict[str, Any] = {"display_name": None, "ipm_subtree": None, "deleted_items": None, "finder": None}
+    i = 0
+    if i < len(lines) and lines[i].startswith("Display Name: "):
+        out["display_name"] = lines[i].removeprefix("Display Name: ")
+        i += 1
+        for key, label in (("ipm_subtree", "IPM Subtree"), ("deleted_items", "Deleted Items"), ("finder", "Finder")):
+            if i < len(lines) and lines[i].startswith(f"{label}: "):
+                try:
+                    out[key] = parse_entry_id(lines[i].removeprefix(f"{label}: "))
+                except ValueError as exc:
+                    raise ValueError(f"line {i + 1}: {exc}") from None
+                i += 1
+            else:
+                break
+    out["properties"], i = _properties(lines, i, column=False)
+    if i != len(lines):
+        raise ValueError(f"line {i + 1}: unexpected {lines[i]!r}")
+    return out
+
+
+_NAMED_ID = re.compile(r"^Named Property ID: 0x([0-9A-Fa-f]{4})$")
+_GUID_INDEX = re.compile(r"^ GUID Index: (None|Mapi|PublicStrings|GuidIndex\((\d+)\))$")
+_GUID_LINE = re.compile(r"^ (PS_MAPI|PS_PUBLIC_STRINGS|Other): GuidValue \{ (.+) \}$")
+_NUMBER = re.compile(r"^ Number: 0x([0-9A-Fa-f]{8})$")
+_STRING = re.compile(r"^ String\[0x([0-9A-Fa-f]{8})\]: (\".*\")$")
+
+
+def parse_read_named_props(text: str) -> list[dict[str, Any]]:
+    """The ``read_named_props`` example: one dict per ``Named Property ID:`` group.
+
+    ``{"prop_id": int, "guid_index": None | int (GuidIndex(n)) | "Mapi" |
+    "PublicStrings", "guid": uuid.UUID | None, "number": int | None,
+    "string_offset": int | None, "name": str | None}``. ``guid`` is the
+    ``Other:`` / ``PS_MAPI:`` / ``PS_PUBLIC_STRINGS:`` line; exactly one of
+    ``number`` and ``name`` is set. An empty golden (the example printed
+    nothing) is an empty list.
+    """
+    lines = _lines(text)
+    out: list[dict[str, Any]] = []
+    i = 0
+    while i < len(lines):
+        m = _NAMED_ID.match(lines[i])
+        if not m:
+            raise ValueError(f"line {i + 1}: expected `Named Property ID:`, got {lines[i]!r}")
+        group: dict[str, Any] = {
+            "prop_id": int(m.group(1), 16),
+            "guid_index": None,
+            "guid": None,
+            "number": None,
+            "string_offset": None,
+            "name": None,
+        }
+        i += 1
+        if i >= len(lines) or not (m := _GUID_INDEX.match(lines[i])):
+            raise ValueError(f"line {i + 1}: expected ` GUID Index:`")
+        group["guid_index"] = int(m.group(2)) if m.group(2) is not None else (None if m.group(1) == "None" else m.group(1))
+        i += 1
+        if i < len(lines) and (m := _GUID_LINE.match(lines[i])):
+            group["guid"] = _guid(m.group(2))
+            i += 1
+        if i < len(lines) and (m := _NUMBER.match(lines[i])):
+            group["number"] = int(m.group(1), 16)
+        elif i < len(lines) and (m := _STRING.match(lines[i])):
+            group["string_offset"] = int(m.group(1), 16)
+            cur = _TextCursor(m.group(2))
+            group["name"] = cur.string()
+            cur.done()
+        else:
+            raise ValueError(f"line {i + 1}: expected ` Number:` or ` String[…]:`")
+        i += 1
+        out.append(group)
+    return out
+
+
+_ROW = re.compile(r"^Row: 0x([0-9A-Fa-f]+)$")
+_VERSION = re.compile(r"^Version: 0x([0-9A-Fa-f]+)$")
+
+
+def _parse_table_rows(text: str) -> list[dict[str, Any]]:
+    """``Row:``/``Version:`` blocks of `` Column: Property ID:`` groups — the shape of both hierarchy-table examples."""
+    lines = _lines(text)
+    out: list[dict[str, Any]] = []
+    i = 0
+    while i < len(lines):
+        m = _ROW.match(lines[i])
+        if not m:
+            raise ValueError(f"line {i + 1}: expected `Row:`, got {lines[i]!r}")
+        row: dict[str, Any] = {"id": int(m.group(1), 16)}
+        i += 1
+        if i >= len(lines) or not (m := _VERSION.match(lines[i])):
+            raise ValueError(f"line {i + 1}: expected `Version:`")
+        row["version"] = int(m.group(1), 16)
+        i += 1
+        row["columns"], j = _properties(lines, i, column=True)
+        if j == i:
+            raise ValueError(f"line {i + 1}: a row with no ` Column:` lines")
+        i = j
+        out.append(row)
+    return out
+
+
+def parse_read_root_folder(text: str) -> list[dict[str, Any]]:
+    """The ``read_root_folder`` example: the root folder's hierarchy table, one dict per ``Row:``.
+
+    ``{"id": int, "version": int, "columns": [<group>, …]}`` where a group is
+    ``_properties``' ``{"id", "type", "record", "value"}`` — ``record`` from
+    ``parse_record`` or None, ``value`` from ``parse_value`` or None for
+    ``Value: None`` (the cell is absent from the row). pstd-inline-cid's
+    golden is empty (exit 1) and parses to ``[]``.
+    """
+    return _parse_table_rows(text)
+
+
+def parse_read_ipm_subtree(text: str) -> list[dict[str, Any]]:
+    """The ``read_ipm_subtree`` example: the IPM subtree's hierarchy table, in ``parse_read_root_folder``'s shape."""
+    return _parse_table_rows(text)
 
 
 def parse_read_search_updates(text: str) -> Any:

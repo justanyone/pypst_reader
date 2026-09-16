@@ -1211,6 +1211,111 @@ def heap_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
         yield lie("record.hnid_subnode_absent", set_u32(data, record + 4, 0x4000_0001), PstNotFoundError)
 
 
+# --- pc_lies: the same store PC, lied about one PROPERTY RECORD at a time ----------
+#
+# `heap_lies` breaks the container — the HNHDR, the page map, the BTH
+# header, the root page's shape. `pc_lies` leaves all of that valid and
+# breaks what P05 reads: the client signature a PC insists on, the
+# key/record widths a PC BTH must have, and the `wPropType` /
+# `dwValueHnid` pair of one record ([MS-PST] 2.3.3.3). Every lie here is
+# invisible to `pypst.ltp.heap` and `pypst.ltp.tree` and must be refused by
+# `pypst.ltp.prop_context`.
+
+
+def _pc_records(data: bytes, shape: dict[str, Any]) -> list[tuple[int, int, int, int]]:
+    """Every root-page record as `(offset, prop_id, wPropType, dwValueHnid)`."""
+    out = []
+    for at in range(shape["page"], shape["page_end"], shape["stride"]):
+        prop_id, prop_type, hnid = struct.unpack_from("<HHI", data, at)
+        out.append((at, prop_id, prop_type, hnid))
+    return out
+
+
+def _heap_item(shape: dict[str, Any], hnid: int) -> tuple[int, int] | None:
+    """`(offset, size)` of the heap item an HNID names, or None when it is not a resolvable HID in block 0."""
+    if hnid == 0 or hnid & 0x1F or (hnid >> 16) & 0xFFFF:
+        return None
+    index = (hnid >> 5) & 0x7FF
+    if not 0 < index <= shape["count"]:
+        return None
+    return shape["offsets"][index - 1], shape["sizes"][index - 1]
+
+
+def pc_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
+    """The store PC's client signature, BTH widths and property records lied about, the heap left valid."""
+    site = store_pc_block(base)
+    data = site.data
+    shape = _heap_shape(data)
+    bth = shape["bth"]
+    records = _pc_records(data, shape)
+
+    def lie(name: str, edited: bytes, expect: type[PstError] | None, *, must_raise: bool = True) -> Mutation:
+        return Mutation(f"pc_lies:{name}", rewrite_data_block(base, site, edited), expect, must_raise=must_raise)
+
+    # A signature the heap accepts and a PC does not: a TC's heap is a heap.
+    yield lie("bClientSig=bTypeTC", set_u8(data, 3, CLIENT_SIG_TC), PstFormatError)
+    # Widths the BTH accepts (cbKey in KEY_SIZES, cbEnt in 1..=32, and the
+    # page still a whole number of 8-byte records) but a PC record is not.
+    widened = set_u8(set_u8(data, bth + 1, 4), bth + 2, 4)
+    yield lie("bth.cbKey=4_cbEnt=4", widened, PstFormatError)
+
+    # One record's wPropType, for the three shapes of "not a type this port reads".
+    at = records[0][0]
+    yield lie("record.wPropType=0x0000", set_u16(data, at + 2, 0x0000), PstUnsupportedError)
+    yield lie("record.wPropType=0x0009", set_u16(data, at + 2, 0x0009), PstUnsupportedError)
+    yield lie("record.wPropType=0x1234", set_u16(data, at + 2, 0x1234), PstUnsupportedError)
+
+    # Two leaves with the same key: upstream's BTreeMap keeps the last, this port refuses.
+    if len(records) > 1:
+        yield lie("record.duplicate_prop_id", set_u16(data, records[1][0], records[0][1]), PstFormatError)
+
+    # A heap item whose length no fixed-size type can be, retyped to each of
+    # them: the 16-byte Guid, the 8-byte Integer64, and PtypObject (the
+    # documented divergence — upstream cannot read it at all).
+    odd_sized = next(
+        (r for r in records if (item := _heap_item(shape, r[3])) is not None and item[1] not in (8, 16)),
+        None,
+    )
+    if odd_sized is not None:
+        at, _prop_id, _prop_type, hnid = odd_sized
+        item_at, item_size = _heap_item(shape, hnid)
+        yield lie("record.type=Guid_over_wrong_length", set_u16(data, at + 2, 0x0048), PstFormatError)
+        yield lie("record.type=Integer64_over_wrong_length", set_u16(data, at + 2, 0x0014), PstFormatError)
+        yield lie("record.type=Object_over_wrong_length", set_u16(data, at + 2, 0x000D), PstFormatError)
+        # An 8/16-byte scalar is always a HID ([MS-PST] 2.3.3.3); type bits
+        # on one are read past by upstream and refused here.
+        yield lie("record.type=Guid_hnid_type_bits", set_u16(set_u32(data, at + 4, 0x4000_0001), at + 2, 0x0048), PstFormatError)
+        # A count-prefixed multi-value claiming 4 billion items.
+        if item_size >= 4:
+            bomb = set_u16(data, at + 2, 0x101F)
+            bomb = set_u32(bomb, item_at, 0xFFFF_FFFF)
+            yield lie("record.type=MultipleUnicode_count=0xFFFFFFFF", bomb, PstLimitError)
+        # An HNID of 0 on a variable-size type is upstream's Null, not an
+        # error: the reader must return, not refuse (module docstring).
+        yield lie("record.hnid=0_is_null", set_u32(data, at + 4, 0), None, must_raise=False)
+
+    # An odd-length PtypUnicode value: the item's end offset pulled back one
+    # byte, which leaves both spans non-empty and the heap valid.
+    unicode_rec = next(
+        (r for r in records if r[2] == 0x001F and (item := _heap_item(shape, r[3])) is not None and item[1] > 1),
+        None,
+    )
+    if unicode_rec is not None:
+        index = (unicode_rec[3] >> 5) & 0x7FF
+        if index < shape["count"] and shape["sizes"][index] >= 2:
+            yield lie(
+                "record.unicode_value_odd_length",
+                set_u16(data, shape["rgib"] + 2 * index, shape["offsets"][index] - 1),
+                PstFormatError,
+            )
+
+    # PtypBoolean inline: P22 takes the spec's strict reading (0 or 1) where
+    # upstream's PC arm is `value & 0xFF != 0`.
+    boolean = next((r for r in records if r[2] == 0x000B), None)
+    if boolean is not None:
+        yield lie("record.boolean=0x02", set_u32(data, boolean[0] + 4, 0x02), PstFormatError)
+
+
 FAMILIES: tuple[Family, ...] = (
     truncations,
     bit_flips,
@@ -1221,6 +1326,7 @@ FAMILIES: tuple[Family, ...] = (
     zero_files,
     magic_only,
     heap_lies,
+    pc_lies,
 )
 
 

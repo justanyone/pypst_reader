@@ -20,14 +20,20 @@ from __future__ import annotations
 
 import argparse
 import inspect
+import struct
 import sys
+import unicodedata
+import uuid
 import zlib
 from collections.abc import Callable, Iterator
+from datetime import datetime
 from pathlib import Path
 
 from pypst.errors import PstError, PstFormatError
 from pypst.limits import DEFAULT_LIMITS
 from pypst.ltp.heap import HeapNode
+from pypst.ltp.prop_context import PropertyContext, PropertyRecord
+from pypst.ltp.prop_type import ObjectRef, PropType, PropValue, datetime_to_filetime
 from pypst.ltp.tree import HeapTree
 from pypst.ndb.block import BlockReader, DataBlock, SubNodeLeafBlock
 from pypst.ndb.btree import BlockBTree, NodeBTree, read_density_list
@@ -319,6 +325,176 @@ def dump_density_list(path: Path) -> None:
 
 
 DUMPERS["density_list"] = dump_density_list
+
+
+# --- upstream's `Debug` for property values (P05) ------------------------------------------
+
+
+def _rust_float(value: float, *, single: bool = False) -> str:
+    """Rust's `{:?}` for an f64 (or an f32 when `single`): the shortest round-tripping decimal.
+
+    Rust and Python agree on when to switch to an exponent (below 1e-4 or
+    from 1e16 up); Rust writes `1e16` / `1e-5` where Python writes `1e+16` /
+    `1e-05`, always keeps a `.0` on an integral value, and spells the
+    specials `NaN`, `inf`, `-inf`. An f32 is the shortest decimal that
+    round-trips through `<f`, not the f64 the bytes widened to.
+    """
+    if value != value:  # noqa: PLR0124 — NaN is the one value unequal to itself
+        return "NaN"
+    if value in (float("inf"), float("-inf")):
+        return "inf" if value > 0 else "-inf"
+    text = repr(value)
+    if single:
+        packed = struct.pack("<f", value)
+        for precision in range(1, 10):
+            candidate = f"{value:.{precision}g}"
+            try:
+                if struct.pack("<f", float(candidate)) == packed:
+                    text = candidate
+                    break
+            except OverflowError:  # rounded past f32::MAX; a longer form will not be
+                continue
+    mantissa, _, exponent = text.partition("e")
+    if exponent:
+        sign = "-" if exponent.startswith("-") else ""
+        return f"{mantissa}e{sign}{int(exponent.lstrip('+-'))}"
+    if "." not in mantissa and mantissa.strip("-").isdigit():
+        mantissa += ".0"
+    return mantissa
+
+
+_SIMPLE_ESCAPES = {"\t": "\\t", "\r": "\\r", "\n": "\\n", "\\": "\\\\", '"': '\\"', "\0": "\\0"}
+
+
+def _rust_str(text: str) -> str:
+    r"""Rust's `{:?}` for a `str`: `"…"` with `escape_debug` applied to every char.
+
+    `\t \r \n \\ \" \0` by name; a grapheme extender (Mn/Me here — Rust
+    tests `Grapheme_Extend`, which those two categories approximate) or a
+    char that is not printable (Rust's `is_printable`, approximated by
+    `str.isprintable`) as `\u{x}` in minimal lowercase hex; everything
+    else, a single quote included, as itself.
+    """
+    out = []
+    for ch in text:
+        if ch in _SIMPLE_ESCAPES:
+            out.append(_SIMPLE_ESCAPES[ch])
+        elif ch.isprintable() and unicodedata.category(ch) not in ("Mn", "Me"):
+            out.append(ch)
+        else:
+            out.append(f"\\u{{{ord(ch):x}}}")
+    return '"' + "".join(out) + '"'
+
+
+def _rust_guid(value: uuid.UUID) -> str:
+    """Upstream's `GuidValue` Debug: the registry form in upper case."""
+    return f"GuidValue {{ {str(value).upper()} }}"
+
+
+def _rust_binary(value: bytes) -> str:
+    """Upstream's `BinaryValue` Debug: `AA-BB-CC`, and `BinaryValue {  }` (two spaces) when empty."""
+    return f"BinaryValue {{ {'-'.join(f'{b:02X}' for b in value)} }}"
+
+
+def _rust_element(base: PropType, value: PropValue) -> str:
+    """One scalar as it appears inside its variant — bare for the numbers, wrapped for the struct-like values."""
+    if base is PropType.BOOLEAN:
+        return "true" if value else "false"
+    if base in (PropType.FLOAT, PropType.DOUBLE, PropType.APPTIME):
+        assert isinstance(value, float)
+        return _rust_float(value, single=base is PropType.FLOAT)
+    if base is PropType.SYSTIME:
+        assert isinstance(value, datetime)
+        return str(datetime_to_filetime(value))
+    if base is PropType.GUID:
+        assert isinstance(value, uuid.UUID)
+        return _rust_guid(value)
+    if base is PropType.BINARY:
+        assert isinstance(value, bytes)
+        return _rust_binary(value)
+    if base is PropType.UNICODE:
+        assert isinstance(value, str)
+        return f"UnicodeValue {{ {_rust_str(value)} }}"
+    if base is PropType.STRING8:
+        assert isinstance(value, str)
+        return f"String8Value {{ {_rust_str(value)} }}"
+    if base is PropType.OBJECT:
+        assert isinstance(value, ObjectRef)
+        return f"ObjectValue {{ {value.node}, size: 0x{value.size:X} }}"
+    assert isinstance(value, int) and not isinstance(value, bool), (base, value)
+    return str(value)
+
+
+def format_property_value(prop_type: PropType, value: PropValue) -> str:
+    """Upstream's `Debug for PropertyValue` for a value this port decoded as `prop_type` (P05).
+
+    `Null` for `None` whatever the declared type — upstream's `Null` is a
+    value, not a type. A `Time` is printed as the FILETIME ticks the
+    `datetime` converts back to, which drops the sub-microsecond digit
+    `filetime_to_datetime` dropped (P22): a golden `Time(n)` compares equal
+    to this only when `n % 10 == 0`. A multi-value is `Multiple…([a, b])`,
+    Rust's `Vec` Debug.
+    """
+    if value is None:
+        return "Null"
+    name = prop_type.debug_name
+    if isinstance(value, tuple):
+        base = PropType.from_wire(int(prop_type) & ~0x1000)
+        return f"{name}([{', '.join(_rust_element(base, item) for item in value)}])"
+    return f"{name}({_rust_element(prop_type, value)})"
+
+
+# Upstream's examples have no code page at all: `String8Value` is built by
+# widening each byte to U+00XX, which is exactly `latin-1`. The dumper uses
+# it so that its output is byte-comparable with the goldens; `cp1252`, the
+# library default, differs on 0x80..0x9F.
+DUMP_CODEPAGE = "latin-1"
+
+
+def property_lines(prop_id: int, record: PropertyRecord, value: PropValue) -> list[str]:
+    """The three lines `read_store_props` and `dump_pc` print for one property.
+
+    `Type:` is the VALUE's variant, as upstream's example computes it
+    (`PropertyType::from(&value)`), so a variable-size record whose HNID is
+    0 prints `Type: Null` and `Value: Null` whatever `wPropType` says.
+    `Record:` is upstream's `PropertyValueRecord` Debug; the store-props
+    example does not print it, the table examples print their own.
+    """
+    return [
+        f" Property ID: 0x{prop_id:04X}, Type: {record.value_type.debug_name}",
+        f"  Record: {record}",
+        f"  Value: {format_property_value(record.prop_type, value)}",
+    ]
+
+
+def dump_pc(path: Path, nid: str) -> None:
+    """`pc <file> <nid-hex>`: the node's property context as upstream's `read_store_props` prints one (P05).
+
+    Every property in ascending id order as ` Property ID: 0x%04X, Type: %s`,
+    then `  Record: %s` (upstream's `PropertyValueRecord` Debug — `Small(0x…)`,
+    the HeapId, or the sub-node NodeId; the store-props example does not print
+    it, the table examples print their own) and `  Value: %s`, the value's
+    `Debug`. `Type:` is the VALUE's variant as upstream's example computes
+    it (`PropertyType::from(&value)`), so a zero HNID prints `Type: Null` and
+    `Value: Null`. String8 values are decoded as latin-1, which is upstream's
+    (code-page-less) reading, so the two outputs are byte-comparable. The
+    store's `Display Name:` and entry-id lines are the messaging layer's
+    (P07) and are not printed here.
+    """
+    node = _parse_nid(nid)
+    with path.open("rb") as f:
+        header = read_header(f)
+        root = header.root
+        block_btree = BlockBTree(f, root.block_btree, DEFAULT_LIMITS)
+        node_btree = NodeBTree(f, root.node_btree, DEFAULT_LIMITS)
+        reader = BlockReader(f, header, block_btree, DEFAULT_LIMITS)
+        pc = PropertyContext.from_node(reader, node_btree.find(node), codepage=DUMP_CODEPAGE)
+        for prop_id, record in pc.records.items():
+            for line in property_lines(prop_id, record, pc.read(record)):
+                print(line)
+
+
+DUMPERS["pc"] = dump_pc
 
 
 def main(argv: list[str] | None = None) -> int:

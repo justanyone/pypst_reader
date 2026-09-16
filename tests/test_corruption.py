@@ -23,7 +23,8 @@ type through `Mutation.expect`.
 The `test_p03_*` stubs skip until `pypst.ndb.block` import; when they do,
 the skip inside each names the mutation to build (the `P03 landed?` note in
 tests/corrupt.py lists the builders that row adds). The `test_p04_*` cases
-are live: P04 added the heap builders and the `heap_lies` family.
+are live: P04 added the heap builders and the `heap_lies` family, P05 the
+`pc_lies` family and the `pc.store_pc` entry point.
 """
 
 from __future__ import annotations
@@ -59,6 +60,7 @@ EXPECTED_FAMILIES = (
     "zero_files",
     "magic_only",
     "heap_lies",
+    "pc_lies",
 )
 
 # The smallest populated corpus store first (the default base), then

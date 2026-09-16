@@ -14,7 +14,8 @@ two cannot disagree about what "leak" means:
 - a call that does not return within the watchdog's deadline is a HANG.
 
 The entry points here are the ones that exist today (header, the two
-B-tree walks and lookups, the density list). Each later layer adds its
+B-tree walks and lookups, the density list, the store node's heap/BTH
+and its property context). Each later layer adds its
 calls to `exercise` in its own row; the contract harness (P24) is the
 generic version over `pypst.__all__`.
 
@@ -41,6 +42,7 @@ from dataclasses import dataclass, field, replace
 from pypst.errors import PstError
 from pypst.limits import DEFAULT_LIMITS, Limits
 from pypst.ltp.heap import HeapNode, HeapNodeId
+from pypst.ltp.prop_context import PropertyContext
 from pypst.ltp.tree import HeapTree
 from pypst.ndb.block import BlockReader
 from pypst.ndb.btree import BlockBTree, NodeBTree, read_density_list
@@ -138,6 +140,9 @@ def exercise(data: bytes, shape: BaseShape, limits: Limits = DEFAULT_LIMITS) -> 
         # every record's heap HNID resolved — through the roots this
         # file's own header names.
         outcomes.append(_attempt("heap.store_pc", lambda: walk_store_pc(f, read_header(f), limits)))
+        # P05: the same node as a property context — the client signature,
+        # the record widths, every wPropType and every value decoded.
+        outcomes.append(_attempt("pc.store_pc", lambda: read_store_pc(f, read_header(f), limits)))
     return outcomes
 
 
@@ -159,6 +164,19 @@ def walk_store_pc(f: io.BytesIO, header: Header, limits: Limits) -> int:
             heap.get_hnid(hnid)
         count += 1
     return count
+
+
+def read_store_pc(f: io.BytesIO, header: Header, limits: Limits) -> int:
+    """Open NID 0x21 as a `PropertyContext` and decode every value; the count of properties.
+
+    Where `walk_store_pc` stops at the heap and the BTH, this reads the
+    layer above: the PC's own checks (bClientSig, cbKey/cbEnt, duplicate
+    keys, the record count) and P22's decoders over every value.
+    """
+    bbt = BlockBTree(f, header.root.block_btree, limits)
+    entry = NodeBTree(f, header.root.node_btree, limits).find(NodeId(0x21))
+    pc = PropertyContext.from_node(BlockReader(f, header, bbt, limits), entry, limits)
+    return sum(1 for _ in pc)
 
 
 class Hang(Exception):

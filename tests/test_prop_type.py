@@ -31,6 +31,7 @@ from pypst.ltp.prop_type import (
     fixed_size,
     is_fixed_size,
 )
+from pypst.ndb.ids import NodeId
 
 GOLDEN = Path(__file__).resolve().parent / "golden"
 
@@ -385,7 +386,7 @@ def test_mv_guid_wrong_length_for_its_count_is_refused() -> None:
         (PropType.LONGLONG, struct.pack("<q", -(1 << 63)), -(1 << 63)),
         (PropType.BINARY, b"", b""),
         (PropType.BINARY, b"\x01\x04\x00\x00\x10\x00", b"\x01\x04\x00\x00\x10\x00"),
-        (PropType.OBJECT, struct.pack("<II", 0x8025, 0x1234), ObjectRef(node=0x8025, size=0x1234)),
+        (PropType.OBJECT, struct.pack("<II", 0x8025, 0x1234), ObjectRef(node=NodeId(0x8025), size=0x1234)),
         (PropType.UNICODE, utf16("IPF.Note"), "IPF.Note"),
         (PropType.UNICODE, b"", ""),
         (PropType.STRING8, b"Search Root", "Search Root"),
@@ -543,7 +544,7 @@ def test_fixed_scalars_round_trip_through_struct() -> None:
         guid = uuid.UUID(int=rng.getrandbits(128))
         assert decode(PropType.GUID, guid.bytes_le) == guid
         node, size = rng.getrandbits(32), rng.getrandbits(32)
-        assert decode(PropType.OBJECT, struct.pack("<II", node, size)) == ObjectRef(node, size)
+        assert decode(PropType.OBJECT, struct.pack("<II", node, size)) == ObjectRef(NodeId(node), size)
         ft = rng.randrange(0, FILETIME_MAX // 10) * 10
         assert datetime_to_filetime(decode(PropType.SYSTIME, struct.pack("<q", ft))) == ft
 
@@ -554,7 +555,7 @@ def test_float_nan_survives_decoding() -> None:
 
 
 def test_object_ref_is_frozen() -> None:
-    ref = ObjectRef(1, 2)
+    ref = ObjectRef(NodeId(1), 2)
     with pytest.raises(AttributeError):
         ref.node = 3  # type: ignore[misc]
 
@@ -595,6 +596,29 @@ def test_variant_map_covers_every_upstream_variant_and_is_injective() -> None:
     assert len(set(UPSTREAM_VARIANT_TO_PROPTYPE.values())) == len(UPSTREAM_VARIANT_TO_PROPTYPE)
     unmapped = {m for m in PropType} - set(UPSTREAM_VARIANT_TO_PROPTYPE.values())
     assert unmapped == {PropType.UNSPECIFIED}
+
+
+def test_debug_name_is_the_upstream_variant_map_both_ways() -> None:
+    """`PropType.debug_name` (P05, for the dumper) agrees with the map this file transcribed from the goldens."""
+    for variant, t in UPSTREAM_VARIANT_TO_PROPTYPE.items():
+        assert t.debug_name == variant
+        assert PropType.from_debug_name(variant) is t
+    with pytest.raises(PstUnsupportedError):
+        _ = PropType.UNSPECIFIED.debug_name
+    with pytest.raises(PstFormatError):
+        PropType.from_debug_name("Integer128")
+    assert PropType.CLSID.debug_name == "Guid"
+
+
+def test_object_ref_node_is_a_node_id() -> None:
+    """P22 left `ObjectRef.node` a raw int; P05 wrapped it (INTERFACES changelog)."""
+    ref = decode(PropType.OBJECT, struct.pack("<II", 0x8025, 0x1234))
+    assert isinstance(ref, ObjectRef) and isinstance(ref.node, NodeId)
+    assert ref.node.index == 0x401 and ref.node.id_type.name == "ATTACHMENT" and ref.size == 0x1234
+    # An unknown 5-bit type is carried (as NodeId does) and refused only at id_type.
+    odd = decode(PropType.OBJECT, struct.pack("<II", 0x0000_0019, 0))
+    with pytest.raises(PstFormatError):
+        _ = odd.node.id_type
 
 
 @pytest.mark.parametrize("variant", sorted(UPSTREAM_VARIANT_TO_PROPTYPE), ids=str)

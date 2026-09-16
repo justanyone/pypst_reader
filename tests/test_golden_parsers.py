@@ -4,12 +4,16 @@ A parser that accepts a truncated golden turns a corrupted file into a green
 differential test, so every parser here is shown to refuse bad input before
 it is trusted to read good input. The read_header parser is exercised over
 all nine committed goldens (Empty.pst plus the public corpus); read_btrees
-and read_density_list over the seven Unicode ones (P02); the five stubs are
-checked to raise NotImplementedError with a non-empty description.
+and read_density_list over the seven Unicode ones (P02); the property-value
+grammar and the four PC/TC examples over every Unicode golden (P05); the two
+remaining stubs are checked to raise NotImplementedError with a non-empty
+description.
 """
 
 from __future__ import annotations
 
+import math
+import uuid
 from pathlib import Path
 
 import pytest
@@ -28,6 +32,12 @@ from tests.golden_parsers import (
     parse_read_btrees,
     parse_read_density_list,
     parse_read_header,
+    parse_read_ipm_subtree,
+    parse_read_named_props,
+    parse_read_root_folder,
+    parse_read_store_props,
+    parse_record,
+    parse_value,
 )
 
 ALL_STORES = [FIXTURES / "Empty.pst", *public_fixture_paths()]
@@ -281,7 +291,15 @@ def test_registry_covers_every_captured_example() -> None:
     assert set(PARSERS) == set(line.removeprefix("EXAMPLES=").split(","))
 
 
-COMPLETE = {"read_header", "read_btrees", "read_density_list"}
+COMPLETE = {
+    "read_header",
+    "read_btrees",
+    "read_density_list",
+    "read_store_props",
+    "read_named_props",
+    "read_root_folder",
+    "read_ipm_subtree",
+}
 
 
 @pytest.mark.parametrize("example", sorted(set(PARSERS) - COMPLETE))
@@ -546,3 +564,235 @@ def test_read_density_list_rejects_trailing_junk_and_non_error_single_line() -> 
         parse_read_density_list(_empty_dl_text() + "Extra: 1\n")
     with pytest.raises(ValueError, match="line 2:"):
         parse_read_density_list("Backfill Complete: false\n")
+
+
+# --- the property-value grammar and the four PC/TC examples (P05) -----------------
+
+VALUE_CASES = [
+    ("Null", ("Null", None)),
+    ("Integer16(-1)", ("Integer16", -1)),
+    ("Integer32(917521)", ("Integer32", 917521)),
+    ("Integer64(-9223372036854775808)", ("Integer64", -9223372036854775808)),
+    ("Currency(10000)", ("Currency", 10000)),
+    ("ErrorCode(-2147024809)", ("ErrorCode", -2147024809)),
+    ("Time(116444736000000000)", ("Time", 116444736000000000)),
+    ("Floating32(1.5)", ("Floating32", 1.5)),
+    ("Floating64(-0.25)", ("Floating64", -0.25)),
+    ("Floating64(1e16)", ("Floating64", 1e16)),
+    ("Floating64(NaN)", ("Floating64", float("nan"))),
+    ("Floating64(inf)", ("Floating64", float("inf"))),
+    ("FloatingTime(0.0)", ("FloatingTime", 0.0)),
+    ("Boolean(true)", ("Boolean", True)),
+    ("Boolean(false)", ("Boolean", False)),
+    ('Unicode(UnicodeValue { "IPF.Note" })', ("Unicode", "IPF.Note")),
+    ('Unicode(UnicodeValue { "" })', ("Unicode", "")),
+    ('Unicode(UnicodeValue { "a, b]c" })', ("Unicode", "a, b]c")),
+    ('Unicode(UnicodeValue { "tab\\there" })', ("Unicode", "tab\there")),
+    ('Unicode(UnicodeValue { "\\u{301}" })', ("Unicode", "\u0301")),
+    ('String8(String8Value { "Search Root" })', ("String8", "Search Root")),
+    ("Guid(GuidValue { 00062002-0000-0000-C000-000000000046 })", ("Guid", uuid.UUID("00062002-0000-0000-c000-000000000046"))),
+    ("Binary(BinaryValue { 01-FF-00 })", ("Binary", b"\x01\xff\x00")),
+    ("Binary(BinaryValue {  })", ("Binary", b"")),
+    ("MultipleInteger32([1, 2, 3])", ("MultipleInteger32", [1, 2, 3])),
+    ("MultipleInteger32([])", ("MultipleInteger32", [])),
+    ('MultipleUnicode([UnicodeValue { "a, b" }, UnicodeValue { "]" }])', ("MultipleUnicode", ["a, b", "]"])),
+    ("MultipleBinary([BinaryValue { AA }, BinaryValue {  }])", ("MultipleBinary", [b"\xaa", b""])),
+    ("Object(ObjectValue { NodeId { Attachment: 0x401 }, size: 0x1234 })", None),
+]
+
+
+@pytest.mark.parametrize(("text", "expected"), [(t, e) for t, e in VALUE_CASES if e is not None], ids=lambda v: str(v)[:40])
+def test_parse_value_round_trips(text: str, expected: tuple) -> None:
+    variant, value = parse_value(text)
+    assert variant == expected[0]
+    if isinstance(expected[1], float) and math.isnan(expected[1]):
+        assert math.isnan(value)
+    else:
+        assert value == expected[1]
+        assert type(value) is type(expected[1])
+
+
+def test_parse_value_object_carries_the_node_id() -> None:
+    variant, value = parse_value("Object(ObjectValue { NodeId { Attachment: 0x401 }, size: 0x1234 })")
+    assert variant == "Object"
+    assert value == {"node": {"type": "Attachment", "index": 0x401}, "size": 0x1234}
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "",
+        "Integer32",
+        "Integer32(0)extra",
+        "Integer32()",
+        "Integer32(0x10)",
+        "Integer128(0)",
+        "Boolean(1)",
+        "Binary(BinaryValue { AABB })",
+        "Binary(BinaryValue { AA- })",
+        "Binary(BinaryValue {})",
+        "Guid(GuidValue { not-a-guid })",
+        'Unicode(UnicodeValue { "unterminated })',
+        'Unicode(UnicodeValue { "bad \\q escape" })',
+        'Unicode(UnicodeValue { "\\u{zz}" })',
+        "MultipleInteger32([1, 2)",
+        "MultipleInteger32([1 2])",
+        "Object(ObjectValue { NodeId { Attachment: 0x401 } })",
+    ],
+)
+def test_parse_value_rejects(bad: str) -> None:
+    with pytest.raises(ValueError):
+        parse_value(bad)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Small(0x000E0011)", {"kind": "small", "raw": 0x000E0011}),
+        ("Small(Integer32(0))", {"kind": "small", "value": ("Integer32", 0)}),
+        ("Small(Boolean(true))", {"kind": "small", "value": ("Boolean", True)}),
+        ("HeapId(NodeId { HeapNode: 0x5 })", {"kind": "heap", "hid": 0xA0}),
+        ("Heap(HeapId(NodeId { HeapNode: 0x5 }))", {"kind": "heap", "hid": 0xA0}),
+        ("NodeId { ListsTablesProperties: 0x405 }", {"kind": "node", "node": {"type": "ListsTablesProperties", "index": 0x405}}),
+        ("Node(NodeId { ListsTablesProperties: 0x405 })", {"kind": "node", "node": {"type": "ListsTablesProperties", "index": 0x405}}),
+    ],
+)
+def test_parse_record_both_spellings(text: str, expected: dict) -> None:
+    assert parse_record(text) == expected
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["", "Small(0x0)", "Small()", "Heap(HeapId(NodeId { HeapNode: 0x5 })", "Node(NodeId { Internal: 0x1 }", "Whatever(1)"],
+)
+def test_parse_record_rejects(bad: str) -> None:
+    with pytest.raises(ValueError):
+        parse_record(bad)
+
+
+# The three stores whose read_store_props golden is a complete dump; the
+# oracle exits 1 part-way through pstd-inline-cid's (no Deleted Items entry
+# id), so its golden carries two header lines and no properties.
+STORE_PROPS_PARTIAL = {"pstd-inline-cid"}
+
+
+@pytest.mark.parametrize("store", UNICODE_STORES, ids=UNICODE_IDS)
+def test_read_store_props_golden_parses(store: Path, golden, golden_exit) -> None:
+    parsed = parse_read_store_props(golden(store, "read_store_props"))
+    assert set(parsed) == {"display_name", "ipm_subtree", "deleted_items", "finder", "properties"}
+    assert isinstance(parsed["display_name"], str) and parsed["display_name"]
+    assert len(parsed["ipm_subtree"]["record_key"]) == 16
+    if store.stem in STORE_PROPS_PARTIAL:
+        assert golden_exit(store, "read_store_props") == 1
+        assert parsed["deleted_items"] is None and parsed["properties"] == []
+        return
+    assert golden_exit(store, "read_store_props") == 0
+    assert parsed["properties"], store.stem
+    ids = [g["id"] for g in parsed["properties"]]
+    assert ids == sorted(ids), f"{store.stem}: read_store_props is not in prop-id order"
+    assert len(set(ids)) == len(ids), f"{store.stem}: a property id appears twice"
+    for group in parsed["properties"]:
+        assert group["record"] is None, "the example prints no Record: line"
+        assert group["value"][0] == group["type"]
+
+
+def test_read_store_props_rejects_garbled_and_truncated() -> None:
+    text = (GOLDEN / "Empty" / "read_store_props.txt").read_text()
+    lines = text.splitlines()
+    # A group cut between its Type: and its Value:.
+    with pytest.raises(ValueError, match="expected `  Value:`"):
+        parse_read_store_props("\n".join(lines[:5]) + "\n")
+    # A Type: that the Value: contradicts.
+    swapped = list(lines)
+    swapped[4] = " Property ID: 0x0E34, Type: Integer32"
+    with pytest.raises(ValueError, match="!= Type:"):
+        parse_read_store_props("\n".join(swapped) + "\n")
+    # Trailing junk after the last group.
+    with pytest.raises(ValueError, match="unexpected"):
+        parse_read_store_props(text + "Something Else\n")
+    # A column group where a plain one belongs.
+    with pytest.raises(ValueError, match="unexpected"):
+        parse_read_store_props("Display Name: x\n Column: Property ID: 0x0001, Type: Null\n  Value: Null\n")
+
+
+@pytest.mark.parametrize("store", UNICODE_STORES, ids=UNICODE_IDS)
+def test_read_named_props_golden_parses(store: Path, golden, golden_exit) -> None:
+    assert golden_exit(store, "read_named_props") == 0
+    entries = parse_read_named_props(golden(store, "read_named_props"))
+    assert entries, store.stem
+    for entry in entries:
+        assert 0x8000 <= entry["prop_id"] <= 0xFFFF, store.stem
+        assert (entry["number"] is None) != (entry["name"] is None), "exactly one of Number:/String[…]:"
+        if entry["name"] is not None:
+            assert entry["string_offset"] is not None
+        if isinstance(entry["guid_index"], int):
+            assert entry["guid"] is not None, "GuidIndex(n) is followed by an Other: line"
+    ids = [e["prop_id"] for e in entries]
+    assert ids == sorted(ids), f"{store.stem}: named props are not in id order"
+
+
+def test_read_named_props_rejects_garbled() -> None:
+    text = (GOLDEN / "Empty" / "read_named_props.txt").read_text()
+    lines = text.splitlines()
+    with pytest.raises(ValueError, match="expected ` GUID Index:`"):
+        parse_read_named_props(lines[0] + "\n")
+    with pytest.raises(ValueError, match="expected `Named Property ID:`"):
+        parse_read_named_props(" GUID Index: None\n")
+    with pytest.raises(ValueError, match="expected ` Number:` or"):
+        parse_read_named_props("Named Property ID: 0x8000\n GUID Index: None\n")
+    assert parse_read_named_props("") == []
+
+
+TABLE_PARSERS = {"read_root_folder": parse_read_root_folder, "read_ipm_subtree": parse_read_ipm_subtree}
+
+
+@pytest.mark.parametrize("example", sorted(TABLE_PARSERS))
+@pytest.mark.parametrize("store", UNICODE_STORES, ids=UNICODE_IDS)
+def test_table_goldens_parse(store: Path, example: str, golden, golden_exit) -> None:
+    rows = TABLE_PARSERS[example](golden(store, example))
+    if golden_exit(store, example) != 0:
+        assert rows == [], f"{store.stem}: a refusal golden must hold no rows"
+        return
+    assert rows, f"{store.stem}: {example} golden has no rows"
+    widths = {len(row["columns"]) for row in rows}
+    assert len(widths) == 1, f"{store.stem}: rows disagree about the column count {widths}"
+    first = [(c["id"], c["type"]) for c in rows[0]["columns"]]
+    for row in rows:
+        assert [(c["id"], c["type"]) for c in row["columns"]] == first, "the schema is the table's, not the row's"
+        for cell in row["columns"]:
+            if cell["value"] is None:
+                assert cell["record"] is None, "an absent cell prints no Record: line"
+            else:
+                assert cell["record"] is not None
+                assert cell["value"][0] == cell["type"]
+
+
+def test_table_parsers_reject_garbled() -> None:
+    with pytest.raises(ValueError, match="expected `Row:`"):
+        parse_read_root_folder("Version: 0x1\n")
+    with pytest.raises(ValueError, match="expected `Version:`"):
+        parse_read_root_folder("Row: 0x1\n")
+    with pytest.raises(ValueError, match="a row with no ` Column:` lines"):
+        parse_read_ipm_subtree("Row: 0x1\nVersion: 0x2\n")
+    # A plain ` Property ID:` group where a ` Column: Property ID:` belongs is not a column.
+    with pytest.raises(ValueError, match="a row with no ` Column:` lines"):
+        parse_read_ipm_subtree("Row: 0x1\nVersion: 0x2\n Property ID: 0x1, Type: Null\n  Value: Null\n")
+
+
+def test_every_value_line_in_every_golden_parses() -> None:
+    """The grammar covers what upstream actually printed, not only what this file imagined."""
+    seen: set[str] = set()
+    lines = 0
+    for path in sorted(GOLDEN.glob("*/read_*.txt")):
+        for line in path.read_text().splitlines():
+            for prefix in ("  Value: ", "  Record: "):
+                if not line.startswith(prefix):
+                    continue
+                text = line.removeprefix(prefix)
+                if prefix == "  Record: ":
+                    parse_record(text)
+                elif text != "None":
+                    seen.add(parse_value(text)[0])
+                lines += 1
+    assert lines > 1000, f"only {lines} Value:/Record: lines found; the goldens moved"
+    assert seen == {"Integer32", "Integer64", "Boolean", "Binary", "Unicode", "String8"}, seen

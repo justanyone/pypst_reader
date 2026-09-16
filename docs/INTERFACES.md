@@ -561,6 +561,9 @@ class PropType(IntEnum):             # [MS-OXCDATA] 2.11.1
 
     @classmethod
     def from_wire(cls, value: int) → PropType
+    debug_name → str                     # upstream's Debug variant ("Integer32", "Time", …); UNSPECIFIED → PstUnsupportedError
+    @classmethod
+    def from_debug_name(cls, name: str) → PropType   # the inverse, for the golden parsers; unknown → PstFormatError
     # the way to construct from a wPropType field. Any code upstream's TryFrom<u16> rejects —
     # including UNSPECIFIED and the spec's ServerId/Restriction/RuleAction — is
     # PstUnsupportedError(f"property type 0x{v:04X}"); not a u16 at all → PstFormatError.
@@ -590,7 +593,7 @@ def decode(t: PropType | int, data: bytes | memoryview, *, codepage: str = "cp12
 # any multi-value count > max_items → PstLimitError (checked before allocation; distinct from PstFormatError).
 
 @dataclass(frozen=True, slots=True)
-class ObjectRef:  node: int; size: int         # PT_OBJECT: subnode id (raw u32 for now — see changelog) and byte size
+class ObjectRef:  node: NodeId; size: int      # PT_OBJECT: the sub-node's NID (P05 wrapped it — see changelog) and byte size
 
 def filetime_to_datetime(ft: int) → datetime   # 100 ns ticks since 1601-01-01 → aware UTC; sub-µs ticks dropped; out of range → PstFormatError
 def datetime_to_filetime(dt: datetime) → int   # inverse; naive → TypeError, before 1601 → ValueError (caller errors, not file errors)
@@ -602,17 +605,64 @@ map from those to `PropType` is `UPSTREAM_VARIANT_TO_PROPTYPE` in
 
 ## `pypst.ltp.prop_context` — P05
 
+**Built** (`src/pypst/ltp/prop_context.py`, 2026-09-16). Ported from
+`ltp/prop_context.rs` (the record types, `PropertyContextInner::properties`
+and `read_property`; the value decoders are P22's).
+
 ```python
+PC_KEY_FORMAT = "<H"; PC_KEY_SIZE = 2; PC_RECORD_FORMAT = "<HI"; PC_RECORD_SIZE = 6
+
 @dataclass(frozen=True, slots=True)
 class PropertyRecord:                # one PC BTH leaf: 2-byte prop id key, 6-byte value record
     prop_id: int; prop_type: PropType; raw: int   # raw = the 4-byte inline value OR an HNID
+    SIZE = 8
+    unpack(key: bytes, value: bytes) → PropertyRecord
+        # !PstUnsupportedError naming BOTH the property and the wPropType; !PstFormatError short buffer
+    is_inline → bool                 # upstream's `Small`: NULL and the ≤ 4-byte scalars
+    hnid → HeapNodeId | None         # None for an inline record
+    is_null → bool                   # a non-inline record whose HNID is 0 — upstream's PropertyValue::Null
+    value_type → PropType            # prop_type, or NULL for a null HNID — the `Type:` the goldens print
+    __str__ → "Small(0x0018B2B3)" | "HeapId(NodeId { HeapNode: 0x5 })" | "NodeId { … }"   # upstream's Debug
 
 class PropertyContext:
-    __init__(self, heap: HeapNode, limits: Limits)      # client sig must be 0xBC
-    records → Mapping[int, PropertyRecord]              # count > limits.MAX_PROPERTY_COUNT → PstLimitError
-    get(self, prop_id: int) → PropValue | None          # decodes on demand; fixed types inline, else via HNID
+    __init__(self, heap: HeapNode, limits: Limits | None = None, *, codepage: str = "cp1252")
+        # !PstFormatError client sig != 0xBC, or a BTH whose cbKey/cbEnt are not 2 and 6
+        # limits=None takes the heap's own. TypeError for a non-HeapNode.
+    from_node(reader: BlockReader, entry: NodeBTreeEntry | SubNodeLeafEntry, limits=None, *, codepage="cp1252")
+        # THE constructor: HeapNode.from_node + the checks above
+    heap → HeapNode; tree → HeapTree; limits → Limits; codepage → str
+    records → Mapping[int, PropertyRecord]   # read-only, ascending prop id, parsed once and kept
+        # !PstLimitError count > limits.max_property_count; !PstFormatError a repeated prop id
+    __len__; __contains__(prop_id)
+    read(self, record: PropertyRecord) → PropValue      # upstream's read_property; TypeError for a non-record
+    get(self, prop_id: int) → PropValue | None          # decodes on demand; None when ABSENT or when the HNID is 0
     __iter__ → Iterator[tuple[int, PropValue]]          # in prop-id order, as read_store_props prints
 ```
+
+Values are decoded on demand and never cached; a caller that wants them all
+iterates once. Fixed types of four bytes or fewer come from the 4-byte field,
+masked to their width exactly as upstream masks (`& 0xFFFF`, `& 0xFF`);
+everything else goes through `HeapNode.get_hnid` and `prop_type.decode`. A
+sub-node an HNID names that the node's tree does not hold is
+`PstNotFoundError` (upstream's `PropertySubNodeValueNotFound`).
+
+Divergences from upstream, each in the module docstring with its reason: a
+`PtypNull` record decodes to `None` (upstream's `small_value` has no Null
+arm, so the whole store fails to open); `PtypObject` IS decoded (upstream's
+`try_from` has no arm — P19's finding); an 8/16-byte scalar or Object whose
+HNID carries type bits is `PstFormatError` (upstream reads the item at `raw
+>> 5` anyway); a repeated property id is `PstFormatError` (upstream's
+`BTreeMap` keeps the last); the BTH widths are checked before anything is
+read; counts are bounded by `limits`. `PtypBoolean` is P22's strict form.
+
+`python -m pypst.debug pc <file> <nid-hex>` prints the goldens' shape —
+` Property ID: 0x%04X, Type: %s`, `  Record: %s`, `  Value: %s` — through
+`debug.property_lines(prop_id, record, value)` and
+`debug.format_property_value(prop_type, value)` (upstream's `Debug for
+PropertyValue`, including Rust's float, string and `BinaryValue` spellings).
+The dumper decodes String8 with `debug.DUMP_CODEPAGE` (`"latin-1"`), which
+is upstream's code-page-less reading, so its output is byte-comparable with
+`read_store_props`'s golden.
 
 ## `pypst.ltp.table_context` — P06
 
@@ -774,6 +824,31 @@ __all__ = [...]                      # the P24 contract harness iterates this
 ---
 
 ## Changelog
+
+- 2026-09-16 — P05 landed `pypst.ltp.prop_context`; its section now describes
+  what was built. Changes from the draft: `limits` is optional (the heap's
+  own by default) and `codepage` was added; `PropertyContext.from_node`,
+  `read(record)`, `tree`/`heap`/`limits`/`codepage`, `__len__` and
+  `__contains__` added; `PropertyRecord` gained `unpack`, `is_inline`,
+  `hnid`, `is_null`, `value_type`, `SIZE` and upstream's `__str__`; the PC
+  BTH's 2/6 widths are checked in `__init__` and the module's struct
+  constants are named. **`ObjectRef.node` is now a `NodeId`** (P22's open
+  item, closed here — `pypst.ltp.prop_type` changed in one annotation), and
+  `PropType` gained `debug_name` / `from_debug_name` for the dumper and the
+  golden parsers. **MV_GUID keeps upstream's count-prefixed reading**: a
+  structure-only survey of every PC in both private stores and the whole
+  corpus found no `PtypMultipleGuid` property, and the survey is now a
+  standing test. `pypst.debug` gained `pc`, `property_lines`,
+  `format_property_value` and `DUMP_CODEPAGE`. `tests/golden_parsers.py`
+  completed `parse_read_store_props`, `parse_read_named_props`,
+  `parse_read_root_folder`, `parse_read_ipm_subtree`, `parse_value` and
+  `parse_record` (only `read_search_updates` and `dump_messages` remain
+  stubs). `tests/corrupt.py` gained the `pc_lies` family (13–14 lies: a
+  signature the heap accepts and a PC does not, BTH widths the BTH accepts
+  and a PC does not, unknown types, a repeated key, wrong-length fixed
+  values, type bits on a fixed HNID, an MV count of 2^32-1, an odd-length
+  Unicode value, a non-boolean boolean, and a zero HNID that must NOT
+  raise), and the corruption harness a `pc.store_pc` entry point.
 
 - 2026-09-15 — drafted from upstream's public surface (P30). Nothing above
   `errors`/`encode`/`crc` exists yet; every other section is a promise.

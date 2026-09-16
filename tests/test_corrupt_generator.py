@@ -34,6 +34,9 @@ BASE_IDS = [p.stem for p in BASES]
 
 # Pinned totals per base and family. A change here is a deliberate change
 # to the generator, made in the same commit that explains it.
+PC_LIES_INLINE_CID = 13  # pstd-inline-cid's store PC has no PtypBoolean record
+PC_LIES_EMPTY = 14
+
 PINNED = {
     "pstd-inline-cid": {
         "truncations": 61,
@@ -45,6 +48,7 @@ PINNED = {
         "zero_files": 6,
         "magic_only": 3,
         "heap_lies": 22,
+        "pc_lies": PC_LIES_INLINE_CID,
     },
     "Empty": {
         "truncations": 62,
@@ -56,6 +60,7 @@ PINNED = {
         "zero_files": 6,
         "magic_only": 3,
         "heap_lies": 22,
+        "pc_lies": PC_LIES_EMPTY,
     },
 }
 
@@ -90,7 +95,7 @@ def test_another_seed_moves_the_random_families_and_only_those() -> None:
     # bit_flips names carry the offset, so a different seed gives different names.
     assert {n for n in a if n.startswith("bit_flips:")} != {n for n in b if n.startswith("bit_flips:")}
     # The deterministic families are identical byte for byte.
-    for family in ("truncations", "field_lies", "pointer_cycles", "depth_bombs", "zero_files", "magic_only", "heap_lies"):
+    for family in ("truncations", "field_lies", "pointer_cycles", "depth_bombs", "zero_files", "magic_only", "heap_lies", "pc_lies"):
         assert {n: d for n, d in a.items() if n.startswith(family)} == {n: d for n, d in b.items() if n.startswith(family)}
 
 
@@ -366,6 +371,7 @@ def test_families_are_named_and_ordered() -> None:
         "zero_files",
         "magic_only",
         "heap_lies",
+        "pc_lies",
     ]
 
 

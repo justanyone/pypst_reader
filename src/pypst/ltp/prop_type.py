@@ -67,8 +67,10 @@ buffer an attacker wrote:
   Zero decodes to the epoch itself, 1601-01-01T00:00:00+00:00: MAPI uses zero
   to mean "no time", but that is a policy for the messaging layer, not a
   fact about the bytes.
-- PtypObject's node id stays a raw `int` in `ObjectRef` for now, because the
-  `NodeId` type (row P23) is being built in parallel; row P05 wraps it.
+- PtypObject's node id is a `NodeId` (`ObjectRef.node`), as upstream's
+  `ObjectValue { node_id: NodeId, size }`. It was a raw `int` while P23 was
+  in flight; P05 wrapped it. An unknown 5-bit type is accepted here, as
+  `NodeId(raw)` accepts it, and refused where `id_type` is asked for.
 """
 
 from __future__ import annotations
@@ -83,6 +85,7 @@ from enum import IntEnum
 
 from pypst.errors import PstFormatError, PstLimitError, PstUnsupportedError
 from pypst.limits import MAX_MV_ITEMS
+from pypst.ndb.ids import NodeId
 
 DEFAULT_MAX_ITEMS = MAX_MV_ITEMS  # the named home is pypst.limits (P11)
 
@@ -148,8 +151,62 @@ class PropType(IntEnum):
             raise PstUnsupportedError(f"property type 0x{value:04X}")
         return cls(value)
 
+    @property
+    def debug_name(self) -> str:
+        """The variant name upstream's `Debug` prints for this type (`Integer32`, `Time`, ...) — what the goldens contain.
+
+        `UNSPECIFIED` has no upstream variant and is refused with
+        `PstUnsupportedError`, as `from_wire` refuses it.
+        """
+        try:
+            return _DEBUG_NAMES[self]
+        except KeyError:
+            raise PstUnsupportedError(f"property type 0x{int(self):04X} has no upstream name") from None
+
+    @classmethod
+    def from_debug_name(cls, name: str) -> PropType:
+        """The inverse of `debug_name`, for parsing the oracle's output; an unknown name is `PstFormatError`."""
+        try:
+            return _TYPES_BY_DEBUG_NAME[name]
+        except KeyError:
+            raise PstFormatError(f"unknown property type name {name!r}") from None
+
 
 _WIRE_CODES = frozenset(int(m) for m in PropType)
+
+# Upstream's `PropertyType` variant names ([MS-OXCDATA]'s `Ptyp*` names minus
+# the prefix), in the order of the enum in `ltp/prop_type.rs`.
+_DEBUG_NAMES: dict[PropType, str] = {
+    PropType.NULL: "Null",
+    PropType.SHORT: "Integer16",
+    PropType.LONG: "Integer32",
+    PropType.FLOAT: "Floating32",
+    PropType.DOUBLE: "Floating64",
+    PropType.CURRENCY: "Currency",
+    PropType.APPTIME: "FloatingTime",
+    PropType.ERROR: "ErrorCode",
+    PropType.BOOLEAN: "Boolean",
+    PropType.OBJECT: "Object",
+    PropType.LONGLONG: "Integer64",
+    PropType.STRING8: "String8",
+    PropType.UNICODE: "Unicode",
+    PropType.SYSTIME: "Time",
+    PropType.GUID: "Guid",
+    PropType.BINARY: "Binary",
+    PropType.MV_SHORT: "MultipleInteger16",
+    PropType.MV_LONG: "MultipleInteger32",
+    PropType.MV_FLOAT: "MultipleFloating32",
+    PropType.MV_DOUBLE: "MultipleFloating64",
+    PropType.MV_CURRENCY: "MultipleCurrency",
+    PropType.MV_APPTIME: "MultipleFloatingTime",
+    PropType.MV_LONGLONG: "MultipleInteger64",
+    PropType.MV_STRING8: "MultipleString8",
+    PropType.MV_UNICODE: "MultipleUnicode",
+    PropType.MV_SYSTIME: "MultipleTime",
+    PropType.MV_GUID: "MultipleGuid",
+    PropType.MV_BINARY: "MultipleBinary",
+}
+_TYPES_BY_DEBUG_NAME = {name: member for member, name in _DEBUG_NAMES.items()}
 
 
 # The fixed-size scalars and their little-endian struct formats. Sizes are
@@ -219,11 +276,13 @@ def fixed_size(t: PropType) -> int:
 class ObjectRef:
     """A PtypObject value: the subnode holding an attachment or embedded message.
 
-    Upstream's `ObjectValue { node_id: NodeId, size: u32 }`. `node` is the raw
-    u32 until row P23's `NodeId` lands (see the module docstring).
+    Upstream's `ObjectValue { node_id: NodeId, size: u32 }`: the NID of the
+    sub-node (of the owning node) that holds the object's bytes — an
+    attachment's data, or an embedded message's own property context — and
+    the byte size upstream carries alongside it.
     """
 
-    node: int
+    node: NodeId
     size: int
 
 
@@ -311,7 +370,7 @@ def _decode_guid(data: bytes | memoryview) -> uuid.UUID:
 def _decode_object(data: bytes | memoryview) -> ObjectRef:
     _exact(PropType.OBJECT, data, 8)
     node, size = struct.unpack("<II", data)
-    return ObjectRef(node, size)
+    return ObjectRef(NodeId(node), size)
 
 
 def _decode_binary(data: bytes | memoryview) -> bytes:
