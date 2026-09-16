@@ -443,8 +443,13 @@ class BlockReader:
 
     # --- the walks ----------------------------------------------------------
 
-    def read_data(self, block: BlockId) -> bytes:
-        """All of a node's data bytes: the data block, or the leaves of its XBLOCK/XXBLOCK tree in order.
+    def read_data_blocks(self, block: BlockId) -> list[bytes]:
+        """A node's data one block at a time: the data block, or the leaves of its XBLOCK/XXBLOCK tree in order.
+
+        The per-block split is what a Heap-on-Node needs (`pypst.ltp.heap`):
+        an HID's block index counts these leaves, each with its own page
+        map, and the boundaries are the blocks' own `cb`, not fixed slices
+        of the joined bytes. `read_data` is the join of this list.
 
         Bounded (module docstring): depth, cycles, the claimed and the
         assembled size. Not checked, as upstream: `lcbTotal` against the
@@ -452,7 +457,7 @@ class BlockReader:
         """
         root = self.read_data_tree(block)
         if isinstance(root, DataBlock):
-            return root.data
+            return [root.data]
         limits = self._limits
         what = "data tree"
         check_allocation(root.total_size, limits.max_allocation, f"{what} lcbTotal")
@@ -479,7 +484,11 @@ class BlockReader:
             parts.append(node.data)
             assembled += len(node.data)
             check_allocation(assembled, limits.max_allocation, f"{what} assembled size")
-        return b"".join(parts)
+        return parts
+
+    def read_data(self, block: BlockId) -> bytes:
+        """All of a node's data bytes: `read_data_blocks` joined."""
+        return b"".join(self.read_data_blocks(block))
 
     def read_subnode_tree(self, block: BlockId) -> dict[NodeId, SubNodeLeafEntry]:
         """Every leaf entry of the subnode B-tree rooted at `block`, keyed by NID (first entry per NID wins).
@@ -505,6 +514,10 @@ class BlockReader:
             for entry in node.entries:
                 entries.setdefault(entry.node, entry)
         return entries
+
+    def node_data_blocks(self, entry: NodeBTreeEntry) -> list[bytes]:
+        """`read_data_blocks(entry.data)` — the node's data by block, for a heap over it."""
+        return self.read_data_blocks(entry.data)
 
     def node_data(self, entry: NodeBTreeEntry) -> bytes:
         """The bytes of the node `entry` names — the convenience every layer above uses.

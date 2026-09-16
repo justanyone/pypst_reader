@@ -27,6 +27,8 @@ from pathlib import Path
 
 from pypst.errors import PstError, PstFormatError
 from pypst.limits import DEFAULT_LIMITS
+from pypst.ltp.heap import HeapNode
+from pypst.ltp.tree import HeapTree
 from pypst.ndb.block import BlockReader, DataBlock, SubNodeLeafBlock
 from pypst.ndb.btree import BlockBTree, NodeBTree, read_density_list
 from pypst.ndb.header import read_header
@@ -204,11 +206,7 @@ def dump_node(path: Path, nid: str) -> None:
     on a private store can compare with the oracle's length and a later
     row can compare across layers. The nid is hex, with or without `0x`.
     """
-    try:
-        raw = int(nid, 16)
-    except ValueError:
-        raise PstFormatError(f"not a hex node id: {nid!r}") from None
-    node = NodeId(raw)
+    node = _parse_nid(nid)
     with path.open("rb") as f:
         header = read_header(f)
         root = header.root
@@ -225,6 +223,78 @@ def dump_node(path: Path, nid: str) -> None:
 
 
 DUMPERS["node"] = dump_node
+
+
+def _parse_nid(nid: str) -> NodeId:
+    """A hex node id from the command line, with or without `0x`."""
+    try:
+        return NodeId(int(nid, 16))
+    except ValueError:
+        raise PstFormatError(f"not a hex node id: {nid!r}") from None
+
+
+def _open_heap(path: Path, nid: str) -> tuple[NodeBTreeEntry, HeapNode]:
+    """The heap over node `nid`, read whole (its blocks and sub-node tree) so the file can close."""
+    node = _parse_nid(nid)
+    with path.open("rb") as f:
+        header = read_header(f)
+        root = header.root
+        block_btree = BlockBTree(f, root.block_btree, DEFAULT_LIMITS)
+        node_btree = NodeBTree(f, root.node_btree, DEFAULT_LIMITS)
+        reader = BlockReader(f, header, block_btree, DEFAULT_LIMITS)
+        entry = node_btree.find(node)
+        return entry, HeapNode.from_node(reader, entry)
+
+
+def dump_heap(path: Path, nid: str) -> None:
+    """`heap <file> <nid-hex>`: the HNHDR, then every block's page map as counts and item lengths (P04).
+
+    No upstream twin — upstream has no heap example — so the format is this
+    port's: `Client Signature`, `User Root`, `Fill Levels`, `Blocks`, then
+    per block `Block N: Allocations: A, Free: F` and one ` Item i: n bytes`
+    line per allocation (1-based, as HIDs count them). Lengths, never
+    contents, so it is safe on a private store.
+    """
+    entry, heap = _open_heap(path, nid)
+    header = heap.header
+    print(f"Node: {entry.node}")
+    print(f"Client Signature: 0x{header.client_signature:02X}")
+    print(f"User Root: {header.user_root}")
+    print(f"Fill Levels: {list(header.fill_levels)}")
+    print(f"Blocks: {heap.block_count}")
+    for block_index in range(heap.block_count):
+        page_map = heap.page_map(block_index)
+        print(f"Block {block_index}: Allocations: {page_map.count}, Free: {page_map.free_count}")
+        for i, size in enumerate(page_map.sizes, start=1):
+            print(f" Item {i}: {size} bytes")
+
+
+DUMPERS["heap"] = dump_heap
+
+
+def dump_bth(path: Path, nid: str) -> None:
+    """`bth <file> <nid-hex>`: the BTH at the heap's user root — its header and every leaf record as hex (P04).
+
+    `key=` and `value=` are the raw record bytes: for a PC the u16 property
+    id and the 6-byte type + HNID record, which name structure and not
+    content; a TC's user root is a TCINFO, not a BTHHEADER, and is refused
+    by the header check as it should be.
+    """
+    entry, heap = _open_heap(path, nid)
+    tree = HeapTree(heap)
+    print(f"Node: {entry.node}")
+    print(f"Key Size: {tree.key_size}")
+    print(f"Entry Size: {tree.entry_size}")
+    print(f"Levels: {tree.levels}")
+    print(f"Root: {tree.root}")
+    count = 0
+    for key, value in tree:
+        print(f" Record: key={key.hex()} value={value.hex()}")
+        count += 1
+    print(f"Records: {count}")
+
+
+DUMPERS["bth"] = dump_bth
 
 
 def dump_density_list(path: Path) -> None:

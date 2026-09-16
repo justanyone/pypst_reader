@@ -20,10 +20,10 @@ tests/test_header.py and tests/test_btree.py and are not repeated; the
 families here reach the same refusals systematically and pin the exact
 type through `Mutation.expect`.
 
-The `test_p03_*` and `test_p04_*` stubs skip until `pypst.ndb.block` and
-`pypst.ltp.heap` import; when they do, the skip inside each names the
-mutation to build (the `P03 landed?` note in tests/corrupt.py lists the
-builders that row adds).
+The `test_p03_*` stubs skip until `pypst.ndb.block` import; when they do,
+the skip inside each names the mutation to build (the `P03 landed?` note in
+tests/corrupt.py lists the builders that row adds). The `test_p04_*` cases
+are live: P04 added the heap builders and the `heap_lies` family.
 """
 
 from __future__ import annotations
@@ -36,13 +36,13 @@ from pathlib import Path
 
 import pytest
 
-from pypst.errors import PstFormatError
+from pypst.errors import PstFormatError, PstLimitError
 from pypst.limits import DEFAULT_LIMITS
 from pypst.ndb.btree import BlockBTree, NodeBTree
 from pypst.ndb.header import Header, read_header
 from tests import corrupt
 from tests.conftest import FIXTURES, PUBLIC, REPO
-from tests.corruption_harness import BaseShape, Verdict, Watchdog, judge
+from tests.corruption_harness import BaseShape, Verdict, Watchdog, exercise, judge
 
 SEED = 20260915
 TIMEOUT = 5.0
@@ -58,6 +58,7 @@ EXPECTED_FAMILIES = (
     "future_versions",
     "zero_files",
     "magic_only",
+    "heap_lies",
 )
 
 # The smallest populated corpus store first (the default base), then
@@ -174,10 +175,6 @@ def _p03() -> None:
     pytest.importorskip("pypst.ndb.block")
 
 
-def _p04() -> None:
-    pytest.importorskip("pypst.ltp.heap")
-
-
 def test_p03_leaf_entry_data_block_past_eof() -> None:
     _p03()
     pytest.skip("P03 landed: rewrite a leaf BBTENTRY's BREF.ib past EOF (reseal the page); BlockReader.read_block → PstFormatError")
@@ -204,10 +201,32 @@ def test_p03_subnode_tree_cycle() -> None:
 
 
 def test_p04_bth_cycle() -> None:
-    _p04()
-    pytest.skip("P04 landed: a BTH whose child HID is its own root; HeapTree iteration → PstLimitError")
+    """A BTH with one index level whose only record names the root page itself: iteration is a cycle, not a hang."""
+    from pypst.ltp.heap import HeapNode
+    from pypst.ltp.tree import HeapTree
+
+    root = corrupt.hid(2)
+    heap = HeapNode([corrupt.heap_node([corrupt.bth_header(2, 6, levels=1, root=root), corrupt.bth_index([(b"\x01\x00", root)])])])
+    with pytest.raises(PstLimitError, match="cycle"):
+        list(HeapTree(heap))
+    # The same lie in a real store's message-store PC, through the family.
+    base = (PUBLIC / "pstd-inline-cid.pst").read_bytes()
+    m = corrupt.mutation(base, seed=SEED, name="heap_lies:bth.root_cycle")
+    outcomes = exercise(m.data, BaseShape.of(base))
+    assert any(o.entry_point == "heap.store_pc" and isinstance(o.error, PstLimitError) for o in outcomes)
 
 
 def test_p04_heap_index_past_the_block() -> None:
-    _p04()
-    pytest.skip("P04 landed: an HID whose index exceeds the block's allocation table; HeapNode.get → PstFormatError")
+    """An HID whose item index exceeds the block's cAlloc, and one whose block index exceeds the block count."""
+    from pypst.ltp.heap import HeapId, HeapNode
+
+    heap = HeapNode([corrupt.heap_node([b"first", b"second"])])
+    assert bytes(heap.get(HeapId(corrupt.hid(2)))) == b"second"
+    with pytest.raises(PstFormatError, match="past the block's 2 allocation"):
+        heap.get(HeapId(corrupt.hid(3)))
+    with pytest.raises(PstFormatError, match="block index 1 not found"):
+        heap.get(HeapId(corrupt.hid(1, block=1)))
+    base = (PUBLIC / "pstd-inline-cid.pst").read_bytes()
+    m = corrupt.mutation(base, seed=SEED, name="heap_lies:hidUserRoot_past_cAlloc")
+    outcomes = exercise(m.data, BaseShape.of(base))
+    assert any(o.entry_point == "heap.store_pc" and isinstance(o.error, PstFormatError) for o in outcomes)

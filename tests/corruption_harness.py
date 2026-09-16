@@ -40,9 +40,12 @@ from dataclasses import dataclass, field, replace
 
 from pypst.errors import PstError
 from pypst.limits import DEFAULT_LIMITS, Limits
+from pypst.ltp.heap import HeapNode, HeapNodeId
+from pypst.ltp.tree import HeapTree
+from pypst.ndb.block import BlockReader
 from pypst.ndb.btree import BlockBTree, NodeBTree, read_density_list
-from pypst.ndb.header import read_header
-from pypst.ndb.ids import ByteIndex, PageId, PageRef
+from pypst.ndb.header import Header, read_header
+from pypst.ndb.ids import ByteIndex, NodeId, PageId, PageRef
 from tests import corrupt
 
 DEFAULT_TIMEOUT = 5.0
@@ -130,7 +133,32 @@ def exercise(data: bytes, shape: BaseShape, limits: Limits = DEFAULT_LIMITS) -> 
         if (parsed.node_btree, parsed.block_btree) != (shape.nbt_root, shape.bbt_root):
             trees("header", parsed.node_btree, parsed.block_btree)
     outcomes.append(_attempt("read_density_list", lambda: read_density_list(f, limits)))
+    if header.returned:
+        # P04: the message store's property context as a heap and a BTH,
+        # every record's heap HNID resolved — through the roots this
+        # file's own header names.
+        outcomes.append(_attempt("heap.store_pc", lambda: walk_store_pc(f, read_header(f), limits)))
     return outcomes
+
+
+# Property types whose PC record value is always an HNID ([MS-PST] 2.3.3.3:
+# fixed types wider than 4 bytes, and every variable-size type).
+_HNID_TYPES = frozenset({0x0005, 0x0006, 0x0007, 0x000D, 0x0014, 0x0040, 0x0048, 0x001E, 0x001F, 0x0102})
+
+
+def walk_store_pc(f: io.BytesIO, header: Header, limits: Limits) -> int:
+    """Open NID 0x21 as a heap, walk its BTH, resolve every HNID-bearing record; the count of records."""
+    bbt = BlockBTree(f, header.root.block_btree, limits)
+    entry = NodeBTree(f, header.root.node_btree, limits).find(NodeId(0x21))
+    heap = HeapNode.from_node(BlockReader(f, header, bbt, limits), entry)
+    count = 0
+    for _key, value in HeapTree(heap):
+        (prop_type,) = struct.unpack_from("<H", value, 0)
+        hnid = HeapNodeId.unpack_from(value, 2)
+        if (prop_type in _HNID_TYPES or prop_type & 0x1000) and hnid.raw != 0:
+            heap.get_hnid(hnid)
+        count += 1
+    return count
 
 
 class Hang(Exception):

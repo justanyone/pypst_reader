@@ -44,6 +44,7 @@ PINNED = {
         "future_versions": 17,
         "zero_files": 6,
         "magic_only": 3,
+        "heap_lies": 22,
     },
     "Empty": {
         "truncations": 62,
@@ -54,6 +55,7 @@ PINNED = {
         "future_versions": 17,
         "zero_files": 6,
         "magic_only": 3,
+        "heap_lies": 22,
     },
 }
 
@@ -88,7 +90,7 @@ def test_another_seed_moves_the_random_families_and_only_those() -> None:
     # bit_flips names carry the offset, so a different seed gives different names.
     assert {n for n in a if n.startswith("bit_flips:")} != {n for n in b if n.startswith("bit_flips:")}
     # The deterministic families are identical byte for byte.
-    for family in ("truncations", "field_lies", "pointer_cycles", "depth_bombs", "zero_files", "magic_only"):
+    for family in ("truncations", "field_lies", "pointer_cycles", "depth_bombs", "zero_files", "magic_only", "heap_lies"):
         assert {n: d for n, d in a.items() if n.startswith(family)} == {n: d for n, d in b.items() if n.startswith(family)}
 
 
@@ -363,6 +365,7 @@ def test_families_are_named_and_ordered() -> None:
         "future_versions",
         "zero_files",
         "magic_only",
+        "heap_lies",
     ]
 
 

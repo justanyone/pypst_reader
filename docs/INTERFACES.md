@@ -424,33 +424,126 @@ the dumper and the tests need one block at a time. `limits` defaults to
 `DEFAULT_LIMITS`. `tests/corrupt.py` gained the block builders (`data_block`,
 `xblock`, `slblock`, `siblock`, `block_trailer`, `file_with_blocks`) for P12.
 
-## `pypst.ltp.heap` + `pypst.ltp.tree` — P04
+## `pypst.ltp.heap` + `pypst.ltp.tree` — landed (P04)
+
+Unicode arm only. The Heap-on-Node over a node's data blocks and its
+sub-node tree, and the BTree-on-Heap over that.
 
 ```python
+# pypst.ltp.heap
+HEAP_ID_FORMAT = "<I"; HEAP_HEADER_FORMAT = "<HBBII"; HEAP_HEADER_SIZE = 12; HEAP_SIGNATURE = 0xEC
+PAGE_HEADER_FORMAT = "<H"; PAGE_HEADER_SIZE = 2; BITMAP_HEADER_FORMAT = "<H64s"; BITMAP_HEADER_SIZE = 66
+FIRST_BITMAP_BLOCK = 8; BITMAP_PERIOD = 128          # HNBITMAPHDR at blocks 8, 136, 264, … (2.3.1.4)
+PAGE_MAP_FORMAT = "<HH"; PAGE_MAP_SIZE = 4; MAX_HEAP_ITEM_INDEX = 2047
+
+class HeapNodeType(IntEnum):        # bClientSig, [MS-PST] 2.3.1.2's nine values (upstream's HeapNodeType)
+    RESERVED1=0x6C, TABLE=0x7C, RESERVED2=0x8C, RESERVED3=0x9C, RESERVED4=0xA5, RESERVED5=0xAC,
+    TREE=0xB5, PROPERTIES=0xBC, RESERVED6=0xCC
+    from_wire(value) → HeapNodeType                  # !PstFormatError for any other value (as upstream's TryFrom)
+
 @dataclass(frozen=True, slots=True)
-class HeapId:                        # HID 2.3.1.1: type (5 bits, must be HID=0), index (11 bits), block index (16 bits)
-    raw: int
-    index → int; block_index → int
+class HeapId:                        # HID 2.3.1.1 — an item in THIS heap
+    raw: int;  SIZE = 4
+    # !PstFormatError unless a u32 with zero type bits; HeapId(0) is the null HID
+    from_parts(index: int, block_index: int = 0) → HeapId   # 1-based item index ≤ 2047, block ≤ 65535; 0 allowed (null)
+    unpack_from(buf, offset=0) → HeapId; pack() → bytes
+    is_null → bool; index → int (hidIndex, 1-based); block_index → int
+    __str__ → "HeapId(NodeId { HeapNode: 0x5 })"        # upstream's Debug form, as the goldens print it
+
 @dataclass(frozen=True, slots=True)
-class HeapNodeId:                    # HNID 2.3.3.2: the *union* — a HeapId if nidType == 0, else a NodeId (subnode)
-    raw: int
-    as_heap → HeapId | None
-    as_node → NodeId | None
-# The two are distinct classes on purpose (T02 § the trap).
+class HeapNodeId:                    # HNID 2.3.3.2 — the union; NOT a HeapId, NOT a NodeId
+    raw: int;  SIZE = 4;  unpack_from; pack
+    is_heap → bool                   # type bits == 0
+    as_heap → HeapId | None          # the HID, or None
+    as_node → NodeId | None          # the sub-node NID (ANY nonzero type, known or not — upstream's `_ =>` arm), or None
+    __str__ → str(as_heap or NodeId)
+
+@dataclass(frozen=True, slots=True)
+class HeapNodeHeader:  page_map_offset: int; client_signature: HeapNodeType; user_root: HeapId; fill_levels: tuple[int, ...] (8 nibbles, low first)
+    unpack_from(buf, offset=0)       # !PstFormatError bSig != 0xEC, unknown bClientSig, user root with type bits
+@dataclass(frozen=True, slots=True)
+class HeapPageMap:  offsets: tuple[int, ...] (rgibAlloc, cAlloc + 1); free_count: int; fill_levels: tuple[int, ...] | None (128 nibbles on a bitmap block)
+    count → int (cAlloc); size(index) → int; sizes → tuple[int, ...]
 
 class HeapNode:
-    __init__(self, data: bytes, *, subnodes: dict[NodeId, SubNodeEntry] | None, reader: BlockReader, limits: Limits)
-    client_signature → int           # bClientSig: 0xB5 = BTH, 0xBC = PC, 0x7C = TC, ...
-    user_root → HeapId
-    get(self, hid: HeapId) → memoryview             # !PstFormatError out-of-range index/block, zero-length freed item
-    get_hnid(self, hnid: HeapNodeId) → bytes        # heap item or subnode data, transparently
+    __init__(self, blocks: Sequence[bytes], *, subnodes: Mapping[NodeId, SubNodeLeafEntry] | None = None,
+             reader: BlockReader | None = None, limits: Limits = DEFAULT_LIMITS)
+        # `blocks` = the node's data blocks in order (BlockReader.read_data_blocks); block 0's HNHDR is read here.
+        # !PstFormatError no blocks, bad HNHDR
+    from_node(reader: BlockReader, entry: NodeBTreeEntry | SubNodeLeafEntry, limits=None) → HeapNode   # THE constructor:
+        # read_data_blocks(entry.data) + read_subnode_tree(entry.sub_node); a SubNodeLeafEntry for an attachment's/embedded message's PC
+    header → HeapNodeHeader; client_signature → HeapNodeType; user_root → HeapId; block_count → int; limits → Limits
+    block(block_index) → bytes                       # !PstFormatError past the last block
+    page_map(block_index) → HeapPageMap              # parsed on first use and kept (upstream re-parses per find_entry)
+        # !PstFormatError header/page map outside the block, offsets decreasing or past the block, cFree != zero-length spans
+        # !PstLimitError allocations so far > limits.max_heap_items
+    get(self, hid: HeapId) → memoryview             # a VIEW into the block; !PstFormatError block index past the last,
+                                                     # index 0 (null), index > cAlloc, zero-length (freed) item; TypeError for a non-HeapId
+    get_hnid(self, hnid: HeapNodeId) → bytes        # heap item (copied), or the sub-node's whole data via reader.read_data;
+                                                     # !PstNotFoundError sub-node absent (or no sub-node tree / no reader); TypeError for a non-HeapNodeId
+
+# pypst.ltp.tree
+BTH_HEADER_FORMAT = "<BBBBI"; BTH_HEADER_SIZE = 8; KEY_SIZES = (2, 4, 8, 16); MAX_ENTRY_SIZE = 32
+
+@dataclass(frozen=True, slots=True)
+class HeapTreeHeader:  key_size: int; entry_size: int; levels: int; root: HeapId (null = empty tree)
+    unpack_from(buf, offset=0)       # !PstFormatError bType != 0xB5 (or unknown), cbKey ∉ KEY_SIZES, cbEnt ∉ 1..=32, root with type bits
 
 class HeapTree:                      # BTH 2.3.2 over a HeapNode
-    __init__(self, heap: HeapNode, root: HeapId)
-    key_size, value_size → int
-    __iter__ → Iterator[tuple[bytes, bytes]]        # leaf (key, value) pairs in key order; depth/cycle → PstLimitError
-    find(self, key: bytes) → bytes | None
+    __init__(self, heap: HeapNode, root: HeapId | None = None)   # root = the BTHHEADER item; heap.user_root by default (a PC);
+                                     # a TC passes TCINFO.hidRowIndex. Header read here; !PstLimitError levels > limits.max_heap_tree_depth
+    heap → HeapNode; header → HeapTreeHeader; key_size, entry_size, levels → int; root → HeapId
+    __iter__ → Iterator[tuple[bytes, bytes]]        # every leaf (key, value) — exactly key_size / entry_size bytes — in the
+                                                     # tree's order, level by level as upstream's `entries`; an empty tree yields nothing
+                                                     # !PstFormatError a page not a whole number of records, a record HID with type bits
+                                                     # !PstLimitError a page visited twice (cycle), pages or records > limits.max_items
+    entries() → list[tuple[bytes, bytes]]           # list(self)
+    find(self, key: bytes) → bytes | None           # one descent; keys compared as little-endian unsigned ints of key_size bytes;
+                                                     # !PstFormatError len(key) != key_size
 ```
+
+What a PC record looks like to this layer, for P05: key = `<H` prop id, value
+= `<H` wPropType + `<I` dwValueHnid; `HeapNodeId.unpack_from(value, 2)` then
+`as_heap` / `as_node`; a fixed type ≤ 4 bytes is inline in those 4 bytes, an
+HNID of 0 on any other type is upstream's `Null` (and `read_store_props`
+prints `Type: Null` for it — `PropertyType::from(value)` names the value's
+variant, not `wPropType`; the private stores have such a record). For P06:
+the TC's user root is a TCINFO, `HeapTree(heap, HeapId(hidRowIndex))` is the
+row index (key `<I` row id, value `<I` row index), `hnidRows` is a
+`HeapNodeId` whose sub-node data is the row matrix.
+
+Verified, exactly upstream's checks (module docstrings): `bSig`, `bClientSig`,
+`hidUserRoot` type bits, page-map location, non-decreasing `rgibAlloc`,
+`cFree` == zero-length spans, block/item index range; BTH `bType`, `cbKey`,
+`cbEnt`, every page HID's type bits. Not verified, as upstream: `ibHnpm`
+alignment (pstd-inline-cid has 121; read), item overlap, fill levels.
+Divergences: an `rgibAlloc` offset past the block and a **zero-length item**
+are refused (upstream slices/returns empty); a page **not a whole number of
+records is `PstFormatError`** where upstream's `while let Ok` silently drops
+the tail (P19's finding); levels, cycles and counts are bounded by `limits`.
+
+`python -m pypst.debug heap <file> <nid-hex>` prints the HNHDR and every
+block's page map as counts and item lengths; `bth <file> <nid-hex>` prints
+the BTH at the user root and each leaf record as `key=<hex> value=<hex>`.
+Neither has an upstream twin.
+
+Changes from the draft, and why: `HeapNode` takes the node's **blocks**
+(`Sequence[bytes]`), not one `bytes` — an HID's block index counts the data
+tree's leaves, whose boundaries are their own `cb`; so `BlockReader` gained
+`read_data_blocks(block) → list[bytes]` and `node_data_blocks(entry)`
+(`read_data` is now their join — same bytes, same checks); `from_node` added
+as the constructor every caller wants; `HeapNodeType`, `HeapNodeHeader`,
+`HeapPageMap`, `HeapTreeHeader`, `block`/`page_map`/`block_count` and the
+module constants added for the dumper and the tests; `HeapId` gained
+`from_parts`/`is_null`/`unpack_from`/`pack`/`__str__`; `HeapNodeId` gained
+`is_heap`; `HeapTree.root` defaults to the user root and `entries()` /
+`header` were added; `key_size`/`value_size` became `key_size`/`entry_size`
+(the spec's `cbEnt`). `tests/corrupt.py` gained the heap/BTH builders
+(`hid`, `heap_header`, `page_header`, `bitmap_header`, `page_map`,
+`heap_block`, `heap_node`, `bth_header`, `bth_leaf`, `bth_index`,
+`bth_heap`, `pc_record`) and the `heap_lies` family (22 lies over the store
+PC of a real store, resealed); the corruption harness now walks the store
+PC's heap and BTH on every mutation.
 
 ## `pypst.ltp.prop_type` — P22 (leaf; land first)
 
@@ -748,3 +841,14 @@ __all__ = [...]                      # the P24 contract harness iterates this
   `limits` defaults; the module constants named. `debug btrees` prints the
   full `read_btrees` output; `debug node` registered; `debug.main` passes
   extra positional arguments through.
+- 2026-09-16 — P04 landed `pypst.ltp.heap` and `pypst.ltp.tree`; its section
+  now describes what was built. Changes from the draft: `HeapNode` takes the
+  node's blocks (not one `bytes`) plus `from_node`; **`BlockReader` gained
+  `read_data_blocks` / `node_data_blocks`** (additive; `read_data` is their
+  join); `HeapId.from_parts`/`is_null`/`__str__`, `HeapNodeId.is_heap`,
+  `HeapNodeType`, `HeapNodeHeader`, `HeapPageMap`, `HeapTreeHeader`,
+  `HeapTree.entries`; `value_size` → `entry_size`; a zero-length heap item
+  and a ragged BTH page are refused (divergences, in the docstrings); the
+  examples print `Type: Null` for a zero HNID (a fact for P05). `debug heap`
+  and `debug bth` registered; `corrupt.py` gained the heap builders and the
+  `heap_lies` family; the harness walks the store PC.

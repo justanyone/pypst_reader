@@ -29,13 +29,22 @@ All helpers return a new `bytes`; the input is never modified.
 
 from __future__ import annotations
 
+import io
+import itertools
 import random
 import struct
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from pypst.crc import compute_crc
-from pypst.errors import PstError, PstFormatError, PstLimitError, PstUnsupportedError
+from pypst.errors import (
+    PstError,
+    PstFormatError,
+    PstLimitError,
+    PstNotFoundError,
+    PstUnsupportedError,
+)
 from pypst.limits import DEFAULT_LIMITS
 
 # The struct formats the landed modules parse with. `field_lies` derives every
@@ -912,9 +921,295 @@ def magic_only(base: bytes, rng: random.Random) -> Iterator[Mutation]:
 # stub tests in tests/test_corruption.py (`test_p03_*`) are the place they
 # are asserted; they skip until `pypst.ndb.block` imports.
 #
-# P04 landed? add: `heap_lies` — a BTH whose child pointer names its own
-# HID (cycle), a heap index past the block, a freed (zero-length) item
-# referenced by the user root. See `test_p04_*` in tests/test_corruption.py.
+# --- P04: heap-on-node and BTree-on-heap builders --------------------------------
+#
+# Synthetic heaps for tests/test_heap.py and tests/test_tree.py, and the
+# `heap_lies` family below. A heap here is ONE block's worth of bytes (the
+# HNHDR, the items back to back, the HNPAGEMAP), exactly what
+# `HeapNode([bytes])` takes; a multi-block heap is a list of `heap_block`s.
+# Every builder takes overrides for the fields a denial test lies about.
+
+HEAP_SIGNATURE = 0xEC
+HEAP_HEADER_FORMAT = "<HBBII"
+BTH_HEADER_FORMAT = "<BBBBI"
+CLIENT_SIG_PC = 0xBC
+CLIENT_SIG_TC = 0x7C
+CLIENT_SIG_BTH = 0xB5
+
+
+def hid(index: int, block: int = 0) -> int:
+    """A raw HID ([MS-PST] 2.3.1.1): type 0, the 1-based `index` (11 bits), the block index (16 bits)."""
+    return (block << 16) | (index << 5)
+
+
+def heap_header(
+    page_map_offset: int = 0,
+    *,
+    client_sig: int = CLIENT_SIG_PC,
+    user_root: int = hid(1),
+    fill_levels: int = 0,
+    signature: int = HEAP_SIGNATURE,
+) -> bytes:
+    """A 12-byte HNHDR ([MS-PST] 2.3.1.2). `page_map_offset` is patched by `heap_block`."""
+    return struct.pack(HEAP_HEADER_FORMAT, page_map_offset, signature, client_sig, user_root, fill_levels)
+
+
+def page_header(page_map_offset: int = 0) -> bytes:
+    """A 2-byte HNPAGEHDR ([MS-PST] 2.3.1.3)."""
+    return struct.pack("<H", page_map_offset)
+
+
+def bitmap_header(page_map_offset: int = 0, fill_levels: bytes = bytes(64)) -> bytes:
+    """A 66-byte HNBITMAPHDR ([MS-PST] 2.3.1.4)."""
+    return struct.pack("<H", page_map_offset) + fill_levels
+
+
+def page_map(offsets: Sequence[int], *, count: int | None = None, free: int | None = None) -> bytes:
+    """An HNPAGEMAP ([MS-PST] 2.3.1.5): cAlloc (len - 1 unless lied), cFree (the zero steps unless lied), rgibAlloc."""
+    n = len(offsets) - 1 if count is None else count
+    zero_steps = sum(1 for a, b in itertools.pairwise(offsets) if a == b)
+    f = zero_steps if free is None else free
+    return struct.pack(f"<HH{len(offsets)}H", n, f, *offsets)
+
+
+def heap_block(
+    items: Sequence[bytes],
+    *,
+    header: bytes | None = None,
+    offsets: Sequence[int] | None = None,
+    page_map_offset: int | None = None,
+    count: int | None = None,
+    free: int | None = None,
+    pad: int = 0,
+) -> bytes:
+    """One heap block: `header` (an HNHDR by default), the items, `pad` bytes, then the page map.
+
+    The header's first two bytes are set to the page map's offset unless
+    `page_map_offset` lies; `offsets` replaces the computed rgibAlloc.
+    """
+    head = heap_header() if header is None else header
+    body = bytearray(head)
+    computed = [len(body)]
+    for item in items:
+        body += item
+        computed.append(len(body))
+    body += bytes(pad)
+    ib = len(body) if page_map_offset is None else page_map_offset
+    body[0:2] = struct.pack("<H", ib)
+    return bytes(body) + page_map(computed if offsets is None else list(offsets), count=count, free=free)
+
+
+def heap_node(items: Sequence[bytes], **header_kwargs: Any) -> bytes:
+    """A single-block heap whose HNHDR takes `heap_header`'s keyword overrides; item 1 is `items[0]`."""
+    return heap_block(items, header=heap_header(**header_kwargs))
+
+
+def bth_header(key_size: int = 2, entry_size: int = 6, levels: int = 0, root: int = 0, *, btype: int = CLIENT_SIG_BTH) -> bytes:
+    """An 8-byte BTHHEADER ([MS-PST] 2.3.2.1); `root` is a raw HID (0 = empty tree)."""
+    return struct.pack(BTH_HEADER_FORMAT, btype, key_size, entry_size, levels, root)
+
+
+def bth_leaf(pairs: Sequence[tuple[bytes, bytes]]) -> bytes:
+    """A leaf page ([MS-PST] 2.3.2.3): the key/value records back to back, as given."""
+    return b"".join(k + v for k, v in pairs)
+
+
+def bth_index(records: Sequence[tuple[bytes, int]]) -> bytes:
+    """An index page ([MS-PST] 2.3.2.2): (first key, raw HID of the next level) records back to back."""
+    return b"".join(k + struct.pack("<I", h) for k, h in records)
+
+
+def _chunks(seq: Sequence[Any], size: int) -> list[list[Any]]:
+    return [list(seq[i : i + size]) for i in range(0, len(seq), size)] or [[]]
+
+
+def bth_heap(
+    pairs: Sequence[tuple[bytes, bytes]],
+    *,
+    key_size: int = 2,
+    entry_size: int = 6,
+    levels: int = 0,
+    fanout: int = 2,
+    client_sig: int = CLIENT_SIG_PC,
+    header_root: int | None = None,
+) -> bytes:
+    """A single-block heap holding a well-formed BTH over `pairs` (already in key order).
+
+    Item 1 is the BTHHEADER (the heap's user root); the leaf pages follow,
+    `fanout` records each when `levels` > 0, then each index level, the
+    top one a single page. `header_root` replaces `hidRoot` for a lie.
+    With no pairs the tree is empty (hidRoot 0), whatever `levels` says.
+    """
+    items: list[bytes] = [b""]  # placeholder for the header, item 1
+    if not pairs:
+        root = 0
+    else:
+        leaf_pages = _chunks(pairs, fanout) if levels else [list(pairs)]
+        page_hids: list[tuple[bytes, int]] = []
+        for page in leaf_pages:
+            items.append(bth_leaf(page))
+            page_hids.append((page[0][0], hid(len(items))))
+        for level in range(levels):
+            groups = _chunks(page_hids, fanout) if level < levels - 1 else [page_hids]
+            page_hids = []
+            for group in groups:
+                items.append(bth_index(group))
+                page_hids.append((group[0][0], hid(len(items))))
+        root = page_hids[0][1]
+    items[0] = bth_header(key_size, entry_size, levels, root if header_root is None else header_root)
+    return heap_node(items, client_sig=client_sig)
+
+
+def pc_record(prop_type: int, hnid: int) -> bytes:
+    """A 6-byte PC BTH value ([MS-PST] 2.3.3.3): wPropType, dwValueHnid — the `entry_size` 6 of every PC."""
+    return struct.pack("<HI", prop_type, hnid)
+
+
+# --- heap_lies: the message-store PC of a real store, lied about in place ----------
+#
+# The store PC (NID 0x21) is a single data block in every corpus store, so
+# each lie is a rewrite of that block's decoded bytes, re-encoded by the
+# header's method and re-CRC'd, and the whole file is otherwise the base.
+# The landed NDB layers locate the block; a lie the NDB refuses would be
+# the NDB's test, not the heap's, so the trailer is always made consistent.
+
+NID_MESSAGE_STORE = 0x21
+_HNID_BEARING_TYPES = frozenset({0x001E, 0x001F, 0x0102})
+
+
+@dataclass(frozen=True)
+class _DataBlockSite:
+    offset: int
+    size: int
+    cyclic_key: int
+    crypt: int
+    data: bytes  # decoded
+
+
+def store_pc_block(base: bytes) -> _DataBlockSite:
+    """Where the message store's PC data block is, and its decoded bytes."""
+    from pypst.encode import decode_block
+    from pypst.ndb.block import BlockReader
+    from pypst.ndb.btree import BlockBTree, NodeBTree
+    from pypst.ndb.header import read_header
+    from pypst.ndb.ids import NodeId
+
+    f = io.BytesIO(base)
+    header = read_header(f)
+    bbt = BlockBTree(f, header.root.block_btree)
+    entry = NodeBTree(f, header.root.node_btree).find(NodeId(NID_MESSAGE_STORE))
+    block = bbt.find(entry.data)
+    if block.block.block.is_internal:
+        raise ValueError("the store PC is not a single data block; heap_lies needs one")
+    offset, size = block.block.index.value, block.size
+    key = block.block.block.search_key & 0xFFFFFFFF
+    raw = base[offset : offset + size]
+    reader = BlockReader(f, header, bbt)
+    assert reader.node_data(entry) == decode_block(raw, header.crypt_method, key)
+    return _DataBlockSite(offset, size, key, int(header.crypt_method), decode_block(raw, header.crypt_method, key))
+
+
+def rewrite_data_block(base: bytes, site: _DataBlockSite, data: bytes) -> bytes:
+    """`base` with the block at `site` holding `data` (same length), encoded and CRC'd as the header says."""
+    from pypst.encode import CryptMethod, encode_decode_cyclic, encode_permute
+
+    assert len(data) == site.size
+    method = CryptMethod(site.crypt)
+    if method is CryptMethod.PERMUTE:
+        encoded = encode_permute(data)
+    elif method is CryptMethod.CYCLIC:
+        encoded = encode_decode_cyclic(data, site.cyclic_key)
+    else:
+        encoded = data
+    out = bytearray(base)
+    out[site.offset : site.offset + site.size] = encoded
+    trailer = site.offset + block_alloc_size(site.size) - BLOCK_TRAILER_SIZE
+    out[trailer + 4 : trailer + 8] = struct.pack("<I", compute_crc(0, encoded))
+    return bytes(out)
+
+
+def _heap_shape(data: bytes) -> dict[str, Any]:
+    """The offsets inside a decoded PC heap block that the lies below rewrite."""
+    ib, _sig, _client, user_root, _fill = struct.unpack_from(HEAP_HEADER_FORMAT, data, 0)
+    count, _free = struct.unpack_from("<HH", data, ib)
+    offsets = struct.unpack_from(f"<{count + 1}H", data, ib + 4)
+    root_index = (user_root >> 5) & 0x7FF
+    bth_at = offsets[root_index - 1]
+    _btype, key_size, entry_size, _levels, bth_root = struct.unpack_from(BTH_HEADER_FORMAT, data, bth_at)
+    page_index = (bth_root >> 5) & 0x7FF
+    page_at, page_end = offsets[page_index - 1], offsets[page_index]
+    return {
+        "ib": ib,
+        "count": count,
+        "rgib": ib + 4,
+        "bth": bth_at,
+        "page": page_at,
+        "page_end": page_end,
+        "stride": key_size + entry_size,
+        "root_hid": bth_root,
+        "offsets": offsets,
+        "sizes": tuple(b - a for a, b in itertools.pairwise(offsets)),
+    }
+
+
+def _first_hnid_record(data: bytes, shape: dict[str, int]) -> int | None:
+    """The offset of the first root-page record whose value is a heap HNID of a variable-size type."""
+    for at in range(shape["page"], shape["page_end"], shape["stride"]):
+        prop_type, hnid = struct.unpack_from("<HI", data, at + 2)
+        if prop_type in _HNID_BEARING_TYPES and hnid & 0x1F == 0 and hnid != 0:
+            return at
+    return None
+
+
+def heap_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
+    """The store PC's heap and BTH lied about in place: header, page map, user root, BTH header, root page."""
+    site = store_pc_block(base)
+    data = site.data
+    shape = _heap_shape(data)
+    ib, rgib, bth = shape["ib"], shape["rgib"], shape["bth"]
+
+    def lie(name: str, edited: bytes, expect: type[PstError]) -> Mutation:
+        return Mutation(f"heap_lies:{name}", rewrite_data_block(base, site, edited), expect, must_raise=True)
+
+    yield lie("bSig=0x00", set_u8(data, 2, 0x00), PstFormatError)
+    yield lie("bClientSig=0x00", set_u8(data, 3, 0x00), PstFormatError)
+    yield lie("ibHnpm=0xFFFF", set_u16(data, 0, 0xFFFF), PstFormatError)
+    yield lie("ibHnpm=odd_past_end", set_u16(data, 0, len(data) - 1), PstFormatError)
+    yield lie("cAlloc=0xFFFF", set_u16(data, ib, 0xFFFF), PstFormatError)
+    yield lie("cFree=cAlloc", set_u16(data, ib + 2, shape["count"]), PstFormatError)
+    yield lie("rgibAlloc_decreasing", set_u16(data, rgib + 4, 0), PstFormatError)
+    yield lie("rgibAlloc_past_block", set_u16(data, rgib + 2 * shape["count"], 0xFFFF), PstFormatError)
+    yield lie("hidUserRoot=0", set_u32(data, 4, 0), PstFormatError)
+    yield lie("hidUserRoot_type_bits", set_u32(data, 4, hid(1) | 0x01), PstFormatError)
+    yield lie("hidUserRoot_past_cAlloc", set_u32(data, 4, hid(0x7FF)), PstFormatError)
+    yield lie("hidUserRoot_block_1", set_u32(data, 4, hid(1, block=1)), PstFormatError)
+    yield lie("bth.bType=bTypePC", set_u8(data, bth, CLIENT_SIG_PC), PstFormatError)
+    yield lie("bth.cbKey=3", set_u8(data, bth + 1, 3), PstFormatError)
+    yield lie("bth.cbEnt=0", set_u8(data, bth + 2, 0), PstFormatError)
+    yield lie("bth.cbEnt=33", set_u8(data, bth + 2, 33), PstFormatError)
+    yield lie("bth.bIdxLevels=0xFF", set_u8(data, bth + 3, 0xFF), PstLimitError)
+    yield lie("bth.hidRoot_past_cAlloc", set_u32(data, bth + 4, hid(0x7FF)), PstFormatError)
+    # The root page not a whole number of records — a cbEnt the page length
+    # does not divide by: upstream's `while let Ok` would drop the tail
+    # silently; this port refuses.
+    page_len = shape["page_end"] - shape["page"]
+    ragged_ent = next(e for e in (7, 5, 9, 11, 13) if page_len % (2 + e))
+    yield lie(f"bth.cbEnt={ragged_ent}_ragged", set_u8(data, bth + 2, ragged_ent), PstFormatError)
+    # A cycle: one index level whose root page is an item filled with
+    # records naming that same item. Any item whose length is a whole
+    # number of 6-byte index records will do; its bytes are overwritten.
+    cyclic_item = next((i for i, size in enumerate(shape["sizes"], start=1) if size and size % 6 == 0), None)
+    if cyclic_item is not None:
+        at, size = shape["offsets"][cyclic_item - 1], shape["sizes"][cyclic_item - 1]
+        cyclic = set_u8(data, bth + 3, 1)
+        cyclic = set_u32(cyclic, bth + 4, hid(cyclic_item))
+        cyclic = set_bytes(cyclic, at, (b"\x00\x00" + struct.pack("<I", hid(cyclic_item))) * (size // 6))
+        yield lie("bth.root_cycle", cyclic, PstLimitError)
+    record = _first_hnid_record(data, shape)
+    if record is not None:
+        yield lie("record.hnid_past_cAlloc", set_u32(data, record + 4, hid(0x7FF)), PstFormatError)
+        yield lie("record.hnid_subnode_absent", set_u32(data, record + 4, 0x4000_0001), PstNotFoundError)
+
 
 FAMILIES: tuple[Family, ...] = (
     truncations,
@@ -925,6 +1220,7 @@ FAMILIES: tuple[Family, ...] = (
     future_versions,
     zero_files,
     magic_only,
+    heap_lies,
 )
 
 
