@@ -51,7 +51,6 @@ can start today.
 | P06-TC | 2 | ✗ blocked on P04 | `ltp/table_context.py` — table contexts. Largest LTP file; split if it overruns. | [`todo/T02-ltp.md`](todo/T02-ltp.md#p06-tc) |
 | P12-FUZZ | 2 | ✗ not started (grows with each layer) | `tests/corrupt.py` mutation generator + the corruption suite: truncation, lying lengths, cyclic BTrees, bad CRCs, a 4 GB claim in a 265 KB file. Denial-first. | [`todo/T04-hardening.md`](todo/T04-hardening.md#p12-fuzz) |
 | P24-CONTRACT | 2 | ✗ blocked on P12 | The `PstError`-or-nothing harness: every public entry point × every corrupt file × every fixture; any other exception type is a failure. | [`todo/T06-testing.md`](todo/T06-testing.md#p24-contract) |
-| P20-SYNTH | 5 | ⏳ in flight — agent/p20-synth 2026-09-15 | `scripts/make_fixture.py` over a pinned EMLtoPST (MIT, pure Python): authored `.eml` → hash-recorded PST with **known content**, so tests can assert what a message says. Admitted to the corpus only once the oracle reads it. | [`todo/T06-testing.md`](todo/T06-testing.md#p20-synth) |
 | P25-HYPOTHESIS | 5 | ✗ not started | Decide (ADR paragraph) and add `hypothesis` as a dev-only dependency; first property tests over encode/crc/ids. | [`todo/T06-testing.md`](todo/T06-testing.md#p25-hypothesis) |
 | P26-COVERAGE | 5 | ✗ not started | `pytest-cov` + a coverage floor ratchet beside the ruff ratchet. A number that may not go down, never cited as evidence of correctness. | [`todo/T06-testing.md`](todo/T06-testing.md#p26-coverage) |
 | P07-STORE | 5 | ✗ blocked on P05 | `messaging/store.py` + `messaging/named_prop.py` — the store object and the named-property map. **Must decide** what to do with `pstd-inline-cid.pst`, which upstream refuses for a missing property. | [`todo/T03-messaging.md`](todo/T03-messaging.md#p07-store) |
@@ -83,6 +82,7 @@ can start today.
 | P01-HEADER | ✅ 2026-09-15 | `ndb/header.py` + `ndb/root.py`, `debug header` dumper, `tests/corrupt.py` seed. Goldens 7/7 Unicode stores (text and values), ANSI refused 2/2 on real bytes, private stores match the live oracle 2/2 (structure only), 110 denial cases incl. truncation at every 8-byte boundary, 30/30 mutants caught; upstream's magic twin landed. Validates exactly upstream's set; wVer 36/37 (4 KB pages) refused as unsupported. |
 | P11-LIMITS | ✅ 2026-09-15 | `limits.py`: 15 ceilings each justified from [MS-PST] field widths or Outlook's documented caps (MAX_ITEMS raised to 2^27 = the 27-bit node index — a 50 GiB store's BBT alone exceeds the draft's 1e6), frozen `Limits`, `check_depth/count/allocation`, bounded `VisitedSet`; PstLimitError proven disjoint from PstFormatError; 32 tests, 18/18 mutants caught. Not yet wired into any walk — that is P02+. |
 | P28-SPEC-VECTORS | ✅ 2026-09-15 | `tests/spec/`: 7 modules, 128 items, ~120 values typed verbatim from [MS-PST]/[MS-OXRTFCP]/[MS-OXCDATA]/[MS-DTYP] and ~60 derived; full key and CRC tables compared byte-for-byte; 24/24 mutants caught. Found: MV_GUID spec-vs-upstream (pinned xfail); corpus stores violate spec MUSTs upstream ignores (wSig=0 in pstd-inline-cid, qwUnused, rgbFM fill) — pinned as known deviations so P01/P02 do not enforce them. |
+| P20-SYNTH | ✅ 2026-09-15 | `scripts/get_fixture_tools.sh` + `make_fixture.py` over pinned EMLtoPST with a conformance patch (its TCINFO offsets and booleans were wrong — the same defect that makes upstream refuse `pstd-inline-cid`); `synth-basics.pst` (35 KB, 7 authored messages, byte-reproducible) is read by the oracle through `read_ipm_subtree` (only `read_search_updates` refuses: no search queue node); goldens captured; 44 content tests (8 wait on P08/P09), 8/8 mutants caught. |
 
 ## Still the user's call
 
@@ -92,5 +92,12 @@ can start today.
 - **Apache-2.0 fixtures.** ADR-0004 admits them (7 of the 8 corpus stores).
   If the corpus must be MIT/public-domain only, the pstsdk, Tika and
   java-libpst stores come out and P20 (synthetic fixtures) becomes priority 1.
+- **The EMLtoPST patch.** `scripts/patches/emltopst-oracle-conformance.patch`
+  necessarily contains fragments of EMLtoPST's source. That project says MIT
+  in its README but ships no LICENSE file (checked at the pin and at every
+  commit). The generated store is our own work and the tool is never
+  redistributed; the patch is the only thing that carries its text. If that
+  is not comfortable, the alternative is to upstream the patch to EMLtoPST
+  and pin the merged commit, or to rewrite the generator ourselves (P20b).
 - **Dev-only dependencies** (P25, P26): `hypothesis`, `pytest-cov`. Runtime
   stays at zero either way.
