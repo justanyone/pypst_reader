@@ -1,0 +1,111 @@
+Row: 0x8062
+Version: 0xD
+ Column: Property ID: 0x0E30, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E33, Type: Integer64
+  Value: None
+ Column: Property ID: 0x0E34, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x10F4, Type: Boolean
+  Value: None
+ Column: Property ID: 0x3001, Type: String8
+  Record: Heap(HeapId(NodeId { HeapNode: 0x5 }))
+  Value: String8(String8Value { "Deleted Items" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: String8
+  Value: None
+ Column: Property ID: 0x36DA, Type: Binary
+  Value: None
+ Column: Property ID: 0x36DE, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6670, Type: Binary
+  Value: None
+ Column: Property ID: 0x672D, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6730, Type: Integer64
+  Value: None
+ Column: Property ID: 0x6731, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6732, Type: String8
+  Value: None
+ Column: Property ID: 0x6733, Type: String8
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(32866))
+  Value: Integer32(32866)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(13))
+  Value: Integer32(13)
+ Column: Property ID: 0x6853, Type: Integer32
+  Value: None
+Row: 0x8082
+Version: 0x1D
+ Column: Property ID: 0x0E30, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E33, Type: Integer64
+  Value: None
+ Column: Property ID: 0x0E34, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x10F4, Type: Boolean
+  Value: None
+ Column: Property ID: 0x3001, Type: String8
+  Record: Heap(HeapId(NodeId { HeapNode: 0x6 }))
+  Value: String8(String8Value { "Sample2" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(1))
+  Value: Integer32(1)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: String8
+  Record: Heap(HeapId(NodeId { HeapNode: 0x7 }))
+  Value: String8(String8Value { "IPF.Note" })
+ Column: Property ID: 0x36DA, Type: Binary
+  Value: None
+ Column: Property ID: 0x36DE, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6635, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x6636, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x6670, Type: Binary
+  Value: None
+ Column: Property ID: 0x672D, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6730, Type: Integer64
+  Value: None
+ Column: Property ID: 0x6731, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6732, Type: String8
+  Value: None
+ Column: Property ID: 0x6733, Type: String8
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(32898))
+  Value: Integer32(32898)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(29))
+  Value: Integer32(29)
+ Column: Property ID: 0x6853, Type: Integer32
+  Value: None

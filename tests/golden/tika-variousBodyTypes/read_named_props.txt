@@ -1,0 +1,224 @@
+Named Property ID: 0x8000
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008205
+Named Property ID: 0x8001
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008223
+Named Property ID: 0x8002
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008231
+Named Property ID: 0x8003
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008216
+Named Property ID: 0x8004
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x0000820D
+Named Property ID: 0x8005
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x0000820E
+Named Property ID: 0x8006
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008235
+Named Property ID: 0x8007
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008236
+Named Property ID: 0x8008
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008233
+Named Property ID: 0x8009
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000000]: "content-class"
+Named Property ID: 0x800A
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ String[0x00000020]: "DRMLicense"
+Named Property ID: 0x800B
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000038]: "x-cr-hashedpuzzle"
+Named Property ID: 0x800C
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000060]: "x-cr-puzzleid"
+Named Property ID: 0x800D
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008580
+Named Property ID: 0x800E
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008581
+Named Property ID: 0x800F
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ String[0x00000080]: "urn:schemas-microsoft-com:office:outlook#storetypeprivate"
+Named Property ID: 0x8010
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008514
+Named Property ID: 0x8011
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008510
+Named Property ID: 0x8012
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008503
+Named Property ID: 0x8013
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008501
+Named Property ID: 0x8014
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008506
+Named Property ID: 0x8015
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000850E
+Named Property ID: 0x8016
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008518
+Named Property ID: 0x8017
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008582
+Named Property ID: 0x8018
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x000000F8]: "x-ms-exchange-organization-authas"
+Named Property ID: 0x8019
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085EB
+Named Property ID: 0x801A
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000140]: "acceptlanguage"
+Named Property ID: 0x801B
+ GUID Index: GuidIndex(3)
+ Other: GuidValue { 403FC56B-CD30-47C5-86F8-EDE9E35A022B }
+ String[0x00000160]: "ComplianceTag"
+Named Property ID: 0x801C
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ String[0x00000180]: "ExchangeApplicationFlags"
+Named Property ID: 0x801D
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 33EBA41F-7AA8-422E-BE7B-79E1A98E54B3 }
+ String[0x000001B4]: "ConversationIndexTrackingEx"
+Named Property ID: 0x801E
+ GUID Index: GuidIndex(5)
+ Other: GuidValue { 41F28F13-83F4-4114-A584-EEDB5A6B0BFF }
+ String[0x000001F0]: "IsQuotedTextChanged"
+Named Property ID: 0x801F
+ GUID Index: GuidIndex(5)
+ Other: GuidValue { 41F28F13-83F4-4114-A584-EEDB5A6B0BFF }
+ String[0x0000021C]: "HeaderBodyFragmentList"
+Named Property ID: 0x8020
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ Number: 0x0000232A
+Named Property ID: 0x8021
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 23239608-685D-4732-9C55-4C95CB4E8E33 }
+ String[0x0000024C]: "InferenceClassificationResult"
+Named Property ID: 0x8022
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ String[0x0000028C]: "NetworkMessageId"
+Named Property ID: 0x8023
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ String[0x000002B0]: "CurrentMessageSafetyFlags"
+Named Property ID: 0x8024
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ String[0x000002E8]: "DirectDeliveryRequestor"
+Named Property ID: 0x8025
+ GUID Index: GuidIndex(5)
+ Other: GuidValue { 41F28F13-83F4-4114-A584-EEDB5A6B0BFF }
+ String[0x0000031C]: "ClientInfo"
+Named Property ID: 0x8026
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000334]: "x-ms-exchange-organization-authsource"
+Named Property ID: 0x8027
+ GUID Index: GuidIndex(5)
+ Other: GuidValue { 41F28F13-83F4-4114-A584-EEDB5A6B0BFF }
+ String[0x00000384]: "IsSigned"
+Named Property ID: 0x8028
+ GUID Index: GuidIndex(5)
+ Other: GuidValue { 41F28F13-83F4-4114-A584-EEDB5A6B0BFF }
+ String[0x00000398]: "IsReadReceipt"
+Named Property ID: 0x8029
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x000003B8]: "x-ms-exchange-organization-authmechanism"
+Named Property ID: 0x802A
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 23239608-685D-4732-9C55-4C95CB4E8E33 }
+ String[0x0000040C]: "LatestMessageWordCount"
+Named Property ID: 0x802B
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 23239608-685D-4732-9C55-4C95CB4E8E33 }
+ String[0x0000043C]: "InferenceMessageIdentifier"
+Named Property ID: 0x802C
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 23239608-685D-4732-9C55-4C95CB4E8E33 }
+ String[0x00000474]: "TriageFeatureVector"
+Named Property ID: 0x802D
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 23239608-685D-4732-9C55-4C95CB4E8E33 }
+ String[0x000004A0]: "ClutterProbability"
+Named Property ID: 0x802E
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 23239608-685D-4732-9C55-4C95CB4E8E33 }
+ String[0x000004C8]: "ClutterThreshold"
+Named Property ID: 0x802F
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ String[0x000004EC]: "ItemExchangeDiagnostics"
+Named Property ID: 0x8030
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000520]: "x-originating-ip"
+Named Property ID: 0x8031
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000544]: "x-ms-exchange-organization-originalclientipaddress"
+Named Property ID: 0x8032
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x000005AC]: "x-ms-exchange-organization-originalserveripaddress"
+Named Property ID: 0x8033
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000614]: "x-ms-publictraffictype"
+Named Property ID: 0x8034
+ GUID Index: GuidIndex(5)
+ Other: GuidValue { 41F28F13-83F4-4114-A584-EEDB5A6B0BFF }
+ String[0x00000644]: "HasQuotedText"
+Named Property ID: 0x8035
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 23239608-685D-4732-9C55-4C95CB4E8E33 }
+ String[0x00000664]: "InferenceClassificationTrackingEx"
+Named Property ID: 0x8036
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085D8
+Named Property ID: 0x8037
+ GUID Index: GuidIndex(5)
+ Other: GuidValue { 41F28F13-83F4-4114-A584-EEDB5A6B0BFF }
+ String[0x000006AC]: "ConversationTreeParentRecordKey"

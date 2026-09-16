@@ -1,0 +1,28 @@
+Display Name: sample1
+IPM Subtree: EntryId { record_key: 6A-55-2B-81-3C-43-F9-43-84-F1-8B-7D-A2-39-3E-95, node_id: NodeId { NormalFolder: 0x401 } }
+Deleted Items: EntryId { record_key: 6A-55-2B-81-3C-43-F9-43-84-F1-8B-7D-A2-39-3E-95, node_id: NodeId { NormalFolder: 0x403 } }
+Finder: EntryId { record_key: 6A-55-2B-81-3C-43-F9-43-84-F1-8B-7D-A2-39-3E-95, node_id: NodeId { NormalFolder: 0x402 } }
+ Property ID: 0x0E34, Type: Binary
+  Value: Binary(BinaryValue { 01-00-00-00-84-67-99-42-DA-82-4F-41-87-AB-7F-BF-8B-A9-03-F7-01-00-00-00 })
+ Property ID: 0x0E38, Type: Integer32
+  Value: Integer32(0)
+ Property ID: 0x0FF9, Type: Binary
+  Value: Binary(BinaryValue { 6A-55-2B-81-3C-43-F9-43-84-F1-8B-7D-A2-39-3E-95 })
+ Property ID: 0x3001, Type: Unicode
+  Value: Unicode(UnicodeValue { "sample1" })
+ Property ID: 0x3416, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-6A-55-2B-81-3C-43-F9-43-84-F1-8B-7D-A2-39-3E-95-23-00-08-00 })
+ Property ID: 0x35DF, Type: Integer32
+  Value: Integer32(137)
+ Property ID: 0x35E0, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-6A-55-2B-81-3C-43-F9-43-84-F1-8B-7D-A2-39-3E-95-22-80-00-00 })
+ Property ID: 0x35E3, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-6A-55-2B-81-3C-43-F9-43-84-F1-8B-7D-A2-39-3E-95-62-80-00-00 })
+ Property ID: 0x35E7, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-6A-55-2B-81-3C-43-F9-43-84-F1-8B-7D-A2-39-3E-95-42-80-00-00 })
+ Property ID: 0x6633, Type: Boolean
+  Value: Boolean(true)
+ Property ID: 0x66FA, Type: Integer32
+  Value: Integer32(917521)
+ Property ID: 0x67FF, Type: Integer32
+  Value: Integer32(0)

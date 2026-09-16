@@ -1,0 +1,10 @@
+File Version: Ansi
+Next Block: AnsiBlockId { leaf: 0x54 }
+Next Page: AnsiPageId: 0x101
+File EOF Index: AnsiByteIndex { 0x42400 }
+AMAP Last Index: AnsiByteIndex { 0x4400 }
+AMAP Free Size: AnsiByteIndex { 0x38200 }
+PMAP Free Size: AnsiByteIndex { 0x1800 }
+NBT BlockRef: AnsiPageRef { page: AnsiPageId: 0xFE, index: AnsiByteIndex { 0x4E00 } }
+BBT BlockRef: AnsiPageRef { page: AnsiPageId: 0xFF, index: AnsiByteIndex { 0x5000 } }
+AMAP Valid: Valid2

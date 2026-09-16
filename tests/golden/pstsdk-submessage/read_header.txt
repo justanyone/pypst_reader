@@ -1,0 +1,10 @@
+File Version: Unicode
+Next Block: UnicodeBlockId { leaf: 0xEB }
+Next Page: UnicodePageId: 0x325
+File EOF Index: UnicodeByteIndex { 0x42400 }
+AMAP Last Index: UnicodeByteIndex { 0x4400 }
+AMAP Free Size: UnicodeByteIndex { 0x33B80 }
+PMAP Free Size: UnicodeByteIndex { 0x0 }
+NBT BlockRef: UnicodePageRef { page: UnicodePageId: 0x324, index: UnicodeByteIndex { 0x9200 } }
+BBT BlockRef: UnicodePageRef { page: UnicodePageId: 0x322, index: UnicodeByteIndex { 0x8800 } }
+AMAP Valid: Valid2

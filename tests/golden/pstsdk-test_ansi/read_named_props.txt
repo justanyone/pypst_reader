@@ -1,0 +1,656 @@
+Named Property ID: 0x8000
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008205
+Named Property ID: 0x8001
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008223
+Named Property ID: 0x8002
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008231
+Named Property ID: 0x8003
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008216
+Named Property ID: 0x8004
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x0000820D
+Named Property ID: 0x8005
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x0000820E
+Named Property ID: 0x8006
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008235
+Named Property ID: 0x8007
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008236
+Named Property ID: 0x8008
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008233
+Named Property ID: 0x8009
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000000]: "content-class"
+Named Property ID: 0x800A
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ String[0x00000020]: "DRMLicense"
+Named Property ID: 0x800B
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000038]: "x-cr-hashedpuzzle"
+Named Property ID: 0x800C
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000060]: "x-cr-puzzleid"
+Named Property ID: 0x800D
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008580
+Named Property ID: 0x800E
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008581
+Named Property ID: 0x800F
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ String[0x00000080]: "urn:schemas-microsoft-com:office:outlook#storetypeprivate"
+Named Property ID: 0x8010
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008510
+Named Property ID: 0x8011
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008578
+Named Property ID: 0x8012
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ String[0x000000F8]: "Keywords"
+Named Property ID: 0x8013
+ GUID Index: GuidIndex(3)
+ Other: GuidValue { 00062014-0000-0000-C000-000000000046 }
+ Number: 0x00008F05
+Named Property ID: 0x8014
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008514
+Named Property ID: 0x8015
+ GUID Index: GuidIndex(3)
+ Other: GuidValue { 00062014-0000-0000-C000-000000000046 }
+ Number: 0x00008F07
+Named Property ID: 0x8016
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008503
+Named Property ID: 0x8017
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008570
+Named Property ID: 0x8018
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085A8
+Named Property ID: 0x8019
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008502
+Named Property ID: 0x801A
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008104
+Named Property ID: 0x801B
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008105
+Named Property ID: 0x801C
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x0000811C
+Named Property ID: 0x801D
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x0000010C]: "x-ms-exchange-organization-authdomain"
+Named Property ID: 0x801E
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008101
+Named Property ID: 0x801F
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008552
+Named Property ID: 0x8020
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008102
+Named Property ID: 0x8021
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008110
+Named Property ID: 0x8022
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008111
+Named Property ID: 0x8023
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x0000810F
+Named Property ID: 0x8024
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008108
+Named Property ID: 0x8025
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008107
+Named Property ID: 0x8026
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008120
+Named Property ID: 0x8027
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x0000811B
+Named Property ID: 0x8028
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008119
+Named Property ID: 0x8029
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008109
+Named Property ID: 0x802A
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008124
+Named Property ID: 0x802B
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x0000812C
+Named Property ID: 0x802C
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008129
+Named Property ID: 0x802D
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x0000812A
+Named Property ID: 0x802E
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x0000811A
+Named Property ID: 0x802F
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008115
+Named Property ID: 0x8030
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008122
+Named Property ID: 0x8031
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008125
+Named Property ID: 0x8032
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008127
+Named Property ID: 0x8033
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x0000812B
+Named Property ID: 0x8034
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x0000812F
+Named Property ID: 0x8035
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008137
+Named Property ID: 0x8036
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008138
+Named Property ID: 0x8037
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008139
+Named Property ID: 0x8038
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008132
+Named Property ID: 0x8039
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008134
+Named Property ID: 0x803A
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008112
+Named Property ID: 0x803B
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008113
+Named Property ID: 0x803C
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008117
+Named Property ID: 0x803D
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008116
+Named Property ID: 0x803E
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x0000811D
+Named Property ID: 0x803F
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008121
+Named Property ID: 0x8040
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x0000811F
+Named Property ID: 0x8041
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x0000811E
+Named Property ID: 0x8042
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008103
+Named Property ID: 0x8043
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008123
+Named Property ID: 0x8044
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008126
+Named Property ID: 0x8045
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008550
+Named Property ID: 0x8046
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008551
+Named Property ID: 0x8047
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008554
+Named Property ID: 0x8048
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008506
+Named Property ID: 0x8049
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008501
+Named Property ID: 0x804A
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008560
+Named Property ID: 0x804B
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008561
+Named Property ID: 0x804C
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008516
+Named Property ID: 0x804D
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008517
+Named Property ID: 0x804E
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000851C
+Named Property ID: 0x804F
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000851D
+Named Property ID: 0x8050
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000851E
+Named Property ID: 0x8051
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000851F
+Named Property ID: 0x8052
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000850E
+Named Property ID: 0x8053
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008511
+Named Property ID: 0x8054
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008515
+Named Property ID: 0x8055
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008518
+Named Property ID: 0x8056
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008519
+Named Property ID: 0x8057
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008542
+Named Property ID: 0x8058
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000850F
+Named Property ID: 0x8059
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000851B
+Named Property ID: 0x805A
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008513
+Named Property ID: 0x805B
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008520
+Named Property ID: 0x805C
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008540
+Named Property ID: 0x805D
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008541
+Named Property ID: 0x805E
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008524
+Named Property ID: 0x805F
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008534
+Named Property ID: 0x8060
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008535
+Named Property ID: 0x8061
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008539
+Named Property ID: 0x8062
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000853A
+Named Property ID: 0x8063
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008530
+Named Property ID: 0x8064
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000851A
+Named Property ID: 0x8065
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008536
+Named Property ID: 0x8066
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008537
+Named Property ID: 0x8067
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008538
+Named Property ID: 0x8068
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008543
+Named Property ID: 0x8069
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008544
+Named Property ID: 0x806A
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008545
+Named Property ID: 0x806B
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008549
+Named Property ID: 0x806C
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008582
+Named Property ID: 0x806D
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008583
+Named Property ID: 0x806E
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008586
+Named Property ID: 0x806F
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008585
+Named Property ID: 0x8070
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008584
+Named Property ID: 0x8071
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000858C
+Named Property ID: 0x8072
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000858E
+Named Property ID: 0x8073
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008593
+Named Property ID: 0x8074
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008590
+Named Property ID: 0x8075
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008595
+Named Property ID: 0x8076
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008597
+Named Property ID: 0x8077
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008591
+Named Property ID: 0x8078
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008596
+Named Property ID: 0x8079
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x0000015C]: "content-type"
+Named Property ID: 0x807A
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000859B
+Named Property ID: 0x807B
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000859C
+Named Property ID: 0x807C
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ String[0x00000178]: "http://schemas.microsoft.com/exchange/junkemailmovestamp"
+Named Property ID: 0x807D
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085A0
+Named Property ID: 0x807E
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085A1
+Named Property ID: 0x807F
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085A4
+Named Property ID: 0x8080
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x0000859F
+Named Property ID: 0x8081
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085B1
+Named Property ID: 0x8082
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ String[0x000001EC]: "http://schemas.microsoft.com/outlook/phishingstamp"
+Named Property ID: 0x8083
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ String[0x00000254]: "STS_Id"
+Named Property ID: 0x8084
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085B2
+Named Property ID: 0x8085
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085B3
+Named Property ID: 0x8086
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085B5
+Named Property ID: 0x8087
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085B6
+Named Property ID: 0x8088
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085B7
+Named Property ID: 0x8089
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085B8
+Named Property ID: 0x808A
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085B9
+Named Property ID: 0x808B
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085BA
+Named Property ID: 0x808C
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085BC
+Named Property ID: 0x808D
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ String[0x00000264]: "http://schemas.microsoft.com/outlook/spoofingstamp"
+Named Property ID: 0x808E
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085BD
+Named Property ID: 0x808F
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085BE
+Named Property ID: 0x8090
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085BF
+Named Property ID: 0x8091
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085C0
+Named Property ID: 0x8092
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085C1
+Named Property ID: 0x8093
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085C2
+Named Property ID: 0x8094
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085C3
+Named Property ID: 0x8095
+ GUID Index: GuidIndex(5)
+ Other: GuidValue { 11000E07-B51B-40D6-AF21-CAA85EDAB1D0 }
+ Number: 0x00000001
+Named Property ID: 0x8096
+ GUID Index: GuidIndex(5)
+ Other: GuidValue { 11000E07-B51B-40D6-AF21-CAA85EDAB1D0 }
+ Number: 0x00000003
+Named Property ID: 0x8097
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085C5
+Named Property ID: 0x8098
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085C6
+Named Property ID: 0x8099
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085C7
+Named Property ID: 0x809A
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085C9
+Named Property ID: 0x809B
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085CB
+Named Property ID: 0x809C
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085CE
+Named Property ID: 0x809D
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 00062041-0000-0000-C000-000000000046 }
+ Number: 0x00008900
+Named Property ID: 0x809E
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 00062041-0000-0000-C000-000000000046 }
+ Number: 0x00008901
+Named Property ID: 0x809F
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 00062041-0000-0000-C000-000000000046 }
+ Number: 0x00008902
+Named Property ID: 0x80A0
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 00062041-0000-0000-C000-000000000046 }
+ Number: 0x00008903
+Named Property ID: 0x80A1
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 00062041-0000-0000-C000-000000000046 }
+ Number: 0x00008904
+Named Property ID: 0x80A2
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 00062041-0000-0000-C000-000000000046 }
+ Number: 0x00008905
+Named Property ID: 0x80A3
+ GUID Index: GuidIndex(6)
+ Other: GuidValue { 00062041-0000-0000-C000-000000000046 }
+ Number: 0x00008906

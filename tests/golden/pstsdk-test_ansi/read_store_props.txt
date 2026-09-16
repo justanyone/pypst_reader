@@ -1,0 +1,26 @@
+Display Name: Personal Folders
+IPM Subtree: EntryId { record_key: C9-B5-5F-F8-4C-3B-00-49-8F-10-1C-6A-91-5F-23-DF, node_id: NodeId { NormalFolder: 0x401 } }
+Deleted Items: EntryId { record_key: C9-B5-5F-F8-4C-3B-00-49-8F-10-1C-6A-91-5F-23-DF, node_id: NodeId { NormalFolder: 0x403 } }
+Finder: EntryId { record_key: C9-B5-5F-F8-4C-3B-00-49-8F-10-1C-6A-91-5F-23-DF, node_id: NodeId { NormalFolder: 0x402 } }
+ Property ID: 0x0E34, Type: Binary
+  Value: Binary(BinaryValue { 01-00-00-00-EF-FC-EA-28-C8-D4-97-40-8C-AB-E7-4A-59-89-A1-C8-01-00-00-00 })
+ Property ID: 0x0E38, Type: Integer32
+  Value: Integer32(0)
+ Property ID: 0x0FF9, Type: Binary
+  Value: Binary(BinaryValue { C9-B5-5F-F8-4C-3B-00-49-8F-10-1C-6A-91-5F-23-DF })
+ Property ID: 0x3001, Type: String8
+  Value: String8(String8Value { "Personal Folders" })
+ Property ID: 0x35DF, Type: Integer32
+  Value: Integer32(137)
+ Property ID: 0x35E0, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-C9-B5-5F-F8-4C-3B-00-49-8F-10-1C-6A-91-5F-23-DF-22-80-00-00 })
+ Property ID: 0x35E3, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-C9-B5-5F-F8-4C-3B-00-49-8F-10-1C-6A-91-5F-23-DF-62-80-00-00 })
+ Property ID: 0x35E7, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-C9-B5-5F-F8-4C-3B-00-49-8F-10-1C-6A-91-5F-23-DF-42-80-00-00 })
+ Property ID: 0x6633, Type: Boolean
+  Value: Boolean(true)
+ Property ID: 0x66FA, Type: Integer32
+  Value: Integer32(917517)
+ Property ID: 0x67FF, Type: Integer32
+  Value: Integer32(-113532656)

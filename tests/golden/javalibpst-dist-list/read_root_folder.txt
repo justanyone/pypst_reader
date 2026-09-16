@@ -1,0 +1,363 @@
+Row: 0x8022
+Version: 0x1E
+ Column: Property ID: 0x0E30, Type: Binary
+  Record: Heap(HeapId(NodeId { HeapNode: 0x7 }))
+  Value: Binary(BinaryValue { BB-13-B2-E5-7E-C6-E3-49-8F-38-67-7A-2C-3C-7A-AF })
+ Column: Property ID: 0x0E33, Type: Integer64
+  Record: Small(Integer64(100))
+  Value: Integer64(100)
+ Column: Property ID: 0x0E34, Type: Binary
+  Record: Heap(HeapId(NodeId { HeapNode: 0x6 }))
+  Value: Binary(BinaryValue { 01-00-00-00-AC-28-41-18-B9-23-96-4D-BE-DC-01-2D-90-E1-A6-7C-01-00-00-00 })
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x5 }))
+  Value: Unicode(UnicodeValue { "Top of Personal Folders" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(true))
+  Value: Boolean(true)
+ Column: Property ID: 0x3613, Type: Unicode
+  Value: None
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(32802))
+  Value: Integer32(32802)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(30))
+  Value: Integer32(30)
+Row: 0x8042
+Version: 0xF
+ Column: Property ID: 0x0E30, Type: Binary
+  Record: Heap(HeapId(NodeId { HeapNode: 0xA }))
+  Value: Binary(BinaryValue { 89-7E-2C-F9-A8-09-15-49-B0-86-4E-D6-9C-F0-94-C2 })
+ Column: Property ID: 0x0E33, Type: Integer64
+  Record: Small(Integer64(124))
+  Value: Integer64(124)
+ Column: Property ID: 0x0E34, Type: Binary
+  Record: Heap(HeapId(NodeId { HeapNode: 0x9 }))
+  Value: Binary(BinaryValue { 01-00-00-00-AC-28-41-18-B9-23-96-4D-BE-DC-01-2D-90-E1-A6-7C-01-00-00-00 })
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x8 }))
+  Value: Unicode(UnicodeValue { "Search Root" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(true))
+  Value: Boolean(true)
+ Column: Property ID: 0x3613, Type: Unicode
+  Value: None
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(32834))
+  Value: Integer32(32834)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(15))
+  Value: Integer32(15)
+Row: 0x2223
+Version: 0x18
+ Column: Property ID: 0x0E30, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E33, Type: Integer64
+  Value: None
+ Column: Property ID: 0x0E34, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0xB }))
+  Value: Unicode(UnicodeValue { "SPAM Search Folder 2" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: Unicode
+  Value: None
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(8739))
+  Value: Integer32(8739)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(24))
+  Value: Integer32(24)
+Row: 0x80E2
+Version: 0x36
+ Column: Property ID: 0x0E30, Type: Binary
+  Record: Heap(HeapId(NodeId { HeapNode: 0xE }))
+  Value: Binary(BinaryValue { B9-D2-59-70-E0-32-DC-4F-94-4C-92-50-6C-EC-C7-34 })
+ Column: Property ID: 0x0E33, Type: Integer64
+  Record: Small(Integer64(412))
+  Value: Integer64(412)
+ Column: Property ID: 0x0E34, Type: Binary
+  Record: Heap(HeapId(NodeId { HeapNode: 0xD }))
+  Value: Binary(BinaryValue { 01-00-00-00-AC-28-41-18-B9-23-96-4D-BE-DC-01-2D-90-E1-A6-7C-01-00-00-00 })
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0xC }))
+  Value: Unicode(UnicodeValue { "IPM_VIEWS" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: Unicode
+  Value: None
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(32994))
+  Value: Integer32(32994)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(54))
+  Value: Integer32(54)
+Row: 0x8102
+Version: 0x3B
+ Column: Property ID: 0x0E30, Type: Binary
+  Record: Heap(HeapId(NodeId { HeapNode: 0x11 }))
+  Value: Binary(BinaryValue { E6-92-C8-B7-49-F7-25-4E-90-C2-C1-1E-35-35-26-FC })
+ Column: Property ID: 0x0E33, Type: Integer64
+  Record: Small(Integer64(432))
+  Value: Integer64(432)
+ Column: Property ID: 0x0E34, Type: Binary
+  Record: Heap(HeapId(NodeId { HeapNode: 0x10 }))
+  Value: Binary(BinaryValue { 01-00-00-00-AC-28-41-18-B9-23-96-4D-BE-DC-01-2D-90-E1-A6-7C-01-00-00-00 })
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0xF }))
+  Value: Unicode(UnicodeValue { "IPM_COMMON_VIEWS" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: Unicode
+  Value: None
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(33026))
+  Value: Integer32(33026)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(59))
+  Value: Integer32(59)
+Row: 0x80023
+Version: 0x12D
+ Column: Property ID: 0x0E30, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E33, Type: Integer64
+  Value: None
+ Column: Property ID: 0x0E34, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x12 }))
+  Value: Unicode(UnicodeValue { "Reminders" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(1))
+  Value: Integer32(1)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x13 }))
+  Value: Unicode(UnicodeValue { "Outlook.Reminder" })
+ Column: Property ID: 0x6635, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x6636, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(524323))
+  Value: Integer32(524323)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(301))
+  Value: Integer32(301)
+Row: 0x80043
+Version: 0xAA
+ Column: Property ID: 0x0E30, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E33, Type: Integer64
+  Value: None
+ Column: Property ID: 0x0E34, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x14 }))
+  Value: Unicode(UnicodeValue { "To-Do Search" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x15 }))
+  Value: Unicode(UnicodeValue { "IPF.Task" })
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(524355))
+  Value: Integer32(524355)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(170))
+  Value: Integer32(170)
+Row: 0x80063
+Version: 0xC4
+ Column: Property ID: 0x0E30, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E33, Type: Integer64
+  Value: None
+ Column: Property ID: 0x0E34, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x16 }))
+  Value: Unicode(UnicodeValue { "ItemProcSearch" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x17 }))
+  Value: Unicode(UnicodeValue { "Outlook.ItemProcessor" })
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(524387))
+  Value: Integer32(524387)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(196))
+  Value: Integer32(196)
+Row: 0x8222
+Version: 0xE8
+ Column: Property ID: 0x0E30, Type: Binary
+  Record: Heap(HeapId(NodeId { HeapNode: 0x1A }))
+  Value: Binary(BinaryValue { AC-58-E9-C2-60-1D-72-41-A0-DB-81-6B-66-0B-F6-A4 })
+ Column: Property ID: 0x0E33, Type: Integer64
+  Record: Small(Integer64(2748))
+  Value: Integer64(2748)
+ Column: Property ID: 0x0E34, Type: Binary
+  Record: Heap(HeapId(NodeId { HeapNode: 0x19 }))
+  Value: Binary(BinaryValue { 01-00-00-00-AC-28-41-18-B9-23-96-4D-BE-DC-01-2D-90-E1-A6-7C-01-00-00-00 })
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x18 }))
+  Value: Unicode(UnicodeValue { "Freebusy Data" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(1))
+  Value: Integer32(1)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: Unicode
+  Value: None
+ Column: Property ID: 0x6635, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x6636, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(33314))
+  Value: Integer32(33314)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(232))
+  Value: Integer32(232)
+Row: 0x80083
+Version: 0x105
+ Column: Property ID: 0x0E30, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E33, Type: Integer64
+  Value: None
+ Column: Property ID: 0x0E34, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x1B }))
+  Value: Unicode(UnicodeValue { "Tracked Mail Processing" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x1C }))
+  Value: Unicode(UnicodeValue { "IPF.Note" })
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(524419))
+  Value: Integer32(524419)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(261))
+  Value: Integer32(261)

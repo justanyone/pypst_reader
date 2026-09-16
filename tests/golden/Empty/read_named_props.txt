@@ -1,0 +1,140 @@
+Named Property ID: 0x8000
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008205
+Named Property ID: 0x8001
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008223
+Named Property ID: 0x8002
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008231
+Named Property ID: 0x8003
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008216
+Named Property ID: 0x8004
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x0000820D
+Named Property ID: 0x8005
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x0000820E
+Named Property ID: 0x8006
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008235
+Named Property ID: 0x8007
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008236
+Named Property ID: 0x8008
+ GUID Index: GuidIndex(0)
+ Other: GuidValue { 00062002-0000-0000-C000-000000000046 }
+ Number: 0x00008233
+Named Property ID: 0x8009
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000000]: "content-class"
+Named Property ID: 0x800A
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ String[0x00000020]: "DRMLicense"
+Named Property ID: 0x800B
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000038]: "x-cr-hashedpuzzle"
+Named Property ID: 0x800C
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000060]: "x-cr-puzzleid"
+Named Property ID: 0x800D
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008580
+Named Property ID: 0x800E
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008581
+Named Property ID: 0x800F
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ String[0x00000080]: "urn:schemas-microsoft-com:office:outlook#storetypeprivate"
+Named Property ID: 0x8010
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008510
+Named Property ID: 0x8011
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008578
+Named Property ID: 0x8012
+ GUID Index: GuidIndex(3)
+ Other: GuidValue { 41F28F13-83F4-4114-A584-EEDB5A6B0BFF }
+ String[0x000000F8]: "IsMentioned"
+Named Property ID: 0x8013
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ String[0x00000114]: "Keywords"
+Named Property ID: 0x8014
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062014-0000-0000-C000-000000000046 }
+ Number: 0x00008F05
+Named Property ID: 0x8015
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008514
+Named Property ID: 0x8016
+ GUID Index: GuidIndex(4)
+ Other: GuidValue { 00062014-0000-0000-C000-000000000046 }
+ Number: 0x00008F07
+Named Property ID: 0x8017
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008503
+Named Property ID: 0x8018
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085A8
+Named Property ID: 0x8019
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008502
+Named Property ID: 0x801A
+ GUID Index: GuidIndex(5)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008104
+Named Property ID: 0x801B
+ GUID Index: GuidIndex(5)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008105
+Named Property ID: 0x801C
+ GUID Index: GuidIndex(5)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x0000811C
+Named Property ID: 0x801D
+ GUID Index: GuidIndex(1)
+ Other: GuidValue { 00020386-0000-0000-C000-000000000046 }
+ String[0x00000128]: "x-ms-exchange-organization-authdomain"
+Named Property ID: 0x801E
+ GUID Index: PublicStrings
+ PS_PUBLIC_STRINGS: GuidValue { 00020329-0000-0000-C000-000000000046 }
+ String[0x00000178]: "DoNotForward"
+Named Property ID: 0x801F
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008570
+Named Property ID: 0x8020
+ GUID Index: GuidIndex(5)
+ Other: GuidValue { 00062003-0000-0000-C000-000000000046 }
+ Number: 0x00008101
+Named Property ID: 0x8021
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x000085E0
+Named Property ID: 0x8022
+ GUID Index: GuidIndex(2)
+ Other: GuidValue { 00062008-0000-0000-C000-000000000046 }
+ Number: 0x00008552

@@ -1,0 +1,26 @@
+Display Name: Personal Folders
+IPM Subtree: EntryId { record_key: 17-93-B4-FA-E6-DE-0B-48-BD-87-CD-93-1D-C4-79-70, node_id: NodeId { NormalFolder: 0x401 } }
+Deleted Items: EntryId { record_key: 17-93-B4-FA-E6-DE-0B-48-BD-87-CD-93-1D-C4-79-70, node_id: NodeId { NormalFolder: 0x403 } }
+Finder: EntryId { record_key: 17-93-B4-FA-E6-DE-0B-48-BD-87-CD-93-1D-C4-79-70, node_id: NodeId { NormalFolder: 0x402 } }
+ Property ID: 0x0E34, Type: Binary
+  Value: Binary(BinaryValue { 01-00-00-00-B5-5F-E8-69-24-ED-AC-44-BE-D6-AA-10-5B-A2-34-D1-01-00-00-00 })
+ Property ID: 0x0E38, Type: Integer32
+  Value: Integer32(0)
+ Property ID: 0x0FF9, Type: Binary
+  Value: Binary(BinaryValue { 17-93-B4-FA-E6-DE-0B-48-BD-87-CD-93-1D-C4-79-70 })
+ Property ID: 0x3001, Type: Unicode
+  Value: Unicode(UnicodeValue { "Personal Folders" })
+ Property ID: 0x35DF, Type: Integer32
+  Value: Integer32(137)
+ Property ID: 0x35E0, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-17-93-B4-FA-E6-DE-0B-48-BD-87-CD-93-1D-C4-79-70-22-80-00-00 })
+ Property ID: 0x35E3, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-17-93-B4-FA-E6-DE-0B-48-BD-87-CD-93-1D-C4-79-70-62-80-00-00 })
+ Property ID: 0x35E7, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-17-93-B4-FA-E6-DE-0B-48-BD-87-CD-93-1D-C4-79-70-42-80-00-00 })
+ Property ID: 0x6633, Type: Boolean
+  Value: Boolean(true)
+ Property ID: 0x66FA, Type: Integer32
+  Value: Integer32(917517)
+ Property ID: 0x67FF, Type: Integer32
+  Value: Integer32(-113532656)

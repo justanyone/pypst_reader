@@ -1,0 +1,77 @@
+Row: 0x8062
+Version: 0xE
+ Column: Property ID: 0x0E30, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E33, Type: Integer64
+  Value: None
+ Column: Property ID: 0x0E34, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x5 }))
+  Value: Unicode(UnicodeValue { "Deleted Items" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: Unicode
+  Value: None
+ Column: Property ID: 0x36DA, Type: Binary
+  Value: None
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6670, Type: Binary
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(32866))
+  Value: Integer32(32866)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(14))
+  Value: Integer32(14)
+Row: 0x8082
+Version: 0x15
+ Column: Property ID: 0x0E30, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E33, Type: Integer64
+  Value: None
+ Column: Property ID: 0x0E34, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x6 }))
+  Value: Unicode(UnicodeValue { "Inbox" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(true))
+  Value: Boolean(true)
+ Column: Property ID: 0x3613, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x7 }))
+  Value: Unicode(UnicodeValue { "IPF.Note" })
+ Column: Property ID: 0x36DA, Type: Binary
+  Value: None
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6670, Type: Binary
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(32898))
+  Value: Integer32(32898)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(21))
+  Value: Integer32(21)

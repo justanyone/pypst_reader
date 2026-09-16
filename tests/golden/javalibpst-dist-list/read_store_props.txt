@@ -1,0 +1,36 @@
+Display Name: Personal Folders
+IPM Subtree: EntryId { record_key: A4-1D-63-DB-C5-3B-8E-4A-B8-07-1E-15-E5-57-50-CE, node_id: NodeId { NormalFolder: 0x401 } }
+Deleted Items: EntryId { record_key: A4-1D-63-DB-C5-3B-8E-4A-B8-07-1E-15-E5-57-50-CE, node_id: NodeId { NormalFolder: 0x403 } }
+Finder: EntryId { record_key: A4-1D-63-DB-C5-3B-8E-4A-B8-07-1E-15-E5-57-50-CE, node_id: NodeId { NormalFolder: 0x402 } }
+ Property ID: 0x0E34, Type: Binary
+  Value: Binary(BinaryValue { 01-00-00-00-AC-28-41-18-B9-23-96-4D-BE-DC-01-2D-90-E1-A6-7C-01-00-00-00 })
+ Property ID: 0x0E38, Type: Integer32
+  Value: Integer32(3)
+ Property ID: 0x0FF9, Type: Binary
+  Value: Binary(BinaryValue { A4-1D-63-DB-C5-3B-8E-4A-B8-07-1E-15-E5-57-50-CE })
+ Property ID: 0x3001, Type: Unicode
+  Value: Unicode(UnicodeValue { "Personal Folders" })
+ Property ID: 0x3416, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-A4-1D-63-DB-C5-3B-8E-4A-B8-07-1E-15-E5-57-50-CE-63-00-08-00 })
+ Property ID: 0x35DF, Type: Integer32
+  Value: Integer32(255)
+ Property ID: 0x35E0, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-A4-1D-63-DB-C5-3B-8E-4A-B8-07-1E-15-E5-57-50-CE-22-80-00-00 })
+ Property ID: 0x35E2, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-A4-1D-63-DB-C5-3B-8E-4A-B8-07-1E-15-E5-57-50-CE-A2-80-00-00 })
+ Property ID: 0x35E3, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-A4-1D-63-DB-C5-3B-8E-4A-B8-07-1E-15-E5-57-50-CE-62-80-00-00 })
+ Property ID: 0x35E4, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-A4-1D-63-DB-C5-3B-8E-4A-B8-07-1E-15-E5-57-50-CE-C2-80-00-00 })
+ Property ID: 0x35E5, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-A4-1D-63-DB-C5-3B-8E-4A-B8-07-1E-15-E5-57-50-CE-E2-80-00-00 })
+ Property ID: 0x35E6, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-A4-1D-63-DB-C5-3B-8E-4A-B8-07-1E-15-E5-57-50-CE-02-81-00-00 })
+ Property ID: 0x35E7, Type: Binary
+  Value: Binary(BinaryValue { 00-00-00-00-A4-1D-63-DB-C5-3B-8E-4A-B8-07-1E-15-E5-57-50-CE-42-80-00-00 })
+ Property ID: 0x6633, Type: Boolean
+  Value: Boolean(true)
+ Property ID: 0x66FA, Type: Integer32
+  Value: Integer32(917521)
+ Property ID: 0x67FF, Type: Integer32
+  Value: Integer32(0)

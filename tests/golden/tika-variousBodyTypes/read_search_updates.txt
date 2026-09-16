@@ -1,0 +1,4 @@
+SearchManagementQueue Length: 3
+ 0: SearchUpdate { flags: 0, data: Some(FolderAdded { parent: NodeId { NormalFolder: 0x401 }, folder: NodeId { NormalFolder: 0x403 }, reserved1: 0, reserved2: 0 }) }
+ 1: SearchUpdate { flags: 0, data: Some(FolderAdded { parent: NodeId { NormalFolder: 0x401 }, folder: NodeId { NormalFolder: 0x404 }, reserved1: 0, reserved2: 0 }) }
+ 2: SearchUpdate { flags: 0, data: Some(FolderAdded { parent: NodeId { NormalFolder: 0x404 }, folder: NodeId { NormalFolder: 0x405 }, reserved1: 0, reserved2: 0 }) }

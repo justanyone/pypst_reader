@@ -1,0 +1,137 @@
+Row: 0x8022
+Version: 0xE
+ Column: Property ID: 0x0E30, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E33, Type: Integer64
+  Value: None
+ Column: Property ID: 0x0E34, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x5 }))
+  Value: Unicode(UnicodeValue { "Top of Outlook data file" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(true))
+  Value: Boolean(true)
+ Column: Property ID: 0x3613, Type: Unicode
+  Value: None
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(32802))
+  Value: Integer32(32802)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(14))
+  Value: Integer32(14)
+Row: 0x8042
+Version: 0x6
+ Column: Property ID: 0x0E30, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E33, Type: Integer64
+  Value: None
+ Column: Property ID: 0x0E34, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x6 }))
+  Value: Unicode(UnicodeValue { "Search Root" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: Unicode
+  Value: None
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(32834))
+  Value: Integer32(32834)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(6))
+  Value: Integer32(6)
+Row: 0x2223
+Version: 0xB
+ Column: Property ID: 0x0E30, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E33, Type: Integer64
+  Value: None
+ Column: Property ID: 0x0E34, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x7 }))
+  Value: Unicode(UnicodeValue { "SPAM Search Folder 2" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: Unicode
+  Value: None
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(8739))
+  Value: Integer32(8739)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(11))
+  Value: Integer32(11)
+Row: 0x80023
+Version: 0x29
+ Column: Property ID: 0x0E30, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E33, Type: Integer64
+  Value: None
+ Column: Property ID: 0x0E34, Type: Binary
+  Value: None
+ Column: Property ID: 0x0E38, Type: Integer32
+  Value: None
+ Column: Property ID: 0x3001, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x8 }))
+  Value: Unicode(UnicodeValue { "ItemProcSearch" })
+ Column: Property ID: 0x3602, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x3603, Type: Integer32
+  Record: Small(Integer32(0))
+  Value: Integer32(0)
+ Column: Property ID: 0x360A, Type: Boolean
+  Record: Small(Boolean(false))
+  Value: Boolean(false)
+ Column: Property ID: 0x3613, Type: Unicode
+  Record: Heap(HeapId(NodeId { HeapNode: 0x9 }))
+  Value: Unicode(UnicodeValue { "Outlook.ItemProcessor" })
+ Column: Property ID: 0x6635, Type: Integer32
+  Value: None
+ Column: Property ID: 0x6636, Type: Integer32
+  Value: None
+ Column: Property ID: 0x67F2, Type: Integer32
+  Record: Small(Integer32(524323))
+  Value: Integer32(524323)
+ Column: Property ID: 0x67F3, Type: Integer32
+  Record: Small(Integer32(41))
+  Value: Integer32(41)
