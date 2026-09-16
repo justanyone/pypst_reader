@@ -57,7 +57,7 @@ can start today.
 | P08-FOLDER | 5 | ✗ blocked on P06, P07, P19 | `messaging/folder.py` — the folder hierarchy and its contents tables. First "open a PST and list the mail". | [`todo/T03-messaging.md`](todo/T03-messaging.md#p08-folder) |
 | P09-MESSAGE | 5 | ✗ blocked on P08 | `messaging/message.py` + `attachment.py` — properties, bodies (plain/HTML/RTF via P21), recipients, attachments, embedded messages (`pstsdk-submessage.pst`). | [`todo/T03-messaging.md`](todo/T03-messaging.md#p09-message) |
 | P10-EML | 5 | ✗ blocked on P09 | The RFC-822 assembler: one message → one `.eml`. **The actual deliverable.** Measure header survival first. | [`todo/T03-messaging.md`](todo/T03-messaging.md#p10-eml) |
-| P14-CI-ORACLE | 10 | ✗ not started | Nightly CI job: build the Rust oracle, run `capture_oracle.py --check` and the `oracle`-marked tests. Every-push CI stays Rust-free thanks to the goldens. | [`todo/T05-infra.md`](todo/T05-infra.md#p14-ci-oracle) |
+| P14-CI-ORACLE | 10 | ⏳ in flight — agent/p14-ci-oracle 2026-09-15 | Nightly CI job: build the Rust oracle, run `capture_oracle.py --check` and the `oracle`-marked tests. Every-push CI stays Rust-free thanks to the goldens. | [`todo/T05-infra.md`](todo/T05-infra.md#p14-ci-oracle) |
 | P31-MYPY | 10 | ✗ blocked on P06 | `mypy --strict` over `src/` once the LTP API has settled — the closest thing to the compiler upstream had. | [`todo/T06-testing.md`](todo/T06-testing.md#p31-mypy) |
 | P15-PERF | 11 | ✗ backlog | Profile against a large store (outside the repo). Not before P10. | [`todo/T05-infra.md`](todo/T05-infra.md#p15-perf) |
 | P16-PUBLISH | 11 | ✗ backlog | PyPI release. Not before P10. | [`todo/T05-infra.md`](todo/T05-infra.md#p16-publish) |
