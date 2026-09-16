@@ -6,17 +6,24 @@ No write support: this reads mail stores, it never produces one.
 
 ## Resume protocol
 
-1. `MasterToDo.md` — the one ranked list of unfinished work
-2. `git log --oneline -15`
-3. `docs/PORTING-PLAN.md` — the layer order and why it is that order
-4. The `rust-port` skill, before touching any ported module
+1. `MasterToDo.md` — the one ranked list of unfinished work, and the lane table
+2. `docs/AGENTS.md` — the multi-agent protocol: **claim the row before starting**
+3. `git log --oneline -15`
+4. `docs/INTERFACES.md` — the layer contracts you code against
+5. `docs/PORTING-PLAN.md` — the layer order and why it is that order
+6. The `rust-port` skill, before touching any ported module
 
 ## Repo state
 
 The encoding and CRC layers are ported, tested, and green (`uv run pytest`).
 Nothing above them exists yet: **this package cannot open a PST**. The next
-move is `ndb/header.py`, and it is deliberately the first because it is the
-smallest thing the oracle can contradict.
+move is P23 (the packed id types) then `ndb/header.py`, deliberately first
+because it is the smallest thing the oracle can contradict.
+
+Two decisions are already made and are not re-litigated in a row:
+**Unicode stores only** (ADR-0003; ANSI is refused and belongs to a sibling
+`pypst_reader_nu`), and a **hash-pinned public fixture corpus** with captured
+oracle goldens (ADR-0004), so the differential suite runs in CI without Rust.
 
 ## The method: differential porting, not translation
 
@@ -38,12 +45,18 @@ Full protocol, including how to avoid fooling yourself with it: the
 
 ## Non-negotiable build standards
 
-- **Mail stores are never committed.** One exception, by name and by content
-  hash: `tests/fixtures/Empty.pst` (Microsoft's MIT empty store). Real stores
-  live in `tests/fixtures/private/`, gitignored, hook-blocked. Never weaken
-  `.gitignore` or `scripts/git-hooks/pre-commit`.
+- **Mail stores are committed only through the manifest.** `Empty.pst` (MIT,
+  Microsoft, by md5) and `tests/fixtures/public/*.pst` — licensed, synthetic
+  or vendor test data, every one SHA-256 pinned in `MANIFEST.sha256` with a
+  provenance row in that directory's README (ADR-0004). Real stores live in
+  `tests/fixtures/private/`, gitignored, hook-blocked. Never weaken
+  `.gitignore`, `scripts/git-hooks/pre-commit` or CI's `no-mail-stores`; the
+  manifest procedure is the only way in.
 - **Never print, log, or assert on private-store content.** Structure only.
   A CI log is a publication channel and a failing assert prints its operands.
+  Corpus content may be printed and asserted on freely — there is nobody in it.
+- **Unicode only.** `wVer` 14/15 raises `PstUnsupportedError`; no variant axis
+  anywhere in the code (ADR-0003).
 - **Every ported module records its origin** — `Ported from:` / `Upstream:` in
   the module docstring. `scripts/check_provenance.py` enforces it; NOTICE
   depends on it being true.
@@ -80,11 +93,14 @@ reason. An unexplained divergence looks like a porting bug to the next reader.
 |---|---|
 | `src/pypst/` | the library — stdlib only |
 | `tests/` | pytest; markers `oracle`, `private`, `slow` |
-| `tests/fixtures/Empty.pst` | the one committed store (MIT, Microsoft) |
+| `tests/fixtures/Empty.pst` | Microsoft's MIT empty store |
+| `tests/fixtures/public/` | the licensed corpus, SHA-256 pinned; README has provenance |
+| `tests/golden/` | the Rust oracle's output over the corpus, captured by `scripts/capture_oracle.py` |
 | `tests/fixtures/private/` | real mail, gitignored, never referenced in output |
 | `reference/outlook-pst-rs` | pinned upstream clone — the oracle, gitignored |
 | `scripts/` | setup, oracle, and the standing lints |
 | `docs/adr/` | binding decisions and the research behind them |
+| `docs/TEST-PLAN.md`, `docs/AGENTS.md`, `docs/INTERFACES.md` | the test tiers, the multi-agent protocol, the layer contracts |
 | `docs/UPSTREAM.txt` | the upstream revision this port is verified against |
 
 ## Skills in this repo

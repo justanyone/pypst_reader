@@ -8,30 +8,30 @@ Read `.claude/skills/rust-port/SKILL.md` before starting any block here.
 
 ### P01-HEADER
 status: ✗ not started
-upstream: `crates/pst/src/ndb/header.rs` (640 lines), `ndb/root.rs` (292)
-oracle:   `scripts/oracle.sh read_header tests/fixtures/Empty.pst`
-blocked on: none — **this is the first row**
+upstream: `crates/pst/src/ndb/header.rs` (640 lines, Unicode arms only), `ndb/root.rs` (292)
+oracle:   `tests/golden/*/read_header.txt` (captured), or live: `scripts/oracle.sh read_header tests/fixtures/public/pstsdk-test_unicode.pst`
+blocked on: P23 (the `BlockRef`/`ByteIndex`/`BlockId` types it returns)
 
 Parse the PST header: `!BDN` magic, CRCs (partial and full — `crc.py` is
 already ported and tested), `wVer`, `bCryptMethod`, the root structure with its
 `BREF`s to the node and block B-tree roots, and the AMap validity flag.
 
-**Done means:** every field your parser produces matches `read_header`'s output
-for `Empty.pst` AND for at least one private store, and a corrupted copy of
-each (flip a byte in the CRC-covered region) is *refused* with `PstFormatError`
-rather than parsed.
+**The decision is made — ADR-0003: Unicode only.** `wVer` 14/15 raises
+`PstUnsupportedError` naming the version and `pypst_reader_nu`; 23/36/37 are
+parsed; anything else is `PstFormatError`. One struct format per structure,
+no variant axis, no `PstFile` trait.
 
-**The decision this row forces — do not defer it.** Upstream splits ANSI and
-Unicode with a `PstFile` trait and two impls; ~480 references across the crate
-turn on it. Python has no reason to copy that shape. Decide here between:
-
-- **Unicode only** (recommended default): every store Outlook has written since
-  2003. Drop the axis entirely, raise `PstUnsupportedError` on `wVer` 14/15.
-- **Both**, via a per-variant struct-format table (`"<I"` vs `"<Q"` for byte
-  indices) consulted by one parser, not two parsers.
-
-Whichever you pick, record it as an ADR before writing the second module —
-retrofitting the axis later means touching every file in `ndb/` and `ltp/`.
+**Done means:**
+- `python -m pypst.debug header <f>` parsed by P29's `parse_read_header`
+  equals the golden's parsed values on **7/7 Unicode fixtures** (Empty and
+  the six Unicode corpus stores), and on every private store present.
+- `pstsdk-test_ansi.pst` and `pstsdk-sample2.pst` raise `PstUnsupportedError`
+  — tested on the real bytes, not a synthetic header.
+- A copy of each Unicode fixture with one byte flipped inside the CRC-covered
+  region raises `PstFormatError`; a copy truncated at every 8-byte boundary
+  of the header raises `PstFormatError` (this seeds P12's generator).
+- The `test_magic_values` upstream test has its parity twin.
+- `docs/INTERFACES.md` § header matches what you built.
 
 ### P02-BTREE
 status: ✗ not started
@@ -72,10 +72,10 @@ that decodes to plausible-looking garbage rather than an error. Test with a
 block that is exactly at a size boundary.
 
 ### P13-ANSI
-status: ✗ deferred — decided at P01, implemented here if the answer is "both"
-upstream: the ANSI arms of every `ndb/` and `ltp/` module
-oracle:   an ANSI store, which we do not currently have
-blocked on: P01's decision, and on acquiring an ANSI fixture
+status: ✅ 2026-09-15 decided — Unicode only (ADR-0003); ANSI support is the sibling package, row P27-NU in `T05-infra.md`
+upstream: the ANSI arms of every `ndb/` and `ltp/` module — not ported here
+oracle:   `pstsdk-test_ansi.pst`, `pstsdk-sample2.pst` (in the corpus for the refusal test and for P27)
+blocked on: —
 
-Only start this if P01 chose "both" and an ANSI store actually exists to test
-against. An untested ANSI path is worse than an honest `PstUnsupportedError`.
+Closed. The two ANSI fixtures test that this package refuses cleanly; that is
+the whole of the ANSI work here.

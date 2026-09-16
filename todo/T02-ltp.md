@@ -27,9 +27,9 @@ though upstream can lean on its type system to keep them apart.
 status: ✗ not started
 upstream: `crates/pst/src/ltp/prop_context.rs` (1,193), `ltp/prop_type.rs` (134)
 oracle:   `scripts/oracle.sh read_store_props tests/fixtures/Empty.pst`
-blocked on: P04
+blocked on: P04, P22
 
-Property contexts, and the MAPI property-type decoders underneath them:
+Property contexts, over the P22 decoders (which are pure functions and land first):
 PT_LONG, PT_BOOLEAN, PT_UNICODE, PT_STRING8 (which needs a codepage —
 upstream's examples pull in `codepage-strings`; Python's `codecs` covers it),
 PT_BINARY, PT_SYSTIME (a Windows FILETIME → `datetime`, UTC, and beware the
@@ -39,8 +39,8 @@ PT_BINARY, PT_SYSTIME (a Windows FILETIME → `datetime`, UTC, and beware the
 including types you did not expect to see. Unknown property types must raise
 `PstUnsupportedError` naming the type — never silently return raw bytes.
 
-**Size note:** this row plus its type decoders may overrun one session. A clean
-split is: contexts first, then the PT_MV_* family as its own block.
+**Size note:** the type decoders are P22 and land before this row starts; if
+the contexts alone overrun a session, split the PT_MV_* wiring off.
 
 ### P06-TC
 status: ✗ not started
@@ -55,3 +55,25 @@ until this works.
 **The trap:** the existence bitmap. A column can be *present in the schema* and
 *absent from a row*, and reading the cell anyway returns stale heap bytes that
 look like data. Test a row with a sparse column explicitly.
+
+### P22-PROPTYPE
+status: ✗ not started (leaf — runs beside lane A)
+upstream: `crates/pst/src/ltp/prop_type.rs` (134) and the per-type `read` arms in `ltp/prop_context.rs` (1,193 — the decoders only, not the context)
+oracle:   the `Value:` lines of `read_store_props` / `read_root_folder` / `read_ipm_subtree` goldens show every type upstream produces on the corpus, in Debug form
+blocked on: none
+
+`ltp/prop_type.py`: `PropType` enum ([MS-OXCDATA] §2.11.1 values; unknown →
+`PstUnsupportedError` naming the value) and one pure decoder per type:
+`bytes → Python value`. PT_SHORT/LONG/LONGLONG/FLOAT/DOUBLE/BOOLEAN/ERROR;
+PT_SYSTIME (FILETIME, 100 ns since 1601-01-01 → aware UTC `datetime`; values
+before 1601 or past `datetime.max` are `PstFormatError`, not `OverflowError`);
+PT_GUID; PT_UNICODE (UTF-16LE, no terminator); PT_STRING8 (needs a codepage —
+`codecs`, default cp1252, unknown → `PstUnsupportedError`); PT_BINARY;
+PT_CLSID; PT_OBJECT; and the PT_MV_* multi-valued forms with their
+count+offsets prefix.
+
+**Done means:** every decoder has a denial test (short buffer, bad count,
+offsets out of range → `PstFormatError`), a round-trip property test where the
+type is invertible, and the FILETIME edge cases (0, 1601 epoch, 9999-12-31,
+`0x7FFFFFFFFFFFFFFF`) are pinned. Grep the goldens for every `Value:` variant
+upstream printed and make sure each has a decoder.

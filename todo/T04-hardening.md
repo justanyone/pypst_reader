@@ -34,7 +34,7 @@ status: ✗ not started
 upstream: none
 oracle:   none — these files are not valid, so the oracle's behaviour on them
           is interesting but not authoritative
-blocked on: P03
+blocked on: P01 for the generator and the header mutations; each later layer adds its own mutations in its own row
 
 The corruption suite. **Every input here is bytes we write ourselves**, which
 is why this row needs no licensable PST and can be built the day P03 lands:
@@ -52,5 +52,7 @@ Each must raise a `PstError` subclass — named, specific, and *not* a
 `struct.error`, `IndexError`, `MemoryError` or hang. Assert the exception type,
 not just that something was raised.
 
-Build these as a generator (`tests/corrupt.py`) that mutates `Empty.pst`, so the
-suite grows by adding a mutation rather than by checking in more binaries.
+Build these as a generator (`tests/corrupt.py`) that mutates a corpus store
+(default `pstd-inline-cid.pst`, the smallest populated one; parametrise over
+the Unicode corpus where cheap), so the suite grows by adding a mutation
+rather than by checking in more binaries. P24 consumes the same generator.
