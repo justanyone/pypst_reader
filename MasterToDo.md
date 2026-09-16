@@ -43,8 +43,7 @@ can start today.
 
 | Id | Pri | State | One line | Work |
 |---|---|---|---|---|
-| P23-IDS | 1 | ⏳ in flight — agent/p23-ids 2026-09-15 | `ndb/ids.py` + `block_sig.py` — the packed value types every layer above uses: `NodeId` (type + index), `BlockId` (internal bit + index), `ByteIndex`, `PageId`, `BlockRef`/`PageRef`, and `compute_sig`. Small, has 4 upstream tests, unblocks P01 and P02. | [`todo/T00-foundation.md`](todo/T00-foundation.md#p23-ids) |
-| P01-HEADER | 1 | ✗ blocked on P23 | `ndb/header.py` + `ndb/root.py` — parse the Unicode PST header, CRC-verified; **refuse ANSI** with `PstUnsupportedError` (ADR-0003). Done = `read_header` goldens match on 7/7 Unicode fixtures, 2/2 ANSI refused, corrupted copies refused. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p01-header) |
+| P01-HEADER | 1 | ✗ not started | `ndb/header.py` + `ndb/root.py` — parse the Unicode PST header, CRC-verified; **refuse ANSI** with `PstUnsupportedError` (ADR-0003). Done = `read_header` goldens match on 7/7 Unicode fixtures, 2/2 ANSI refused, corrupted copies refused. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p01-header) |
 | P02-BTREE | 1 | ✗ blocked on P01 | `ndb/page.py` + `ndb/btree.py` — the node and block B-trees, with a depth limit and a cycle guard that upstream does not need. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p02-btree) |
 | P11-LIMITS | 2 | ✗ not started — land WITH P02 | `limits.py`: recursion depth, allocation ceiling, item counts, `PstLimitError` everywhere they bite. Deliberate divergence — CLAUDE.md § untrusted input. | [`todo/T04-hardening.md`](todo/T04-hardening.md#p11-limits) |
 | P03-BLOCK | 2 | ✗ blocked on P02 | `ndb/block.py` — data blocks, XBLOCK/XXBLOCK trees, subnode BTrees; wire in `encode.py` and `crc.py`. First point at which real bytes come out of a real file. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p03-block) |
@@ -83,6 +82,7 @@ can start today.
 | P00-PLAN | ✅ 2026-09-15 | ADR-0003/0004, `docs/TEST-PLAN.md` (ten tiers), `docs/AGENTS.md` (multi-agent protocol), `docs/INTERFACES.md` (layer contracts), rows P17–P31, lane table. |
 | P29-GOLDEN-HARNESS | ✅ 2026-09-15 | `pypst.debug` dispatcher, `tests/golden_parsers.py` (`parse_read_header` complete, 9/9 goldens; six value parsers; seven described stubs), `golden`/`golden_exit` fixtures, oracle drift test. 84 tests added, 125 passing; each seen red once. |
 | P18-PARITY | ✅ 2026-09-15 | `scripts/check_upstream_parity.py` + `scripts/parity-pending.txt`: 15 upstream tests — 5 twinned in place (encode ×4, tables ×1; upstream has no CRC tests), 10 pending by row; 12 lint tests each seen red; wired into CI lint (skips without `reference/`, bites nightly). |
+| P23-IDS | ✅ 2026-09-15 | `ndb/ids.py` + `block_sig.py` (Unicode arms only): NodeId/NodeIdType + 14 NID_* constants, BlockId, PageId, ByteIndex, BlockRef, PageRef, `compute_sig`. Header ids unpacked from the fixtures' own bytes reproduce the goldens on 7/7 Unicode stores; every NodeId/BlockRef in `read_btrees` goldens rebuilt on 7/7; 4/4 upstream twins; 103 tests, 18/19 mutants caught. |
 
 ## Still the user's call
 

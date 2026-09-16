@@ -105,3 +105,8 @@ Append here as the port teaches you things. Two from the scaffold:
   `crc.rs` is 335 lines of slicing-by-8 that `zlib.crc32` computes exactly,
   once the missing pre/post inversion is undone. Ask that question of every
   file before starting: upstream optimised for Rust's constraints, not ours.
+- **Clear `__pycache__` before a mutation pass.** "Break the code once and watch
+  it go red" is defeated by a same-size edit restored within the same second:
+  the stale `.pyc` stays valid and the tests run against code no longer on
+  disk. P23's first pass was contaminated this way. `find . -name __pycache__
+  -exec rm -r {} +` between mutations, or run with `PYTHONDONTWRITEBYTECODE=1`.

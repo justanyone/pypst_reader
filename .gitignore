@@ -25,7 +25,10 @@
 tests/fixtures/private/
 
 # The upstream Rust source. Fetched, never vendored: scripts/get_rust_source.sh
+# Both spellings: `reference/` matches the directory, `/reference` also matches
+# the symlink the orchestrator plants in each row worktree.
 reference/
+/reference
 
 # Rust build output, wherever cargo lands it
 target/
