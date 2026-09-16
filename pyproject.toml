@@ -72,29 +72,43 @@ packages = ["src/pypstreader"]
 # walking `reference/` — a 1.2 GB pinned clone of the upstream Rust, symlinked
 # in, which is the oracle and emphatically not the product. And an sdist is a
 # publication: what goes in it should be a decision somebody made, not a
-# by-product of what happened to be in the directory. What is here is the
-# package, its licence and attribution, and everything needed to RUN the
-# suite against it — the fixtures, the captured oracle goldens, the lints and
-# the alias distribution's own source.
+# by-product of what happened to be in the directory. What is here is ONLY
+# the installable package, its licence and attribution, and the ADRs that
+# record why it is built the way it is — not the fixtures, the oracle, the
+# scripts or anything that helps develop it. `include` and `exclude` are both
+# set, deliberately redundant, so this stays correct whether or not hatchling
+# manages to infer anything from VCS state.
 [tool.hatch.build.targets.sdist]
 include = [
     "src/pypstreader",
-    "tests",
-    "scripts",
-    "docs",
-    "todo",
-    "alias",
-    "oracle",
+    "docs/adr",
     "README.md",
     "LICENSE",
     "NOTICE",
-    "CLAUDE.md",
-    "MasterToDo.md",
     "pyproject.toml",
-    "uv.lock",
-    ".python-version",
 ]
-exclude = ["**/__pycache__", "**/*.pyc", "tests/fixtures/private"]
+exclude = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "reference",
+    "reference/",
+    "tests",
+    ".worktrees",
+    ".chat_history",
+    ".claude",
+    "todo",
+    "oracle",
+    "scripts",
+    "alias",
+    "uv.lock",
+    "*.pst",
+]
+
+# hatchling force-includes the nearest .gitignore into every sdist regardless
+# of the exclude list above (see hatch_build.py for why); this hook removes
+# that one forced entry so the sdist matches the allow-list exactly.
+[tool.hatch.build.targets.sdist.hooks.custom]
+path = "hatch_build.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
