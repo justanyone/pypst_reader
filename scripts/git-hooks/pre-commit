@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# pre-commit — refuse to commit somebody's mail.
+#
+# .gitignore already ignores every mail store. This hook exists because
+# `git add -f` defeats .gitignore silently, and because the cost of the
+# mistake is not recoverable: a store pushed to a public remote has been
+# published, and `git rm` does not unpublish it.
+#
+# Exactly one mail store may be committed: tests/fixtures/Empty.pst, which is
+# Microsoft's MIT-licensed empty store (see NOTICE). Its content hash is
+# checked too, so that the exemption cannot be used as a smuggling slot by
+# putting a real store at that path.
+#
+# Installed by scripts/setup.sh. To bypass in a genuine emergency you would
+# have to pass --no-verify, which you should not do.
+
+set -euo pipefail
+
+ALLOWED_PATH="tests/fixtures/Empty.pst"
+ALLOWED_SHA="13a1f7eb9e35fcac72cf37360e3a96bc"
+
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+fail=0
+
+while IFS= read -r file; do
+    [[ -z $file ]] && continue
+    case "${file,,}" in
+        *.pst|*.ost|*.pab)
+            if [[ $file == "$ALLOWED_PATH" ]]; then
+                actual="$(git show ":$file" | md5sum | cut -d' ' -f1)"
+                if [[ $actual != "$ALLOWED_SHA" ]]; then
+                    echo "BLOCKED: $file is not the MIT fixture it claims to be." >&2
+                    echo "  expected md5 $ALLOWED_SHA, staged content is $actual" >&2
+                    fail=1
+                fi
+            else
+                echo "BLOCKED: $file is a mail store and must not be committed." >&2
+                fail=1
+            fi
+            ;;
+    esac
+done <<< "$staged"
+
+# Belt and braces: anything under the private fixture directory, whatever it
+# is called. A renamed .pst is still a .pst.
+if grep -qE '^tests/fixtures/private/' <<< "$staged"; then
+    offenders="$(grep -E '^tests/fixtures/private/' <<< "$staged" | grep -v 'README.md$' || true)"
+    if [[ -n $offenders ]]; then
+        echo "BLOCKED: private fixtures are staged:" >&2
+        sed 's/^/  /' <<< "$offenders" >&2
+        fail=1
+    fi
+fi
+
+if (( fail )); then
+    echo >&2
+    echo "Unstage them:  git restore --staged <file>" >&2
+    echo "This hook is the last line of defence. See tests/fixtures/private/README.md" >&2
+    exit 1
+fi
+
+exit 0

@@ -1,0 +1,48 @@
+# ---------------------------------------------------------------------------
+# MAIL STORES ARE NEVER COMMITTED.
+#
+# This is the first rule in the file because it is the one whose failure is
+# irreversible: a PST is somebody's correspondence, and a public repository
+# that has ever held one has published it, `git rm` notwithstanding.
+#
+# Every `.pst`/`.ost` is ignored. Exactly ONE file is exempted, by name:
+# tests/fixtures/Empty.pst, which is Microsoft's own MIT-licensed empty store
+# from the upstream Rust repository (see NOTICE) and contains no mail.
+#
+# scripts/git-hooks/pre-commit enforces this a second time, because a
+# `git add -f` silently defeats everything above. Install it: scripts/setup.sh
+# ---------------------------------------------------------------------------
+*.pst
+*.ost
+*.pab
+!tests/fixtures/Empty.pst
+
+# Private fixtures — real mail, used locally, never shared.
+tests/fixtures/private/
+
+# The upstream Rust source. Fetched, never vendored: scripts/get_rust_source.sh
+reference/
+
+# Rust build output, wherever cargo lands it
+target/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+.coverage
+htmlcov/
+
+# Oracle capture output (differential-testing scratch, regenerable)
+.oracle-cache/
+
+# CodeGraph local index
+.codegraph/
+
+# rtk upstream checkout, if the rtk skill is bootstrapped here
+.claude/skills/rtk/upstream/

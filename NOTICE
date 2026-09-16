@@ -1,0 +1,62 @@
+# NOTICE
+
+## Derivation
+
+`pypst` is a pure-Python port of the read path of
+**[microsoft/outlook-pst-rs](https://github.com/microsoft/outlook-pst-rs)** —
+"Outlook PST Store Provider in Rust", a clean-room implementation of the
+[MS-PST] open specification.
+
+    Copyright (c) Microsoft Corporation.
+    Licensed under the MIT License.
+
+The MIT License expressly permits modification, sublicensing and distribution,
+and a translation into another language is a modification. This notice, and
+Microsoft's copyright line in LICENSE, are the condition attached to that
+permission: **they travel with every copy of this project.** Do not remove them,
+and do not remove the per-module `Ported from:` headers that record which
+upstream file each module came from — they are how a reader verifies this
+notice is telling the truth.
+
+**Pinned upstream revision:** `cfb721daee538acc50d2bad6faac5ce724f6037d`
+(2026-09-14). Recorded in `docs/UPSTREAM.txt` and fetched by
+`scripts/get_rust_source.sh`.
+
+## Trademarks
+
+This project is **not** affiliated with, sponsored by, or endorsed by Microsoft
+Corporation. "Microsoft", "Outlook" and "Windows" are trademarks of Microsoft
+Corporation; upstream's own README reserves them, and nothing here grants a
+licence to them. The project is named `pypst`, and any user-visible string that
+would imply Microsoft authorship or endorsement is a bug.
+
+## Test fixture
+
+`tests/fixtures/Empty.pst` is copied verbatim from
+`crates/pst/examples/Empty.pst` in the upstream repository, at the revision
+pinned above. It is covered by the same MIT licence and the same Microsoft
+copyright, and it is redistributed here under that grant. It contains no mail.
+
+**It is the only mail store in this repository, and the only one that may ever
+be committed.** See the first block of `.gitignore`.
+
+## The specification
+
+[MS-PST] is published by Microsoft as an Open Specification. Its Intellectual
+Property Rights Notice permits copying the documentation "in order to develop
+implementations of the technologies that are described in this documentation",
+which is what this project does.
+
+That same notice is explicit that **it grants no patent licence**: *"Microsoft
+has patents that might cover your implementations… Neither this notice nor
+Microsoft's delivery of this documentation grants any licenses under those
+patents."* It points instead to the Microsoft Open Specification Promise and
+the Microsoft Community Promise as what may cover a given document.
+
+This is not a risk this port creates or can resolve. It is the identical
+posture under which `libpff` (2008–), `java-libpst`, `go-pst` and Microsoft's
+own Rust crate have all operated. It is recorded here so that it is a known
+condition rather than a discovery. See `docs/adr/0002-attribution-and-patent-posture.md`.
+
+- Specification: https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-pst/141923d5-15ab-4ef1-a524-6dce75aae546
+- Open Specification Promise: https://go.microsoft.com/fwlink/?LinkId=214445

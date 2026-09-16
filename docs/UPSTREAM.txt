@@ -1,0 +1,11 @@
+# The Rust source this project is ported from.
+#
+# scripts/get_rust_source.sh reads this file. Change the pin here, run that
+# script, then re-run `python3 scripts/extract_key_data.py` and the full test
+# suite before committing the move — a pin change can alter the oracle's
+# output, and an oracle that moved silently is worse than no oracle.
+
+URL=https://github.com/microsoft/outlook-pst-rs.git
+REV=cfb721daee538acc50d2bad6faac5ce724f6037d
+DATE=2026-09-14
+LICENSE=MIT

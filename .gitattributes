@@ -1,0 +1,5 @@
+# Mail stores and captured oracle output are binary — never diffed, never
+# line-ending-mangled. A PST that git "helpfully" normalises is a corrupt PST.
+*.pst binary
+*.ost binary
+*.bin binary
