@@ -20,11 +20,15 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from pypst.errors import PstError
+from pypst.limits import DEFAULT_LIMITS
+from pypst.ndb.btree import BlockBTree, NodeBTree, read_density_list
 from pypst.ndb.header import read_header
+from pypst.ndb.ids import NodeId
+from pypst.ndb.page import BlockBTreeEntry, BTreePage, IntermediateEntry, NodeBTreeEntry
 
 DUMPERS: dict[str, Callable[[Path], None]] = {}
 
@@ -51,6 +55,102 @@ def dump_header(path: Path) -> None:
 
 
 DUMPERS["header"] = dump_header
+
+
+def _dump_btree_pages(pages: Iterator[BTreePage], root_level: int, kind: str, leaf: Callable[[str, object], None]) -> None:
+    """Print one tree as upstream's `read_btrees` does: pre-order, indented by distance from the root.
+
+    `pages` is a `pages()` iterator, whose order is exactly the recursion
+    here; `leaf` prints one leaf entry at the given indent. An intermediate
+    page is indented by `root_level - level` spaces and a leaf by
+    `root_level`, so that the leaves of a tree line up.
+    """
+    page = next(pages)
+    if page.is_leaf:
+        indent = " " * root_level
+        print(f"{indent}{kind} Page Entries: {len(page.entries)}")
+        for entry in page.entries:
+            leaf(indent, entry)
+        return
+    indent = " " * (root_level - page.level)
+    print(f"{indent}{kind} BTree Level: {page.level}: Entries: {len(page.entries)}")
+    for entry in page.entries:
+        assert isinstance(entry, IntermediateEntry)
+        key = f"{entry.key}" if kind == "Block" else str(NodeId(entry.key))
+        print(f"{indent} Key: {key}")
+        _dump_btree_pages(pages, root_level, kind, leaf)
+
+
+def _root_level(tree: BlockBTree | NodeBTree) -> int:
+    """The root page's level, which fixes every indent; read once, cheaply."""
+    return next(tree.pages()).level
+
+
+def dump_btrees(path: Path) -> None:
+    """Upstream's `read_btrees` example (P02): the block B-tree, a blank line, the node B-tree.
+
+    The block B-tree section is upstream's byte for byte (modulo the
+    `Unicode` prefix). The node B-tree section prints each leaf entry's
+    node, data block, sub-node block and parent as upstream does, and the
+    `Size:` of a leaf data block from the block B-tree's entry (upstream
+    reads the block and prints its data length, which is that entry's `cb`).
+    Where upstream then descends into an internal data block (`Data Tree
+    Level: …`) or a sub-node block (`Sub-Node Block Entries: …`) this
+    dumper stops at the block id: those trees are blocks, which is P03.
+    `tests/golden_parsers.parse_read_btrees` reads both forms.
+    """
+    with path.open("rb") as f:
+        header = read_header(f)
+        root = header.root
+        block_btree = BlockBTree(f, root.block_btree, DEFAULT_LIMITS)
+        node_btree = NodeBTree(f, root.node_btree, DEFAULT_LIMITS)
+
+        def block_leaf(indent: str, entry: object) -> None:
+            assert isinstance(entry, BlockBTreeEntry)
+            print(f"{indent} Block: {entry.block}")
+            print(f"{indent}  Size: {entry.size}")
+            print(f"{indent}  Ref-Count: {entry.ref_count}")
+
+        def node_leaf(indent: str, entry: object) -> None:
+            assert isinstance(entry, NodeBTreeEntry)
+            print(f"{indent} Node: {entry.node}")
+            print(f"{indent}  Data Block: {entry.data}")
+            if entry.data.search_key != 0 and not entry.data.is_internal:
+                print(f"{indent}  Size: 0x{block_btree.find(entry.data).size:X}")
+            print(f"{indent}  Sub-Node Block: {entry.sub_node if entry.sub_node is not None else 'None'}")
+            parent = f"Some({entry.parent})" if entry.parent is not None else "None"
+            print(f"{indent}  Parent Node: {parent}")
+
+        _dump_btree_pages(block_btree.pages(), _root_level(block_btree), "Block", block_leaf)
+        print()
+        _dump_btree_pages(node_btree.pages(), _root_level(node_btree), "Node", node_leaf)
+
+
+DUMPERS["btrees"] = dump_btrees
+
+
+def dump_density_list(path: Path) -> None:
+    """Upstream's `read_density_list` example (P02): seven `Label: value` lines.
+
+    Upstream prints `Error: …` on stdout and exits 0 when the page is
+    absent; here the absence is the `PstFormatError` `read_density_list`
+    raises, reported by `main` on stderr with exit 1, as every dumper does.
+    """
+    with path.open("rb") as f:
+        read_header(f)  # a non-PST is refused as such, not as "no density list"
+        page = read_density_list(f)
+    entries = ", ".join(str(entry) for entry in page.entries)
+    trailer = page.trailer
+    print(f"Backfill Complete: {'true' if page.backfill_complete else 'false'}")
+    print(f"Current Page: {page.current_page}")
+    print(f"Density List Entries: [{entries}]")
+    print(f"Page Type: {trailer.page_type}")
+    print(f"Page Signature: 0x{trailer.signature:x}")
+    print(f"Page CRC: 0x{trailer.crc:08x}")
+    print(f"Block ID: {trailer.block_id}")
+
+
+DUMPERS["density_list"] = dump_density_list
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -100,3 +100,151 @@ def reseal_header(data: bytes) -> bytes:
     data = set_u32(data, CRC_PARTIAL_OFFSET, partial)
     full = compute_crc(0, data[CRC_START:CRC_FULL_END])
     return set_u32(data, CRC_FULL_OFFSET, full)
+
+
+# --- pages (P02) -------------------------------------------------------------
+#
+# [MS-PST] 2.2.2.7 and 2.2.2.7.7. As above, these duplicate the constants in
+# pypst.ndb.page on purpose.
+
+PAGE_SIZE = 512
+PAGE_DATA_SIZE = 496
+PAGE_TRAILER_OFFSET = 496
+BTREE_HEADER_OFFSET = 488  # cEnt, cEntMax, cbEnt, cLevel, dwPadding
+PTYPE_BBT = 0x80
+PTYPE_NBT = 0x81
+PTYPE_DL = 0x86
+DENSITY_LIST_OFFSET = 0x4200
+
+# The Unicode entry sizes: BTENTRY, BBTENTRY, NBTENTRY.
+BTENTRY_SIZE = 24
+BBTENTRY_SIZE = 24
+NBTENTRY_SIZE = 32
+
+
+def page_sig(index: int, page_id: int) -> int:
+    """[MS-PST] 5.5, on the low 32 bits of each input, as upstream's `PageType::signature`."""
+    value = (index & 0xFFFFFFFF) ^ (page_id & 0xFFFFFFFF)
+    return ((value >> 16) ^ value) & 0xFFFF
+
+
+def reseal_page(data: bytes, page_offset: int, *, signature: bool = False) -> bytes:
+    """Recompute the trailer CRC of the page at `page_offset` over its 496 data bytes.
+
+    With `signature=True` the trailer's `wSig` is also recomputed from the
+    offset and the trailer's own `bid`, so a test can build a page whose
+    signature is right for where it sits. The default leaves it alone: the
+    reader does not check it (as upstream), and a test that wants to prove
+    that must be able to keep a wrong one.
+    """
+    end = page_offset + PAGE_SIZE
+    if not 0 <= page_offset <= end <= len(data):
+        raise ValueError(f"page [{page_offset}, {end}) outside {len(data)} bytes")
+    trailer = page_offset + PAGE_TRAILER_OFFSET
+    if signature:
+        page_id = int.from_bytes(data[trailer + 8 : trailer + 16], "little")
+        data = set_u16(data, trailer + 2, page_sig(page_offset, page_id))
+    crc = compute_crc(0, data[page_offset : page_offset + PAGE_DATA_SIZE])
+    return set_u32(data, trailer + 4, crc)
+
+
+def page_trailer(page_type: int, page_id: int, index: int, crc: int, *, signature: int | None = None) -> bytes:
+    """A 16-byte Unicode PAGETRAILER: ptype, ptypeRepeat, wSig, dwCRC, bid."""
+    sig = page_sig(index, page_id) if signature is None else signature
+    return struct.pack("<BBHIQ", page_type, page_type, sig, crc, page_id)
+
+
+def btree_page(
+    page_type: int,
+    level: int,
+    entries: list[bytes],
+    page_id: int,
+    index: int,
+    *,
+    entry_size: int | None = None,
+    max_entries: int | None = None,
+    padding: int = 0,
+    count: int | None = None,
+    ptype_repeat: int | None = None,
+) -> bytes:
+    """A whole 512-byte BTPAGE with a correct CRC and signature, built from packed entries.
+
+    Every field a test may want wrong is a keyword: `entry_size` (cbEnt),
+    `max_entries` (cEntMax), `padding` (dwPadding), `count` (cEnt, default
+    the number of entries), `ptype_repeat`. All entries must be the same
+    length, which is the default `cbEnt`.
+    """
+    sizes = {len(e) for e in entries}
+    if len(sizes) > 1:
+        raise ValueError(f"entries of mixed sizes: {sorted(sizes)}")
+    size = entry_size if entry_size is not None else (sizes.pop() if sizes else BTENTRY_SIZE)
+    if max_entries is None:
+        max_entries = BTREE_HEADER_OFFSET // size if size else 0
+    body = b"".join(entries)
+    if len(body) > BTREE_HEADER_OFFSET:
+        raise ValueError(f"{len(body)} bytes of entries do not fit in {BTREE_HEADER_OFFSET}")
+    data = bytearray(PAGE_DATA_SIZE)
+    data[: len(body)] = body
+    n = len(entries) if count is None else count
+    data[BTREE_HEADER_OFFSET:PAGE_DATA_SIZE] = struct.pack("<BBBBI", n, max_entries, size, level, padding)
+    crc = compute_crc(0, bytes(data))
+    trailer = bytearray(page_trailer(page_type, page_id, index, crc))
+    if ptype_repeat is not None:
+        trailer[1] = ptype_repeat
+    return bytes(data) + bytes(trailer)
+
+
+def bt_entry(key: int, page_id: int, index: int) -> bytes:
+    """A Unicode BTENTRY: btkey, BREF."""
+    return struct.pack("<QQQ", key, page_id, index)
+
+
+def bbt_entry(block_id: int, index: int, size: int, ref_count: int = 1, padding: int = 0) -> bytes:
+    """A Unicode BBTENTRY: BREF, cb, cRef, dwPadding."""
+    return struct.pack("<QQHHI", block_id, index, size, ref_count, padding)
+
+
+def nbt_entry(nid: int, data: int, sub_node: int = 0, parent: int = 0, padding: int = 0) -> bytes:
+    """A Unicode NBTENTRY: nid (u64), bidData, bidSub, nidParent, dwPadding."""
+    return struct.pack("<QQQII", nid, data, sub_node, parent, padding)
+
+
+def density_list_page(
+    entries: list[int],
+    page_id: int,
+    *,
+    backfill_complete: bool = False,
+    current_page: int = 0,
+    count: int | None = None,
+    padding: int = 0,
+    tail: bytes = bytes(12),
+) -> bytes:
+    """A whole 512-byte DLISTPAGE for the fixed offset 0x4200, CRC and signature correct."""
+    if len(entries) > 119:
+        raise ValueError(f"{len(entries)} entries; a DLISTPAGE holds 119")
+    n = len(entries) if count is None else count
+    data = bytearray(PAGE_DATA_SIZE)
+    data[0:8] = struct.pack("<BBHI", 0x01 if backfill_complete else 0, n, padding, current_page)
+    data[8 : 8 + 4 * len(entries)] = struct.pack(f"<{len(entries)}I", *entries)
+    if len(tail) != 12:
+        raise ValueError("rgPadding is 12 bytes")
+    data[484:496] = tail
+    crc = compute_crc(0, bytes(data))
+    return bytes(data) + page_trailer(PTYPE_DL, page_id, DENSITY_LIST_OFFSET, crc)
+
+
+def file_with_pages(pages: dict[int, bytes], size: int | None = None) -> bytes:
+    """An in-memory file holding each page at its offset, zero elsewhere.
+
+    The B-tree walk takes its root as a `PageRef`, so a synthetic tree needs
+    no header: only the pages, at the offsets the refs name.
+    """
+    end = max((offset + len(page) for offset, page in pages.items()), default=0)
+    if size is None:
+        size = end
+    if size < end:
+        raise ValueError(f"size {size} cannot hold a page ending at {end}")
+    out = bytearray(size)
+    for offset, page in pages.items():
+        out[offset : offset + len(page)] = page
+    return bytes(out)

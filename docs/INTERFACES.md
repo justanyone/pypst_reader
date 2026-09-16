@@ -33,6 +33,7 @@ class PstError(Exception)                       # the family; nothing else escap
 class PstFormatError(PstError)                  # the bytes are not a valid PST structure
 class PstLimitError(PstError)                   # valid-looking but beyond a configured ceiling (limits.py)
 class PstUnsupportedError(PstError)             # recognised, deliberately not handled: ANSI, unknown crypt/prop type
+class PstNotFoundError(PstFormatError)          # a B-tree key the tree does not hold (upstream's BTreePageNotFound); added by P02
 ```
 
 Additive only. P11 adds nothing here; it raises `PstLimitError`.
@@ -264,36 +265,82 @@ because upstream's read is lenient and the rest of this package is not.
 `tests/corrupt.py` (mutation helpers; `reseal_header` recomputes both CRCs)
 is the seed P12 extends.
 
-## `pypst.ndb.page` + `pypst.ndb.btree` — P02
+## `pypst.ndb.page` + `pypst.ndb.btree` — landed (P02)
+
+Unicode arms only. `page.py` parses one 512-byte page; `btree.py` reads
+pages from the file and walks them. AMap/PMap/FMap/FPMap contents are not
+ported (write-path only); `PageType` still names them.
 
 ```python
-PAGE_SIZE = 512
+# pypst.ndb.page
+PAGE_SIZE = 512; PAGE_DATA_SIZE = 496; BTREE_ENTRIES_SIZE = 488; MAX_BTREE_LEVEL = 8
+DENSITY_LIST_OFFSET = 0x4200; DENSITY_LIST_INDEX = ByteIndex(0x4200); DENSITY_LIST_MAX_ENTRIES = 119
 class PageType(IntEnum):  BBT = 0x80, NBT = 0x81, FMAP = 0x82, PMAP = 0x83, AMAP = 0x84, FPMAP = 0x85, DL = 0x86
+    from_byte(value) → PageType                       # !PstFormatError unknown
+    is_signed → bool; signature(index: int, page_id: int) → int   # compute_sig for BBT/NBT/DL, else 0
+    debug_name → str; __str__ = debug_name            # "BlockBTree", "DensityList", … (goldens)
 
 @dataclass(frozen=True, slots=True)
-class PageTrailer:                   # [MS-PST] 2.2.2.7.1, 16 bytes at the end of every page
+class PageTrailer:                   # [MS-PST] 2.2.2.7.1, the last 16 bytes of a page
     page_type: PageType; signature: int; crc: int; block_id: PageId
-    verify(self, index: ByteIndex, page_bytes: memoryview) → None   # !PstFormatError sig/crc/type mismatch
+    SIZE = 16
+    unpack_from(buf, offset=496) → PageTrailer        # !PstFormatError ptype != ptypeRepeat, unknown ptype, short
+    verify(self, page_bytes, index: ByteIndex) → None # !PstFormatError CRC over the 496 data bytes; wrong length
+    expected_signature(self, index) → int             # informational — NOT enforced (upstream ignores wSig on read)
 
 @dataclass(frozen=True, slots=True)
-class NodeBTreeEntry:                # NBTENTRY 2.2.2.7.7.4
-    node: NodeId; data: BlockId; sub_node: BlockId | None; parent: NodeId
+class IntermediateEntry:             # BTENTRY 2.2.2.7.7.2, 24 bytes
+    key: int; ref: PageRef;          unpack_from(buf, offset=0)
 @dataclass(frozen=True, slots=True)
-class BlockBTreeEntry:               # BBTENTRY 2.2.2.7.7.3
-    block: BlockRef; size: int; ref_count: int
+class BlockBTreeEntry:               # BBTENTRY 2.2.2.7.7.3, 24 bytes
+    block: BlockRef; size: int; ref_count: int;  key → int (block.block.search_key);  unpack_from
 @dataclass(frozen=True, slots=True)
-class IntermediateEntry:             # BTENTRY 2.2.2.7.7.2
-    key: int; ref: PageRef
+class NodeBTreeEntry:                # NBTENTRY 2.2.2.7.7.4, 32 bytes
+    node: NodeId; data: BlockId; sub_node: BlockId | None; parent: NodeId | None   # None when the field is 0
+    key → int (node.raw);  unpack_from                # !PstFormatError nid wider than 32 bits (as upstream)
 
-class BTreePage(Generic[E]):         # one page: level, entries, trailer
-    level: int; entries: tuple[E, ...]; trailer: PageTrailer
+@dataclass(frozen=True, slots=True)
+class BTreePage:                     # BTPAGE 2.2.2.7.7.1
+    level: int; max_entries: int; entry_size: int
+    entries: tuple[IntermediateEntry, ...] | tuple[BlockBTreeEntry, ...] | tuple[NodeBTreeEntry, ...]
+    trailer: PageTrailer;  is_leaf → bool;  page_type → PageType
+    parse(page_bytes, kind: PageType, index: ByteIndex) → BTreePage
+        # upstream's checks in upstream's order: cEnt ≤ cEntMax; cbEnt ≥ entry size for the level (larger is
+        # the stride, allowed); cEntMax ≤ 488 // cbEnt; cLevel ≤ 8; dwPadding == 0; ptype ∈ {BBT, NBT}; CRC;
+        # a LEAF must be `kind` (an intermediate page may be either type, as upstream). All !PstFormatError.
+
+@dataclass(frozen=True, slots=True)
+class DensityListEntry:  raw: int;  page → int (20 bits);  free_slots → int (12 bits);  __str__ "DensityListPageEntry(raw)"
+@dataclass(frozen=True, slots=True)
+class DensityListPage:               # DLISTPAGE 2.2.2.7.2
+    backfill_complete: bool; current_page: int; entries: tuple[DensityListEntry, ...]; trailer: PageTrailer
+    parse(page_bytes, index=DENSITY_LIST_INDEX) → DensityListPage   # !PstFormatError count > 119, padding, ptype != DL, CRC
+
+# pypst.ndb.btree
+read_page(f, index: ByteIndex, limits=DEFAULT_LIMITS) → bytes     # one seek + one 512-byte read; !PstFormatError short read or index+512 > limits.max_file_size
+read_density_list(f, limits=DEFAULT_LIMITS) → DensityListPage     # !PstFormatError when the slot is not a DL page (upstream: InvalidPageType(0))
 
 class NodeBTree / BlockBTree:
-    __init__(self, f: BinaryIO, root: PageRef, limits: Limits)
-    find(self, key: NodeId | BlockId) → NodeBTreeEntry | BlockBTreeEntry     # !KeyError-shaped PstFormatError("node 0x.. not found")
-    __iter__ → Iterator[entry]       # in key order; depth > limits.MAX_BTREE_DEPTH or a revisited page → PstLimitError
-    pages() → Iterator[BTreePage]    # for the debug dumper; same order read_btrees prints
+    __init__(self, f: BinaryIO, root: PageRef, limits: Limits = DEFAULT_LIMITS)
+    root → PageRef; limits → Limits
+    find(self, key: NodeId | int) → NodeBTreeEntry            # NodeBTree: raw NID or int
+    find(self, key: BlockId | int) → BlockBTreeEntry          # BlockBTree: search_key (reserved bit ignored) or int
+        # !PstNotFoundError (a PstFormatError) when absent — including a key below the first key of the root
+    __iter__ → Iterator[entry]       # leaf entries in tree order (key order for a well-formed store)
+    pages() → Iterator[BTreePage]    # pre-order, root first, children in entry order — read_btrees' print order
+    # Limits, on every walk: depth > limits.max_btree_depth → PstLimitError (root is depth 0; 8 is the deepest
+    # cLevel ≤ 8 allows); a page visited twice (cycle OR shared page) → PstLimitError; entries yielded and
+    # pages visited > limits.max_items → PstLimitError. Iterative: no RecursionError.
+    # Divergence: an NBT intermediate key > 32 bits → PstFormatError (upstream's example skips the subtree).
 ```
+
+`python -m pypst.debug btrees` prints upstream's `read_btrees` format; the block
+section byte for byte, the node section down to each entry's data block id,
+`Size:` (from the BBT entry) for a leaf data block, sub-node block id and parent —
+the data-tree and sub-node-tree lines under those are blocks (P03), which
+extends the dumper. `python -m pypst.debug density_list` prints
+`read_density_list`'s seven lines; a store without the page is refused (exit 1)
+where upstream prints an `Error:` line with exit 0.
 
 ## `pypst.ndb.block` — P03
 
@@ -606,6 +653,19 @@ __all__ = [...]                      # the P24 contract harness iterates this
   gains `from_byte` / `from_byte_lenient` and `debug_name`; `Version` gains
   `is_ansi` / `debug_name`; the module constants and the exact check order
   are recorded. `python -m pypst.debug header` registered.
+- 2026-09-15 — P02 landed `pypst.ndb.page` and `pypst.ndb.btree`; its section
+  now describes what was built. Changes from the draft: `NodeBTreeEntry.parent`
+  is `NodeId | None` (upstream's `Option`, goldens print `None`); `verify` takes
+  `(page_bytes, index)` and checks the CRC only — the signature is carried and
+  exposed as `expected_signature`, never enforced, because upstream ignores it
+  on read and `pstd-inline-cid.pst` has zero signatures; `BTreePage` is a
+  frozen dataclass (not `Generic`) with `max_entries`/`entry_size` kept and a
+  `parse(page_bytes, kind, index)` classmethod; `find` raises the new
+  `PstNotFoundError` (a `PstFormatError`) and accepts a raw `int`; `limits`
+  defaults to `DEFAULT_LIMITS`; `read_page`, `read_density_list`,
+  `DensityListPage`/`DensityListEntry` and the module constants added; the
+  density list IS ported. `python -m pypst.debug btrees` and `density_list`
+  registered; `parse_read_btrees`/`parse_read_density_list` complete.
 - 2026-09-15 — P11 landed `pypst.limits`; its section now describes what was
   built. Changes from the draft: `MAX_ITEMS` is `1 << 27` (the nidIndex
   space), not 1_000_000 — a 50 GiB store's BBT alone has millions of entries

@@ -45,3 +45,14 @@ class PstLimitError(PstError):
     be distinguishable from corruption so that a legitimate large file can
     be retried with a higher limit.
     """
+
+
+class PstNotFoundError(PstFormatError):
+    """A B-tree lookup for a key the tree does not hold (upstream's `BTreePageNotFound`).
+
+    A `PstFormatError`, because a store whose node points at a block the
+    block B-tree does not list is corrupt by any reading — but its own
+    class, because a caller probing for an optional node (a folder's
+    contents table, a named-property map) wants to tell "absent" from
+    "the bytes are wrong" without parsing a message. Added by P02.
+    """
