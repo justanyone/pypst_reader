@@ -48,7 +48,7 @@ names `docs/INTERFACES.md` § header uses (so P01 can compare directly), and
 the drift test is seen to fail when one golden byte is changed.
 
 ### P18-PARITY
-status: ✗ not started
+status: ✅ 2026-09-15 — `scripts/check_upstream_parity.py` reports `parity: 15 upstream tests — 5 twinned, 10 pending (P01-HEADER ×1, P21-RTF ×4, P23-IDS ×5), 0 missing`, exit 0; the 5 encode/key-table twins tagged in place (tests/test_encode.py ×4, tests/test_tables.py ×1 — upstream has no CRC tests); `scripts/parity-pending.txt` carries the 10 owed by P23/P21/P01 rather than xfail stubs, so those rows' real twins merge without a collision; 12 tests in tests/test_parity_lint.py, each seen red once (9 lint mutations + a deleted twin); wired into CI's lint job (skips there, bites nightly)
 upstream: every `#[test]` in the pinned source (15 today)
 oracle:   `python3 scripts/check_upstream_parity.py`
 blocked on: none

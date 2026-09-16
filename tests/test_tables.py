@@ -7,9 +7,13 @@ decoded block would be wrong in a way that looks like a structural bug.
 from __future__ import annotations
 
 from pypst._tables import KEY_DATA, KEY_DATA_I, KEY_DATA_R, KEY_DATA_S
+from tests.parity import upstream_test
 
 
+# Twin of upstream's encode/mod.rs `test_key_data` — derived from Microsoft's MIT-licensed test code.
+@upstream_test("crates/pst/src/encode/mod.rs::test_key_data")
 def test_key_data_is_768_bytes() -> None:
+    """Upstream asserts each of R, S, I is 256 entries; the 768 total is ours."""
     assert len(KEY_DATA) == 768
     assert len(KEY_DATA_R) == len(KEY_DATA_S) == len(KEY_DATA_I) == 256
 

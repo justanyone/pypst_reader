@@ -94,6 +94,32 @@ The tiers — parity, spec vectors, goldens, denial, the contract harness,
 limits, property tests — are in `docs/TEST-PLAN.md`. A layer is done when it
 has tests in every tier that applies.
 
+## Upstream parity
+
+Tier T0 says this port passes every test upstream passes, and
+`scripts/check_upstream_parity.py` checks it: every `#[test]` in the pinned
+Rust source must have **exactly one** Python twin, tagged with the decorator
+from `tests/parity`:
+
+```python
+from tests.parity import upstream_test
+
+# Twin of upstream's permute.rs `test_decode_block` — derived from Microsoft's MIT-licensed test code.
+@upstream_test("crates/pst/src/encode/permute.rs::test_decode_block")
+def test_permute_round_trips() -> None: ...
+```
+
+The ref is the path relative to `reference/outlook-pst-rs` plus `::` and the
+Rust fn name; read the Rust first and assert what it asserts (a superset is
+fine). A twin lives wherever the layer's tests live — `tests/parity/` for a
+file that is nothing but twins, or in place next to the layer's other tests.
+Twins derive from Microsoft's MIT test code, so each carries the one-line
+comment above. When your row's twin cannot land yet because the layer does
+not exist, add `<ref>  <ROW-ID>` to `scripts/parity-pending.txt`; the lint
+fails the moment the twin appears with the line still present, so the row
+that writes the twin deletes the line in the same commit. The lint skips
+when `reference/` is absent (CI's lint job) and bites in the nightly job.
+
 ## What "done" means for a test
 
 Not that it passes. That it would **fail** if the code were wrong. When you

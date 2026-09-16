@@ -3,6 +3,10 @@
 `SAMPLE` and `KEY` are lifted from the `#[cfg(test)]` blocks in
 crates/pst/src/encode/{permute,cyclic}.rs so that a divergence shows up as a
 failure here rather than as unreadable mail four layers up.
+
+The four tests tagged `@upstream_test` are twins of upstream's own `#[test]`
+functions (docs/TEST-PLAN.md, tier T0); scripts/check_upstream_parity.py
+holds the tags to the pinned source.
 """
 
 from __future__ import annotations
@@ -18,15 +22,20 @@ from pypst.encode import (
     encode_decode_cyclic,
     encode_permute,
 )
+from tests.parity import upstream_test
 
 SAMPLE = b"Hello, World!"
 KEY = 0x12345678
 
 
+# Twin of upstream's permute.rs `test_decode_block` — derived from Microsoft's MIT-licensed test code.
+@upstream_test("crates/pst/src/encode/permute.rs::test_decode_block")
 def test_permute_round_trips() -> None:
     assert decode_permute(encode_permute(SAMPLE)) == SAMPLE
 
 
+# Twin of upstream's permute.rs `test_encode_block` — derived from Microsoft's MIT-licensed test code.
+@upstream_test("crates/pst/src/encode/permute.rs::test_encode_block")
 def test_permute_actually_changes_the_data() -> None:
     """Upstream's `test_encode_block` assertion — a no-op table would pass
     the round-trip test and fail every real file."""
@@ -39,12 +48,16 @@ def test_permute_round_trips_over_random_buffers() -> None:
         assert decode_permute(encode_permute(data)) == data
 
 
+# Twin of upstream's cyclic.rs `test_decode_block` — derived from Microsoft's MIT-licensed test code.
+@upstream_test("crates/pst/src/encode/cyclic.rs::test_decode_block")
 def test_cyclic_is_its_own_inverse() -> None:
     """Upstream's `test_decode_block`: applying it twice restores the input."""
     once = encode_decode_cyclic(SAMPLE, KEY)
     assert encode_decode_cyclic(once, KEY) == SAMPLE
 
 
+# Twin of upstream's cyclic.rs `test_encode_block` — derived from Microsoft's MIT-licensed test code.
+@upstream_test("crates/pst/src/encode/cyclic.rs::test_encode_block")
 def test_cyclic_actually_changes_the_data() -> None:
     assert encode_decode_cyclic(SAMPLE, KEY) != SAMPLE
 

@@ -26,6 +26,12 @@ jobs:
       # is what keeps that claim checkable as the tree grows.
       - name: Provenance lint — every ported module records its upstream
         run: uv run python scripts/check_provenance.py
+      # Tier T0: every upstream `#[test]` has exactly one tagged Python twin
+      # (docs/TEST-PLAN.md). This job has no `reference/` checkout, so the
+      # lint SKIPS here with exit 0 — it bites in the nightly oracle job (row
+      # P14-CI-ORACLE), which checks out the pinned upstream source.
+      - name: Upstream parity lint — every upstream test has a twin (skips without reference/)
+        run: uv run python scripts/check_upstream_parity.py
       - name: Quality gate — tier-1 rules clean, and the debt did not grow
         run: uv run python scripts/check_quality_ratchet.py
 

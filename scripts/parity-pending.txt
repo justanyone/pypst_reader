@@ -1,0 +1,21 @@
+# Upstream `#[test]` functions whose Python twin is owed by a row that has not
+# landed yet. Read by scripts/check_upstream_parity.py.
+#
+# Format: one entry per line, `<upstream ref>  <ROW-ID>`, where the ref is
+# `<path relative to reference/outlook-pst-rs>::<fn name>`. Blank lines and
+# `#` comments are ignored.
+#
+# An entry here is a debt, not a waiver: the lint fails the moment the twin
+# exists (the row landed — delete the line in that row's branch), and it fails
+# if the ref names no upstream test (the pin moved — re-check the row).
+
+crates/pst/src/ndb/block_id.rs::test_unicode_bid_index_overflow  P23-IDS
+crates/pst/src/ndb/block_id.rs::test_ansi_bid_index_overflow  P23-IDS
+crates/pst/src/ndb/node_id.rs::test_nid_index_overflow  P23-IDS
+crates/pst/src/block_sig.rs::test_compute_sig  P23-IDS
+crates/pst/src/block_sig.rs::test_overflow  P23-IDS
+crates/compressed-rtf/src/lib.rs::test_decompress_simple_rtf  P21-RTF
+crates/compressed-rtf/src/lib.rs::test_compress_simple_rtf  P21-RTF
+crates/compressed-rtf/src/lib.rs::test_decompress_crossing_write_rtf  P21-RTF
+crates/compressed-rtf/src/lib.rs::test_compress_crossing_write_rtf  P21-RTF
+crates/pst/src/ndb/header.rs::test_magic_values  P01-HEADER
