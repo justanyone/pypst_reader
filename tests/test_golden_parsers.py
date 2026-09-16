@@ -469,7 +469,7 @@ def test_read_btrees_rejects_garbled_value(line_no: int, bad: str) -> None:
 def test_read_density_list_golden_parses(store: Path, golden, golden_exit) -> None:
     assert golden_exit(store, "read_density_list") == 0
     parsed = parse_read_density_list(golden(store, "read_density_list"))
-    if store.stem in {"pstd-inline-cid", "pstsdk-test_unicode"}:
+    if store.stem in {"pstd-inline-cid", "pstsdk-test_unicode", "synth-basics"}:
         assert parsed is None  # no density list page; upstream prints an Error line
         return
     assert parsed is not None
