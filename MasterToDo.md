@@ -45,7 +45,7 @@ can start today.
 |---|---|---|---|---|
 | P25-HYPOTHESIS | 5 | ✗ not started | Decide (ADR paragraph) and add `hypothesis` as a dev-only dependency; first property tests over encode/crc/ids. | [`todo/T06-testing.md`](todo/T06-testing.md#p25-hypothesis) |
 | P26-COVERAGE | 5 | ✗ not started | `pytest-cov` + a coverage floor ratchet beside the ruff ratchet. A number that may not go down, never cited as evidence of correctness. | [`todo/T06-testing.md`](todo/T06-testing.md#p26-coverage) |
-| P10-EML | 5 | ⏳ in flight — agent/p10-eml 2026-09-16 | The RFC-822 assembler: one message → one `.eml`. **The actual deliverable.** Measure header survival first. | [`todo/T03-messaging.md`](todo/T03-messaging.md#p10-eml) |
+| P10-EML | 5 | ⏳ in flight — agent/p10-eml 2026-09-16 | The export: **MBOX per folder (user's call, 2026-09-16)** built on an RFC-822 assembler (one message → one `EmailMessage`, `.eml` still available). Upstream ships no export format — only its text-dumping examples, which `debug messages` already matches byte for byte. Header survival measured by P09: 6/12 corpus, 1/1 private. | [`todo/T03-messaging.md`](todo/T03-messaging.md#p10-eml) |
 | P31-MYPY | 10 | ready (P06 done) — deferred until P09 lands so strict typing is not applied to a moving messaging API; needs `mypy` as a dev dependency (user's call, with hypothesis/pytest-cov) | `mypy --strict` over `src/` once the LTP API has settled — the closest thing to the compiler upstream had. | [`todo/T06-testing.md`](todo/T06-testing.md#p31-mypy) |
 | P15-PERF | 11 | ✗ backlog | Profile against a large store (outside the repo). Not before P10. | [`todo/T05-infra.md`](todo/T05-infra.md#p15-perf) |
 | P16-PUBLISH | 11 | ✗ backlog | PyPI release. Not before P10. | [`todo/T05-infra.md`](todo/T05-infra.md#p16-publish) |
@@ -87,9 +87,7 @@ can start today.
 
 ## Still the user's call
 
-- **Scope of P10.** EML per message is the assumed deliverable. If the real
-  target is MBOX (one file per folder) or JSON, say so before P09 — it changes
-  what P09 must extract, not just how it is formatted.
+- **Scope of P10 — decided 2026-09-16.** Kevin: the main output format is the same as upstream's (upstream has none beyond its text dumps, which the port reproduces) with a slight preference for MBOX. P10 writes one mbox per folder, with per-message EML as the building block.
 - **Apache-2.0 fixtures.** ADR-0004 admits them (7 of the 8 corpus stores).
   If the corpus must be MIT/public-domain only, the pstsdk, Tika and
   java-libpst stores come out and P20 (synthetic fixtures) becomes priority 1.
