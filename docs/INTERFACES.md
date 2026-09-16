@@ -37,25 +37,54 @@ class PstUnsupportedError(PstError)             # recognised, deliberately not h
 
 Additive only. P11 adds nothing here; it raises `PstLimitError`.
 
-## `pypst.limits` — P11
+## `pypst.limits` — exists (P11)
+
+Not a port: upstream has no equivalent (Rust's bounds checks make a panic
+survivable; an unbounded Python loop is a hang). Every default cites the
+[MS-PST] section, the upstream check, or the arithmetic that bounds it, in a
+comment next to the constant. **Ceilings are inclusive**: the ceiling itself
+passes, one over raises.
 
 ```python
-MAX_BTREE_DEPTH: int = 8            # [MS-PST] says the trees are shallow; 8 is generous
-MAX_XBLOCK_DEPTH: int = 2           # XXBLOCK → XBLOCK → data; anything deeper is not the format
-MAX_SUBNODE_DEPTH: int = ...
-MAX_EMBEDDED_MESSAGE_DEPTH: int = 16
-MAX_ALLOCATION: int = 256 * 2**20   # the largest single bytes object a walk may build
-MAX_ITEMS: int = 1_000_000          # rows in one table, entries in one tree
-MAX_HEAP_ITEMS, MAX_PROPERTY_COUNT, MAX_RECIPIENTS, MAX_ATTACHMENTS: int
+MAX_BTREE_DEPTH: int = 8                # BTPAGE.cLevel u8; upstream page.rs refuses an intermediate level outside 1..=8
+MAX_XBLOCK_DEPTH: int = 2               # [MS-PST] 2.2.2.8.3.2: XXBLOCK → XBLOCK → data
+MAX_SUBNODE_DEPTH: int = 2              # [MS-PST] 2.2.2.8.3.3: SIBLOCK → SLBLOCK (nested subnode trees are the embedded-message axis)
+MAX_HEAP_TREE_DEPTH: int = 8            # BTHHEADER.bIdxLevels u8; fan-out ≥ 179 per 3580-byte allocation → 4 levels cover MAX_HEAP_ITEMS
+MAX_EMBEDDED_MESSAGE_DEPTH: int = 16    # no format bound; practical
+MAX_ALLOCATION: int = 256 * 2**20       # largest single bytes a walk assembles; XBLOCK cbTotal is u32 (4 GiB), Outlook writes ≤ 150 MB
+MAX_FILE_SIZE: int = 64 * 2**30         # ROOT.ibFileEof is u64; Outlook's MaxLargeFileSize default is 50 GiB; next power of two
+MAX_ITEMS: int = 1 << 27                # entries in one tree, rows in one table, keys in one VisitedSet: the 27-bit nidIndex space (= MAX_NODE_INDEX + 1 = MAX_FILE_SIZE / 512 pages)
+MAX_HEAP_ITEMS: int = 65_536 * 2_047    # HID: 16-bit block index × 11-bit index with 0 reserved
+MAX_PROPERTY_COUNT: int = 1 << 16       # PC is a BTH keyed by the u16 property id
+MAX_RECIPIENTS: int = 1 << 16           # no format bound below the u32 row id; 130× Exchange's default envelope limit
+MAX_ATTACHMENTS: int = 510 * 340        # one SIBLOCK of SLBLOCKs: (8192-8-16)//16 × (8192-8-16)//24 subnodes per message
+MAX_FOLDERS: int = 1 << 27              # every folder is a node; 27-bit nidIndex
+MAX_MESSAGES: int = 1 << 27             # every message is a node; 27-bit nidIndex
+MAX_MV_ITEMS: int = 1_000_000           # prop_type.decode's max_items default (P22's landed value); bound is MAX_ALLOCATION // 4 offsets
 
 @dataclass(frozen=True, slots=True)
-class Limits:                       # all of the above as fields, defaults from the constants
-    ...
+class Limits:                           # one field per constant, lowercased: max_btree_depth … max_mv_items
+    ...                                 # __post_init__: non-positive → ValueError, non-int (incl. bool) → TypeError.
+                                        # Caller configuration, not file input — the one place those are right; never a PstError.
 DEFAULT_LIMITS = Limits()
+
+def check_depth(depth: int, ceiling: int, what: str) → None        # depth > ceiling → PstLimitError
+def check_count(count: int, ceiling: int, what: str) → None        # count > ceiling → PstLimitError, before anything is allocated
+def check_allocation(nbytes: int, ceiling: int, what: str) → None  # nbytes > ceiling → PstLimitError, before bytearray(nbytes)
+# each raises PstLimitError(f"{what}: {value} exceeds limit {ceiling}")
+
+class VisitedSet:                       # cycle guard, one per walk
+    __init__(self, what: str, ceiling: int = MAX_ITEMS)
+    add(self, key: Hashable) → None     # revisit → PstLimitError(f"{what}: cycle at {key!r}"); len == ceiling → PstLimitError (the set cannot be the DoS)
+    __contains__, __len__
 ```
 
 Every public opener accepts `limits: Limits = DEFAULT_LIMITS` and threads it
-down. A limit trip is `PstLimitError(f"{what} {value} exceeds {ceiling}")`.
+down. A limit trip is `PstLimitError(f"{what}: {value} exceeds limit {ceiling}")`,
+and a revisited key in a walk is `PstLimitError(f"{what}: cycle at {key!r}")` —
+a cycle is corruption by any reading, but every walk's contract above already
+promises `PstLimitError` for it, and a caller that hits one has the same move
+either way: stop.
 
 ## `pypst.encode`, `pypst.crc` — exist
 
@@ -339,7 +368,7 @@ class PropType(IntEnum):             # [MS-OXCDATA] 2.11.1
 def is_fixed_size(t: PropType) → bool  # NULL, SHORT, LONG, FLOAT, DOUBLE, CURRENCY, APPTIME, ERROR, BOOLEAN, LONGLONG, SYSTIME, GUID
 def fixed_size(t: PropType) → int      # 0 (NULL) / 1 / 2 / 4 / 8 / 16; PstFormatError for a variable type. OBJECT is variable.
 
-DEFAULT_MAX_ITEMS = 1_000_000
+DEFAULT_MAX_ITEMS = MAX_MV_ITEMS               # from pypst.limits (P11); 1_000_000
 def decode(t: PropType | int, data: bytes | memoryview, *, codepage: str = "cp1252",
            max_items: int = DEFAULT_MAX_ITEMS) → PropValue
 # `data` is the WHOLE value (the inline bytes, or the complete heap/subnode allocation). An int `t` goes through from_wire.
@@ -577,3 +606,15 @@ __all__ = [...]                      # the P24 contract harness iterates this
   gains `from_byte` / `from_byte_lenient` and `debug_name`; `Version` gains
   `is_ansi` / `debug_name`; the module constants and the exact check order
   are recorded. `python -m pypst.debug header` registered.
+- 2026-09-15 — P11 landed `pypst.limits`; its section now describes what was
+  built. Changes from the draft: `MAX_ITEMS` is `1 << 27` (the nidIndex
+  space), not 1_000_000 — a 50 GiB store's BBT alone has millions of entries
+  and the draft value would have refused a legitimate large file; `MAX_FILE_SIZE`,
+  `MAX_HEAP_TREE_DEPTH`, `MAX_FOLDERS`, `MAX_MESSAGES` and `MAX_MV_ITEMS` added;
+  the trip message is `f"{what}: {value} exceeds limit {ceiling}"` (the draft
+  had no colon or "limit"); ceilings are inclusive; the helpers `check_depth`
+  / `check_count` / `check_allocation` and the `VisitedSet` cycle guard are
+  the API, so every walk raises the same message shape. `Limits` refuses a
+  non-int with `TypeError` (ruff's default TRY004; the draft said ValueError
+  for both). `prop_type.DEFAULT_MAX_ITEMS` is now `limits.MAX_MV_ITEMS`,
+  value unchanged.

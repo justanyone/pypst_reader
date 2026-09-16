@@ -82,8 +82,9 @@ from datetime import UTC, datetime, timedelta
 from enum import IntEnum
 
 from pypst.errors import PstFormatError, PstLimitError, PstUnsupportedError
+from pypst.limits import MAX_MV_ITEMS
 
-DEFAULT_MAX_ITEMS = 1_000_000
+DEFAULT_MAX_ITEMS = MAX_MV_ITEMS  # the named home is pypst.limits (P11)
 
 
 class PropType(IntEnum):
