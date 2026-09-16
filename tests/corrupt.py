@@ -1065,6 +1065,59 @@ def pc_record(prop_type: int, hnid: int) -> bytes:
     return struct.pack("<HI", prop_type, hnid)
 
 
+# --- P06: table-context builders ---------------------------------------------------
+#
+# A TC's heap holds a TCINFO at its user root ([MS-PST] 2.3.4.1), a BTH for
+# the row index ([MS-PST] 2.3.4.3) and — usually — the row matrix as another
+# heap item. These build each piece; `tests/test_table_context.py` assembles
+# them with `heap_node`, and `tc_lies` below rewrites a real one in place.
+
+TCINFO_FORMAT = "<BBHHHHIII"
+TCOLDESC_FORMAT = "<HHHBB"
+
+
+def tcoldesc(prop_type: int, prop_id: int, offset: int, size: int, bit: int) -> bytes:
+    """An 8-byte TCOLDESC ([MS-PST] 2.3.4.2): the property tag, the cell's offset and width, the existence bit."""
+    return struct.pack(TCOLDESC_FORMAT, prop_type, prop_id, offset, size, bit)
+
+
+def tcinfo(
+    columns: Sequence[bytes],
+    rgib: Sequence[int],
+    *,
+    row_index: int = 0,
+    rows: int = 0,
+    btype: int = CLIENT_SIG_TC,
+    count: int | None = None,
+    deprecated_index: int = 0,
+) -> bytes:
+    """A TCINFO ([MS-PST] 2.3.4.1): bType, cCols, the four rgib offsets, hidRowIndex, hnidRows, hidIndex, rgTCOLDESC.
+
+    `count` lies about cCols; `rgib` is the four end offsets in order
+    (TCI_4b, TCI_2b, TCI_1b, TCI_bm).
+    """
+    head = struct.pack(
+        TCINFO_FORMAT,
+        btype,
+        len(columns) if count is None else count,
+        *rgib,
+        row_index,
+        rows,
+        deprecated_index,
+    )
+    return head + b"".join(columns)
+
+
+def tcrowid(row_id: int, index: int) -> tuple[bytes, bytes]:
+    """One TCROWID ([MS-PST] 2.3.4.3.1) as the (key, value) pair a Unicode row-index BTH holds."""
+    return struct.pack("<I", row_id), struct.pack("<I", index)
+
+
+def tc_row(row_id: int, unique: int, cells: bytes, bitmap: bytes) -> bytes:
+    """One row of a row matrix ([MS-PST] 2.3.4.4.1): dwRowID, rgdwData[0], the cell bytes from offset 8, rgbCEB."""
+    return struct.pack("<II", row_id, unique) + cells + bitmap
+
+
 # --- heap_lies: the message-store PC of a real store, lied about in place ----------
 #
 # The store PC (NID 0x21) is a single data block in every corpus store, so
@@ -1086,8 +1139,15 @@ class _DataBlockSite:
     data: bytes  # decoded
 
 
-def store_pc_block(base: bytes) -> _DataBlockSite:
-    """Where the message store's PC data block is, and its decoded bytes."""
+def node_data_block(base: bytes, nid: int) -> _DataBlockSite:
+    """Where one node's single data block is, and its decoded bytes.
+
+    The lie families rewrite a real structure in place, which needs the
+    node's data to be ONE block: a multi-block node would have to be
+    re-encoded block by block with each one's own key. Every node these
+    families aim at (the store PC, the root folder's hierarchy table) is a
+    single block in every base they are pinned for.
+    """
     from pypst.encode import decode_block
     from pypst.ndb.block import BlockReader
     from pypst.ndb.btree import BlockBTree, NodeBTree
@@ -1097,16 +1157,21 @@ def store_pc_block(base: bytes) -> _DataBlockSite:
     f = io.BytesIO(base)
     header = read_header(f)
     bbt = BlockBTree(f, header.root.block_btree)
-    entry = NodeBTree(f, header.root.node_btree).find(NodeId(NID_MESSAGE_STORE))
+    entry = NodeBTree(f, header.root.node_btree).find(NodeId(nid))
     block = bbt.find(entry.data)
     if block.block.block.is_internal:
-        raise ValueError("the store PC is not a single data block; heap_lies needs one")
+        raise ValueError(f"node 0x{nid:X} is not a single data block; the lie families need one")
     offset, size = block.block.index.value, block.size
     key = block.block.block.search_key & 0xFFFFFFFF
     raw = base[offset : offset + size]
     reader = BlockReader(f, header, bbt)
     assert reader.node_data(entry) == decode_block(raw, header.crypt_method, key)
     return _DataBlockSite(offset, size, key, int(header.crypt_method), decode_block(raw, header.crypt_method, key))
+
+
+def store_pc_block(base: bytes) -> _DataBlockSite:
+    """Where the message store's PC data block is, and its decoded bytes."""
+    return node_data_block(base, NID_MESSAGE_STORE)
 
 
 def rewrite_data_block(base: bytes, site: _DataBlockSite, data: bytes) -> bytes:
@@ -1316,6 +1381,172 @@ def pc_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
         yield lie("record.boolean=0x02", set_u32(data, boolean[0] + 4, 0x02), PstFormatError)
 
 
+# --- tc_lies: the root folder's hierarchy table, lied about in place ---------------
+#
+# The third structure built on a heap, after the BTH (`heap_lies`) and the
+# PC (`pc_lies`): a table context ([MS-PST] 2.3.4). Every store has one at
+# NID 0x12D — the root folder's hierarchy table — and in every base pinned
+# here it is a single data block, so the lies are rewrites of that block.
+# What they break is what P06 reads and P04 cannot see: the TCINFO's
+# signature, its four rgib offsets, its hidRowIndex and hnidRows, one
+# TCOLDESC, the row index's key/entry widths, a row index entry that names
+# a row the matrix does not have, and one row's existence bitmap.
+
+NID_ROOT_HIERARCHY_TABLE = 0x12D
+
+
+def _tc_shape(data: bytes) -> dict[str, Any]:
+    """The offsets inside a decoded TC heap block that the lies below rewrite."""
+    ib, _sig, _client, user_root, _fill = struct.unpack_from(HEAP_HEADER_FORMAT, data, 0)
+    count, _free = struct.unpack_from("<HH", data, ib)
+    offsets = struct.unpack_from(f"<{count + 1}H", data, ib + 4)
+    sizes = tuple(b - a for a, b in itertools.pairwise(offsets))
+
+    def item(raw_hid: int) -> tuple[int, int] | None:
+        """`(offset, size)` of the heap item an HID in block 0 names, or None."""
+        if raw_hid == 0 or raw_hid & 0x1F or (raw_hid >> 16) & 0xFFFF:
+            return None
+        index = (raw_hid >> 5) & 0x7FF
+        if not 0 < index <= count:
+            return None
+        return offsets[index - 1], sizes[index - 1]
+
+    root_item = item(user_root)
+    if root_item is None:
+        raise ValueError("the TC heap's user root is not an item of block 0; tc_lies needs one")
+    tcinfo_at = root_item[0]
+    rgib = struct.unpack_from("<4H", data, tcinfo_at + 2)
+    row_index_hid, rows_hnid, _deprecated = struct.unpack_from("<III", data, tcinfo_at + 10)
+    row_index_item = item(row_index_hid)
+    if row_index_item is None:
+        raise ValueError("the TC's hidRowIndex is not an item of block 0; tc_lies needs one")
+    bth_at = row_index_item[0]
+    bth_root = struct.unpack_from(BTH_HEADER_FORMAT, data, bth_at)[4]
+    page = item(bth_root)
+    matrix = item(rows_hnid)
+    return {
+        "ib": ib,
+        "count": count,
+        "rgib_at": ib + 4,
+        "offsets": offsets,
+        "sizes": sizes,
+        "tcinfo": tcinfo_at,
+        "columns": tcinfo_at + 22,
+        "column_count": data[tcinfo_at + 1],
+        "rgib": rgib,
+        "bth": bth_at,
+        "page": None if page is None else page[0],
+        "page_end": None if page is None else page[0] + page[1],
+        "matrix": None if matrix is None else matrix[0],
+        "matrix_size": None if matrix is None else matrix[1],
+    }
+
+
+def _tc_opens(base: bytes) -> bool:
+    """Whether the base's OWN root hierarchy table parses — pstd-inline-cid's does not.
+
+    A lie is only evidence when the unmutated structure was readable. Over
+    a base whose TC this port already refuses (pstd-inline-cid writes a
+    five-byte existence bitmap for five columns, which upstream refuses
+    too — its `read_root_folder` golden is empty with exit 1), the family
+    still yields the same mutations, but with no `expect` and no
+    `must_raise`: they prove nothing and must not be scored as if they did.
+    """
+    from pypst.errors import PstError
+    from pypst.ltp.table_context import TableContext
+    from pypst.ndb.block import BlockReader
+    from pypst.ndb.btree import BlockBTree, NodeBTree
+    from pypst.ndb.header import read_header
+    from pypst.ndb.ids import NodeId
+
+    f = io.BytesIO(base)
+    try:
+        header = read_header(f)
+        bbt = BlockBTree(f, header.root.block_btree)
+        entry = NodeBTree(f, header.root.node_btree).find(NodeId(NID_ROOT_HIERARCHY_TABLE))
+        tc = TableContext.from_node(BlockReader(f, header, bbt), entry)
+        for row in tc.rows():
+            _ = row.cells
+        return bool(tc.row_index)
+    except PstError:
+        return False
+
+
+def tc_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
+    """The root hierarchy table's TCINFO, columns, row index and row matrix lied about, the heap left valid."""
+    site = node_data_block(base, NID_ROOT_HIERARCHY_TABLE)
+    data = site.data
+    shape = _tc_shape(data)
+    tc, col, bth = shape["tcinfo"], shape["columns"], shape["bth"]
+    rgib = shape["rgib"]
+    usable = _tc_opens(base)
+
+    def lie(name: str, edited: bytes, expect: type[PstError] | None, *, must_raise: bool = True) -> Mutation:
+        return Mutation(
+            f"tc_lies:{name}",
+            rewrite_data_block(base, site, edited),
+            expect if usable else None,
+            must_raise=must_raise and usable,
+        )
+
+    # The container: a heap the heap layer accepts and a TC does not.
+    yield lie("bClientSig=bTypePC", set_u8(data, 3, CLIENT_SIG_PC), PstFormatError)
+    yield lie("tcinfo.bType=bTypePC", set_u8(data, tc, CLIENT_SIG_PC), PstFormatError)
+
+    # cCols against the rgib offsets: the existence bitmap's width is
+    # `ceil(cCols / 8)` and rgib[TCI_bm] - rgib[TCI_1b] must equal it.
+    yield lie("tcinfo.cCols=0", set_u8(data, tc + 1, 0), PstFormatError)
+    yield lie("tcinfo.cCols=0xFF", set_u8(data, tc + 1, 0xFF), PstFormatError)
+
+    # The four rgib end offsets, each broken the way [MS-PST] 2.3.4.1 forbids.
+    yield lie("rgib[TCI_4b]_unaligned", set_u16(data, tc + 2, rgib[0] + 1), PstFormatError)
+    yield lie("rgib[TCI_4b]=4_inside_row_header", set_u16(data, tc + 2, 4), PstFormatError)
+    yield lie("rgib[TCI_2b]=0", set_u16(data, tc + 4, 0), PstFormatError)
+    yield lie("rgib[TCI_1b]=0", set_u16(data, tc + 6, 0), PstFormatError)
+    yield lie("rgib[TCI_bm]+1", set_u16(data, tc + 8, rgib[3] + 1), PstFormatError)
+
+    # hidRowIndex and hnidRows.
+    yield lie("tcinfo.hidRowIndex=0", set_u32(data, tc + 10, 0), PstFormatError)
+    yield lie("tcinfo.hidRowIndex_past_cAlloc", set_u32(data, tc + 10, hid(0x7FF)), PstFormatError)
+    yield lie("tcinfo.hnidRows_past_cAlloc", set_u32(data, tc + 14, hid(0x7FF)), PstFormatError)
+    yield lie("tcinfo.hnidRows_subnode_absent", set_u32(data, tc + 14, 0x4000_0001), PstNotFoundError)
+    # An empty matrix is legal shape-wise; the row index then names rows that
+    # are not there, which `find_row` refuses. Either answer is honest.
+    yield lie("tcinfo.hnidRows=0_empty_matrix", set_u32(data, tc + 14, 0), None, must_raise=False)
+
+    # One TCOLDESC ([MS-PST] 2.3.4.2), which the heap layer never looks at.
+    yield lie("column0.wPropType=0x1234", set_u16(data, col, 0x1234), PstUnsupportedError)
+    yield lie("column0.wPropType=PtypNull", set_u16(data, col, 0x0001), PstFormatError)
+    yield lie("column0.ibData_past_rgib", set_u16(data, col + 4, 0xFFF0), PstFormatError)
+    yield lie("column0.cbData=7", set_u8(data, col + 6, 7), PstFormatError)
+    yield lie("column0.iBit=0xFF", set_u8(data, col + 7, 0xFF), PstFormatError)
+
+    # The row index BTH: a TC's is keyed by 4 bytes with 4-byte entries.
+    yield lie("rowindex.bType=bTypeTC", set_u8(data, bth, CLIENT_SIG_TC), PstFormatError)
+    yield lie("rowindex.cbKey=2", set_u8(data, bth + 1, 2), PstFormatError)
+    yield lie("rowindex.cbEnt=2", set_u8(data, bth + 2, 2), PstFormatError)
+
+    # A TCROWID whose dwRowIndex is past the end of the matrix.
+    if shape["page"] is not None:
+        yield lie("rowindex.row_past_matrix", set_u32(data, shape["page"] + 4, 0xFFFF), PstFormatError)
+
+    # The row matrix itself. Clearing a row's existence bitmap makes every
+    # column absent, which is legal; changing its dwRowID desynchronises it
+    # from the index, which is a lie no reader can detect. Neither may crash.
+    if shape["matrix"] is not None:
+        row_width = rgib[3]
+        bitmap_at = shape["matrix"] + rgib[2]
+        bitmap_len = row_width - rgib[2]
+        if bitmap_len > 0 and row_width <= shape["matrix_size"]:
+            yield lie(
+                "row0.existence_bitmap=0",
+                set_bytes(data, bitmap_at, bytes(bitmap_len)),
+                None,
+                must_raise=False,
+            )
+            yield lie("row0.dwRowID=0xFFFFFFFF", set_u32(data, shape["matrix"], 0xFFFFFFFF), None, must_raise=False)
+
+
 FAMILIES: tuple[Family, ...] = (
     truncations,
     bit_flips,
@@ -1327,6 +1558,7 @@ FAMILIES: tuple[Family, ...] = (
     magic_only,
     heap_lies,
     pc_lies,
+    tc_lies,
 )
 
 

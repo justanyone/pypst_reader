@@ -92,9 +92,70 @@ and the pin.
 the contexts alone overrun a session, split the PT_MV_* wiring off.
 
 ### P06-TC
-status: ✗ not started
+status: ✅ 2026-09-16 — `src/pypst/ltp/table_context.py` landed
+(`existence_bitmap_size`, `check_existence_bitmap`, `ColumnDescriptor`,
+`TableContextInfo`, `CellKind`/`CellRecord`, `TableRow`, `TableContext`,
+`from_node`); `HeapNode.get_hnid_blocks` added to P04 (additive — the row
+matrix must be read block by block); `debug tc`, `debug.cell_lines`,
+`debug.format_cell_record`. `tests/test_table_context.py` 151 tests, 1962
+suite-wide, all green. **Differential:** `python -m pypst.debug tc <store>
+<nid>` reproduces BOTH table goldens BYTE FOR BYTE on 8/8 Unicode corpus
+stores — 16 tables, the root folder's hierarchy table (NID 0x12D) against
+`read_root_folder` and the IPM subtree's against `read_ipm_subtree` (Empty
+136/58 lines, javalibpst-dist-list 363/748, pstsdk-sample1 137/111,
+pstsdk-submessage 102/111, pstsdk-test_unicode 104/111, synth-basics 34/51,
+tika-variousBodyTypes 102/77). The 8th store, pstd-inline-cid, is
+REFUSAL PARITY: both its goldens are empty with exit 1 because the ORACLE
+refuses its only table context (its TCINFO declares rgib[TCI_bm] -
+rgib[TCI_1b] = 5 existence-bitmap bytes for 5 columns, where [MS-PST]
+2.3.4.1 allows ceil(5/8) = 1; its Boolean column is also 4 bytes wide at an
+offset in an empty 1-byte region), and this port refuses it at the same
+check with exit 1. The same goldens re-checked as DATA through
+`parse_read_root_folder` / `parse_read_ipm_subtree` — every row id, version,
+column id, `Type:` name, record kind (Small/Heap/Node) and decoded value,
+14 tables, 7 stores. javalibpst-dist-list's IPM hierarchy table keeps its
+row matrix in a SUB-NODE (12 rows, one block) and is pinned as the corpus
+witness for that arm. **Private stores, STRUCTURE ONLY:** 100 table
+contexts across the two (50 each), 56 rows, 398 cells decoded, column types
+0x0003/0x000B/0x0014/0x001F/0x0040/0x0048/0x0102/0x1003/0x101F, no
+non-`PstError` escape; every row has at least one sparse column. Against the
+LIVE oracle (the prebuilt `read_ipm_subtree` binary, never `cargo`): 2/2
+stores' IPM hierarchy tables — 23 columns × 10 rows each — agree on row ids,
+versions, column ids, column types and exactly which cells are absent (no
+value read, printed or asserted). **Denial:** a heap of each of the 8
+non-TC client signatures, 4 bad `bType`s, a truncated TCINFO, a cCols whose
+TCOLDESCs run past the item, cCols vs the bitmap width both ways, 4
+unaligned/non-monotonic rgib sets, `rgib[TCI_4b]` of 0 and 4 (the
+divergence), 5 unknown `wPropType`s, a PtypNull column, 8 columns whose cell
+is outside its region, 5 whose `cbData` is not the type's width, an
+existence bit past the schema and one exactly on the boundary (caught per
+row, as upstream catches it), the two reserved columns moved, 6 wrong row
+index BTH width pairs, a row index that is not a BTH, a null and an
+out-of-range `hidRowIndex`, a duplicate row id, an index entry past the
+matrix, a row id that is not indexed, an `hnidRows` past `cAlloc` and one
+naming an absent sub-node (`PstNotFoundError`), a cell HNID past `cAlloc`
+and one to an absent sub-node, an odd-length Unicode cell, 2 non-boolean
+booleans, an MV count of 2^32-1, a row count over `max_items` and a matrix
+over `max_allocation` (both `PstLimitError`), plus the new `tc_lies`
+mutation family (25 lies on each base) through the harness's new
+`tc.root_hierarchy` entry point; the sweep over both bases is clean.
+**32 deliberate mutations, 29 confirmed red** (PYTHONDONTWRITEBYTECODE=1,
+`__pycache__` cleared between runs); the 3 survivors are equivalent and
+named in the commit message (the bitmap slice taken from the end of a row
+that is always exactly `row_width`; `_check_offset`'s bounds, which
+`TableContextInfo._validate` has already enforced — upstream keeps both
+checks too; the TC's own row-index ceiling, which P04's `HeapTree` enforces
+with the same `limits.max_items`). No upstream `#[test]` in
+`table_context.rs`, so `check_upstream_parity.py` stays at 0 missing (15
+upstream tests, 14 twinned, 1 pending P27-NU). Divergences (docstring):
+`rgib[TCI_4b]` ≥ 8 (upstream underflows `end_4byte - 8`); a cell HNID of 0
+is `None` (upstream refuses heap index 0 and fails the whole table);
+`PtypObject` columns are readable; a duplicate row id and a row index entry
+past the matrix are refused (upstream keeps the last / panics); rows and the
+matrix size are bounded by `limits`. Followed, not fixed: a partial row at
+the end of a matrix block is padding and is dropped ([MS-PST] 2.3.4.4).
 upstream: `crates/pst/src/ltp/table_context.rs` (1,158 — largest LTP file)
-oracle:   `scripts/oracle.sh read_named_props tests/fixtures/Empty.pst`, and P08's folder listing
+oracle:   goldens `read_root_folder` / `read_ipm_subtree` over the corpus (16 tables), and the prebuilt `read_ipm_subtree` on the private stores
 blocked on: P04
 
 Table contexts: the column descriptor array, the row matrix, the row index, and

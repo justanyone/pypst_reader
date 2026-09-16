@@ -504,3 +504,23 @@ class HeapNode:
         if entry is None or self._reader is None:
             raise PstNotFoundError(f"sub-node {node} is not in the node's sub-node tree")
         return self._reader.read_data(entry.data)
+
+    def get_hnid_blocks(self, hnid: HeapNodeId) -> list[bytes]:
+        """The same bytes as `get_hnid`, but as the BLOCKS they are stored in, in order.
+
+        `get_hnid` joins a sub-node's data tree into one `bytes`; a table
+        context's row matrix must not be joined, because its rows are
+        packed per block and never straddle a block boundary ([MS-PST]
+        2.3.4.4 — upstream reads `data_tree.blocks(...)` and counts rows
+        block by block). A heap item is one block by construction.
+        """
+        if not isinstance(hnid, HeapNodeId):
+            raise TypeError(f"HeapNode.get_hnid_blocks takes a HeapNodeId, not {type(hnid).__name__}")
+        heap = hnid.as_heap
+        if heap is not None:
+            return [bytes(self.get(heap))]
+        node = NodeId(hnid.raw)
+        entry = self._subnodes.get(node)
+        if entry is None or self._reader is None:
+            raise PstNotFoundError(f"sub-node {node} is not in the node's sub-node tree")
+        return self._reader.read_data_blocks(entry.data)

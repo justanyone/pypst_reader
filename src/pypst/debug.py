@@ -31,9 +31,10 @@ from pathlib import Path
 
 from pypst.errors import PstError, PstFormatError
 from pypst.limits import DEFAULT_LIMITS
-from pypst.ltp.heap import HeapNode
+from pypst.ltp.heap import HeapId, HeapNode
 from pypst.ltp.prop_context import PropertyContext, PropertyRecord
 from pypst.ltp.prop_type import ObjectRef, PropType, PropValue, datetime_to_filetime
+from pypst.ltp.table_context import CellKind, CellRecord, ColumnDescriptor, TableContext
 from pypst.ltp.tree import HeapTree
 from pypst.ndb.block import BlockReader, DataBlock, SubNodeLeafBlock
 from pypst.ndb.btree import BlockBTree, NodeBTree, read_density_list
@@ -495,6 +496,69 @@ def dump_pc(path: Path, nid: str) -> None:
 
 
 DUMPERS["pc"] = dump_pc
+
+
+def format_cell_record(prop_type: PropType, record: CellRecord, value: PropValue) -> str:
+    """Upstream's `Debug for TableRowColumnValue` for one cell of a table row (P06).
+
+    `Small(<the value's Debug>)` for an inline cell — upstream's variant
+    wraps the `PropertyValue` itself, so this needs the decoded value where
+    a PC's `Record:` needed only the raw field — `Heap(<HeapId>)` for a heap
+    id, `Node(<NodeId>)` for a sub-node.
+    """
+    if record.kind is CellKind.SMALL:
+        return f"Small({format_property_value(prop_type, value)})"
+    if record.kind is CellKind.HEAP:
+        return f"Heap({HeapId(record.raw)})"
+    return f"Node({NodeId(record.raw)})"
+
+
+def cell_lines(column: ColumnDescriptor, record: CellRecord | None, value: PropValue) -> list[str]:
+    """The lines `read_root_folder` / `read_ipm_subtree` print for one column of one row.
+
+    Two lines for an absent cell (the column, then `Value: None`) and three
+    for a present one. `Type:` is the COLUMN's declared type, not the
+    value's variant — the table examples print `column.prop_type()`, where
+    `read_store_props` prints the variant of what it decoded.
+    """
+    head = f" Column: Property ID: 0x{column.prop_id:04X}, Type: {column.prop_type.debug_name}"
+    if record is None:
+        return [head, "  Value: None"]
+    return [
+        head,
+        f"  Record: {format_cell_record(column.prop_type, record, value)}",
+        f"  Value: {format_property_value(column.prop_type, value)}",
+    ]
+
+
+def dump_tc(path: Path, nid: str) -> None:
+    """`tc <file> <nid-hex>`: the node's table context as `read_root_folder` / `read_ipm_subtree` print one (P06).
+
+    Every row of the row matrix in matrix order — `Row:` and `Version:` in
+    upstream's minimal hex, then each column of the schema in `rgTCOLDESC`
+    order, with `Value: None` where the row's cell existence bitmap says the
+    column is absent. String8 values are decoded as latin-1 (`DUMP_CODEPAGE`),
+    which is upstream's code-page-less reading, so the two outputs are
+    byte-comparable.
+    """
+    node = _parse_nid(nid)
+    with path.open("rb") as f:
+        header = read_header(f)
+        root = header.root
+        block_btree = BlockBTree(f, root.block_btree, DEFAULT_LIMITS)
+        node_btree = NodeBTree(f, root.node_btree, DEFAULT_LIMITS)
+        reader = BlockReader(f, header, block_btree, DEFAULT_LIMITS)
+        tc = TableContext.from_node(reader, node_btree.find(node), codepage=DUMP_CODEPAGE)
+        for row in tc.rows():
+            print(f"Row: 0x{row.id:X}")
+            print(f"Version: 0x{row.unique:X}")
+            for column, record in zip(tc.columns, row.records, strict=True):
+                value = None if record is None else tc.read_cell(record, column.prop_type)
+                for line in cell_lines(column, record, value):
+                    print(line)
+
+
+DUMPERS["tc"] = dump_tc
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -15,7 +15,8 @@ two cannot disagree about what "leak" means:
 
 The entry points here are the ones that exist today (header, the two
 B-tree walks and lookups, the density list, the store node's heap/BTH
-and its property context). Each later layer adds its
+and its property context, and the root folder's hierarchy table as a
+table context). Each later layer adds its
 calls to `exercise` in its own row; the contract harness (P24) is the
 generic version over `pypst.__all__`.
 
@@ -43,6 +44,7 @@ from pypst.errors import PstError
 from pypst.limits import DEFAULT_LIMITS, Limits
 from pypst.ltp.heap import HeapNode, HeapNodeId
 from pypst.ltp.prop_context import PropertyContext
+from pypst.ltp.table_context import TableContext
 from pypst.ltp.tree import HeapTree
 from pypst.ndb.block import BlockReader
 from pypst.ndb.btree import BlockBTree, NodeBTree, read_density_list
@@ -143,6 +145,10 @@ def exercise(data: bytes, shape: BaseShape, limits: Limits = DEFAULT_LIMITS) -> 
         # P05: the same node as a property context — the client signature,
         # the record widths, every wPropType and every value decoded.
         outcomes.append(_attempt("pc.store_pc", lambda: read_store_pc(f, read_header(f), limits)))
+        # P06: the root folder's hierarchy table as a table context — the
+        # TCINFO, the column schema, every row of the matrix with every
+        # present cell decoded, and every row id looked up in the index.
+        outcomes.append(_attempt("tc.root_hierarchy", lambda: read_root_hierarchy_tc(f, read_header(f), limits)))
     return outcomes
 
 
@@ -177,6 +183,26 @@ def read_store_pc(f: io.BytesIO, header: Header, limits: Limits) -> int:
     entry = NodeBTree(f, header.root.node_btree, limits).find(NodeId(0x21))
     pc = PropertyContext.from_node(BlockReader(f, header, bbt, limits), entry, limits)
     return sum(1 for _ in pc)
+
+
+def read_root_hierarchy_tc(f: io.BytesIO, header: Header, limits: Limits) -> int:
+    """Open NID 0x12D as a `TableContext`, decode every cell of every row, find every row by id; the row count.
+
+    The whole of P06 in one call: the TCINFO's own checks, the row index
+    BTH's widths, the per-block row count of the matrix, the cell existence
+    bitmap of each row, and P22's decoders over every present cell — plus
+    `find_row` for every id the index holds, which is the only path that
+    can see a row index entry pointing past the matrix.
+    """
+    bbt = BlockBTree(f, header.root.block_btree, limits)
+    entry = NodeBTree(f, header.root.node_btree, limits).find(NodeId(0x12D))
+    tc = TableContext.from_node(BlockReader(f, header, bbt, limits), entry, limits)
+    count = 0
+    for row in tc.rows():
+        count += len(row.records)
+    for row_id in tc.row_index:
+        tc.find_row(row_id)
+    return count
 
 
 class Hang(Exception):

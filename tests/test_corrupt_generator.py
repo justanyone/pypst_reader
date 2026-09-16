@@ -36,6 +36,10 @@ BASE_IDS = [p.stem for p in BASES]
 # to the generator, made in the same commit that explains it.
 PC_LIES_INLINE_CID = 13  # pstd-inline-cid's store PC has no PtypBoolean record
 PC_LIES_EMPTY = 14
+# Every tc_lies mutation is unconditional over both bases; pstd-inline-cid's
+# own root hierarchy table is unreadable (see `corrupt._tc_opens`), so its 25
+# carry no `expect` and no `must_raise`.
+TC_LIES = 25
 
 PINNED = {
     "pstd-inline-cid": {
@@ -49,6 +53,7 @@ PINNED = {
         "magic_only": 3,
         "heap_lies": 22,
         "pc_lies": PC_LIES_INLINE_CID,
+        "tc_lies": TC_LIES,
     },
     "Empty": {
         "truncations": 62,
@@ -61,6 +66,7 @@ PINNED = {
         "magic_only": 3,
         "heap_lies": 22,
         "pc_lies": PC_LIES_EMPTY,
+        "tc_lies": TC_LIES,
     },
 }
 
@@ -372,6 +378,7 @@ def test_families_are_named_and_ordered() -> None:
         "magic_only",
         "heap_lies",
         "pc_lies",
+        "tc_lies",
     ]
 
 

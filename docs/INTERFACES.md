@@ -481,6 +481,8 @@ class HeapNode:
                                                      # index 0 (null), index > cAlloc, zero-length (freed) item; TypeError for a non-HeapId
     get_hnid(self, hnid: HeapNodeId) → bytes        # heap item (copied), or the sub-node's whole data via reader.read_data;
                                                      # !PstNotFoundError sub-node absent (or no sub-node tree / no reader); TypeError for a non-HeapNodeId
+    get_hnid_blocks(self, hnid: HeapNodeId) → list[bytes]   # the same bytes as the BLOCKS they are stored in (added by P06 for
+                                                     # the row matrix, whose rows never straddle a block); a heap item is one block
 
 # pypst.ltp.tree
 BTH_HEADER_FORMAT = "<BBBBI"; BTH_HEADER_SIZE = 8; KEY_SIZES = (2, 4, 8, 16); MAX_ENTRY_SIZE = 32
@@ -664,25 +666,91 @@ The dumper decodes String8 with `debug.DUMP_CODEPAGE` (`"latin-1"`), which
 is upstream's code-page-less reading, so its output is byte-comparable with
 `read_store_props`'s golden.
 
-## `pypst.ltp.table_context` — P06
+## `pypst.ltp.table_context` — landed (P06)
+
+**Built** (`src/pypst/ltp/table_context.py`, 2026-09-16). Ported from
+`ltp/table_context.rs` (the Unicode arm of `TableContextInfo`,
+`TableColumnDescriptor`, `TableRowData` and `TableContextInner::read` /
+`read_column`; the value decoders are P22's).
 
 ```python
 LTP_ROW_ID_PROP_ID = 0x67F2; LTP_ROW_VERSION_PROP_ID = 0x67F3
+TCINFO_FORMAT = "<BBHHHHIII"; TCINFO_SIZE = 22; TCOLDESC_FORMAT = "<HHHBB"; TCOLDESC_SIZE = 8
+ROW_INDEX_KEY_SIZE = ROW_INDEX_ENTRY_SIZE = 4; ROW_HEADER_SIZE = 8; MAX_COLUMNS = 0xFF
+TCI_4b, TCI_2b, TCI_1b, TCI_bm = 0, 1, 2, 3       # the rgib indices of [MS-PST] 2.3.4.1
+
+def existence_bitmap_size(column_count: int) → int          # ceil(n / 8), upstream's
+def check_existence_bitmap(column: int, bitmap: bytes | memoryview) → bool
+    # MSB of a byte is column 0/8/16…; a bit past the bitmap is PstFormatError (upstream's InvalidTableContextColumnCount)
 
 @dataclass(frozen=True, slots=True)
-class ColumnDescriptor:  prop_type: PropType; prop_id: int; offset: int; size: int; existence_bit: int
+class ColumnDescriptor:              # TCOLDESC 2.3.4.2
+    prop_type: PropType; prop_id: int; offset: int; size: int; existence_bit: int;  SIZE = 8
+    unpack_from(buf, offset=0) → ColumnDescriptor    # !PstUnsupportedError naming the column and the wPropType
+
+@dataclass(frozen=True, slots=True)
+class TableContextInfo:              # TCINFO 2.3.4.1, validated exactly as upstream's `new` (plus one divergence)
+    end_4byte: int; end_2byte: int; end_1byte: int; end_bitmap: int
+    row_index: HeapId; rows: HeapNodeId | None; deprecated_index: int; columns: tuple[ColumnDescriptor, ...]
+    unpack(data) → TableContextInfo  # !PstFormatError bType != 0x7C, rgib unaligned/not monotonic/inside the row
+                                     # header/not leaving ceil(cCols/8) bitmap bytes, a column whose type is not a
+                                     # column type (PtypNull), whose cell is outside its region, whose cbData is not
+                                     # its type's width, whose existence bit is past the schema, or a reserved
+                                     # column (0x67F2/0x67F3) away from offset 0/4
+    row_width → int (rgib[TCI_bm]); bitmap_size → int
+
+class CellKind(Enum):  SMALL, HEAP, NODE            # upstream's TableRowColumnValue variants
+@dataclass(frozen=True, slots=True)
+class CellRecord:  kind: CellKind; raw: int = 0; data: bytes = b""
+    hnid → HeapNodeId | None; heap → HeapId | None; node → NodeId | None; is_null → bool (HNID 0)
+
 @dataclass(frozen=True, slots=True)
 class TableRow:
     id: int; unique: int
     cells: Mapping[int, PropValue]   # prop_id → value; a column whose existence bit is clear is ABSENT, not None
+    records: tuple[CellRecord | None, ...]   # parallel to `columns`; None = absent (upstream's Vec<Option<…>>)
+    get(prop_id, default=None); __contains__; __len__
 
 class TableContext:
-    __init__(self, heap: HeapNode, limits: Limits)      # client sig 0x7C
-    columns → tuple[ColumnDescriptor, ...]
-    row_count → int                                     # > limits.MAX_ITEMS → PstLimitError
-    rows() → Iterator[TableRow]                         # row-index order, as read_ipm_subtree prints
-    find_row(self, row_id: int) → TableRow              # !PstFormatError not found
+    __init__(self, heap: HeapNode, limits: Limits | None = None, *, codepage: str = "cp1252")   # client sig 0x7C
+    from_node(reader, entry: NodeBTreeEntry | SubNodeLeafEntry, limits=None, *, codepage="cp1252") → TableContext
+    heap → HeapNode; info → TableContextInfo; tree → HeapTree (the row index BTH); limits; codepage
+    columns → tuple[ColumnDescriptor, ...]           # rgTCOLDESC order — the order the examples print
+    row_index → Mapping[int, int]                    # row id → ordinal; !PstFormatError a repeated id
+    row_count → int; __len__                         # sum of the PER-BLOCK floors; > limits.max_items → PstLimitError
+    rows() → Iterator[TableRow]; __iter__            # MATRIX order (upstream's rows_matrix), not row-id order
+    row(index: int) → TableRow                       # !PstFormatError past the last row
+    find_row(self, row_id: int) → TableRow           # !PstNotFoundError (a PstFormatError) when the id is not indexed
+    read_cell(self, record: CellRecord, prop_type: PropType) → PropValue    # upstream's read_column
 ```
+
+The row matrix is `hnidRows`: a heap item, or a sub-node whose data BLOCKS
+hold it — rows are packed per block and never straddle one ([MS-PST]
+2.3.4.4), so `HeapNode.get_hnid_blocks(hnid) → list[bytes]` was added to
+P04 (additive; `get_hnid` is still the joined form) and the row count is
+the sum of the per-block floors. A partial row at the end of a block is
+padding and is dropped, as upstream floors.
+
+Divergences from upstream, each in the module docstring with its reason:
+`rgib[TCI_4b]` must be ≥ 8 (upstream underflows `end_4byte - 8` as a
+`usize`); a cell HNID of 0 is `None` rather than upstream's refusal of heap
+index 0; `PtypObject` columns are readable (P22/P05 decode the type);
+a repeated row id is refused; a row index entry past the matrix is
+`PstFormatError` where upstream panics; rows and the matrix's size are
+bounded by `limits`.
+
+`python -m pypst.debug tc <file> <nid-hex>` prints `read_root_folder` /
+`read_ipm_subtree`'s shape through `debug.cell_lines(column, record, value)`
+and `debug.format_cell_record(prop_type, record, value)` (upstream's `Debug`
+for `TableRowColumnValue`: `Small(<the value>)`, `Heap(<HeapId>)`,
+`Node(<NodeId>)`), reusing P05's `format_property_value` and
+`DUMP_CODEPAGE`. `Type:` is the COLUMN's declared type, where
+`read_store_props` prints the VALUE's variant.
+
+`tests/corrupt.py` gained the TC builders (`tcinfo`, `tcoldesc`, `tcrowid`,
+`tc_row`, `node_data_block`) and the `tc_lies` family (25 lies over the root
+folder's hierarchy table, resealed); the corruption harness walks that table
+on every mutation (`tc.root_hierarchy`).
 
 ## `pypst.messaging` — P07 / P08 / P09
 
@@ -844,6 +912,23 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
 ---
 
 ## Changelog
+
+- 2026-09-16 — P06 landed `pypst.ltp.table_context`; its section now
+  describes what was built. Changes from the draft: `limits` is optional and
+  `codepage` was added (as P05's); `TableContextInfo`, `ColumnDescriptor`,
+  `CellKind`/`CellRecord`, `from_node`, `read_cell`, `row(index)`,
+  `row_index`, `info`/`tree`/`heap`/`limits`/`codepage`, `__len__` and
+  `__iter__` added, along with `existence_bitmap_size` /
+  `check_existence_bitmap` and the struct constants; `TableRow` gained
+  `records` (parallel to `columns`, `None` where a cell is absent), which is
+  what tells an ABSENT column from a null one and what the dumper needs;
+  `rows()` is MATRIX order (the draft said "row-index order" — upstream's
+  examples iterate `rows_matrix()`, and the row index's order is ascending
+  row id, a different order); `find_row` raises `PstNotFoundError` (a
+  `PstFormatError`, so the draft's contract holds). **`pypst.ltp.heap`
+  gained `HeapNode.get_hnid_blocks`** (additive): the row matrix must be
+  read block by block because rows never straddle a block boundary.
+  `pypst.debug` gained `tc`, `cell_lines` and `format_cell_record`.
 
 - 2026-09-16 — P05 landed `pypst.ltp.prop_context`; its section now describes
   what was built. Changes from the draft: `limits` is optional (the heap's
