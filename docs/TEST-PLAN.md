@@ -106,7 +106,8 @@ opt in — its public callables are discovered the moment the module exists,
 and `test_every_public_callable_has_an_adapter_or_a_reason` fails, naming
 each one, until the row that lands it adds either an `ADAPTERS` entry (a
 builder that, given a `Store`, yields the argument tuples: the bytes, the
-file, the parsed header/B-tree/reader, the NBT entries, a nid…) or a
+file, the parsed header/B-tree/reader, the NBT entries, the heap over a
+node and the BTH over that heap, a nid…) or a
 `NOT_STORE_INPUT` entry with the reason it takes no store-derived input.
 Exception types, enums and dataclass constructors are excluded by rule;
 a dumper registered in `pypst.debug.DUMPERS` is adapted automatically

@@ -22,8 +22,9 @@ once, under the module that defines it.
 
 **Reach** — `ADAPTERS` maps each entry point to a builder that, given a
 `Store` (the bytes, a `Limits`, and lazily the parsed header, the two
-B-trees, a `BlockReader`, the NBT and BBT entries, a handful of pages, a
-temp file for the dumpers), yields the argument tuples to call it with.
+B-trees, a `BlockReader`, the NBT and BBT entries, a handful of pages,
+every node opened as a heap and the BTH over each of those, a temp file
+for the dumpers), yields the argument tuples to call it with.
 `NOT_STORE_INPUT` names, with a reason, every public callable that takes
 no store-derived input (a check helper, a dataclass over already-parsed
 values, an id's `pack`). Three rules exclude classes automatically:
@@ -85,8 +86,10 @@ import pypst
 from pypst import block_sig, crc, debug, encode, limits, rtf
 from pypst.errors import PstError
 from pypst.limits import DEFAULT_LIMITS, Limits
-from pypst.ltp import prop_type
+from pypst.ltp import heap, prop_type, tree
+from pypst.ltp.heap import HeapId, HeapNode, HeapNodeId
 from pypst.ndb import block, btree, header, ids, page, root
+from pypst.ndb.block import SubNodeLeafEntry
 from pypst.ndb.ids import BlockId, ByteIndex, NodeId
 from tests.corruption_harness import DEFAULT_TIMEOUT, Hang, Watchdog
 
@@ -98,7 +101,7 @@ Kind = str  # "bytes" | "file" | "reader" | "path" | "wire" | "method" | "other"
 # `from __future__ import annotations`) marks a callable as needing a parsed
 # store — the `reader` kind. Extend it when a new layer's reader class takes
 # a new kind of parsed argument.
-READER_TYPES = ("Header", "Root", "PageRef", "BlockBTree", "NodeBTree", "BlockReader", "NodeBTreeEntry", "BlockBTreeEntry")
+READER_TYPES = ("Header", "Root", "PageRef", "BlockBTree", "NodeBTree", "BlockReader", "NodeBTreeEntry", "BlockBTreeEntry", "HeapNode")
 WIRE_TYPES = ("PropType", "int")
 
 
@@ -224,6 +227,21 @@ PAGE = page.PAGE_SIZE
 ROOT_OFFSET = 180  # the ROOT inside the header, [MS-PST] 2.2.2.6
 WIRE_BYTES = (0, 1, 2, 0x7F, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0xFE, 0xFF)
 KNOWN_NIDS = (0x21, 0x122, 0x2123)  # NID_MESSAGE_STORE, NID_ROOT_FOLDER, a search folder root
+# [MS-PST] 2.3.4.1 TCINFO, at a table context's user root; only `hidRowIndex`
+# (field 6) is read here, to reach the row-index BTH a TC hangs off it.
+TCINFO_FORMAT = "<BB4HIII"
+MAX_HEAP_BLOCK_INDEX = 0xFFFF  # [MS-PST] 2.3.1.1 `hidBlockIndex` is 16 bits; past this `HeapId.from_parts` refuses
+MAX_SUBNODE_HEAPS = 8  # sub-node heaps opened per store: an attachment's or an embedded message's own PC
+ABSENT_SUBNODE = 0xFFFF_FFE2  # an HNID with type bits, naming a sub-node no tree holds
+
+
+@dataclass(frozen=True, slots=True)
+class OpenHeap:
+    """One node opened as a heap, with the sub-node ids its HNIDs can name."""
+
+    label: str
+    heap: HeapNode
+    subnode_nids: tuple[int, ...]
 
 
 class Store:
@@ -333,6 +351,72 @@ class Store:
         d = self.data
         return [b"", d[:1], d[:16], d[:512], *([d[:4096]] if self.thorough else [])]
 
+    def _open_heaps(self) -> list[OpenHeap]:
+        """Every node opened as a heap, and the first sub-node leaves' own heaps; a node that is not a heap is left out.
+
+        The refusal of a node that is not a heap is judged at the
+        `HeapNode.from_node` adapter, which calls it over every node; here
+        it only means there is no heap to exercise the methods on.
+        """
+        reader = self.reader  # Unreachable on a store whose header or BBT was refused: no heap is reachable either
+        out: list[OpenHeap] = []
+        budget = MAX_SUBNODE_HEAPS if self.thorough else 1
+        for entry in self.nbt_entries if self.thorough else self.nbt_entries[:4]:
+            leaves: list[SubNodeLeafEntry] = []
+            if entry.sub_node is not None:
+                with contextlib.suppress(PstError):
+                    leaves = list(reader.read_subnode_tree(entry.sub_node).values())[:2]
+            with contextlib.suppress(PstError):
+                out.append(OpenHeap(str(entry.node), HeapNode.from_node(reader, entry, self.limits), tuple(leaf.node.raw for leaf in leaves)))
+            for leaf in leaves:
+                if budget <= 0:
+                    break
+                budget -= 1
+                with contextlib.suppress(PstError):
+                    out.append(OpenHeap(f"{entry.node}/{leaf.node}", HeapNode.from_node(reader, leaf, self.limits), ()))
+        return out
+
+    @property
+    def heaps(self) -> list[OpenHeap]:
+        """The store's nodes as heaps, in NBT order (`HeapNode.from_node`)."""
+        return self._lazy("heaps", self._open_heaps)
+
+    def _open_trees(self) -> list[tuple[str, tree.HeapTree]]:
+        out: list[tuple[str, tree.HeapTree]] = []
+        for h in self.heaps if self.thorough else self.heaps[:2]:
+            roots: list[tuple[str, HeapId | None]] = [(f"{h.label} user root", None)]
+            row_index = _row_index_hid(h.heap)
+            if row_index is not None:
+                roots.append((f"{h.label} row index", row_index))
+            for label, root_hid in roots:
+                with contextlib.suppress(PstError):
+                    out.append((label, tree.HeapTree(h.heap, root_hid)))
+        return out
+
+    @property
+    def trees(self) -> list[tuple[str, tree.HeapTree]]:
+        """The BTH at each heap's user root — and, for a table context, at its TCINFO's `hidRowIndex`."""
+        return self._lazy("trees", self._open_trees)
+
+    @property
+    def heap_buffers(self) -> list[tuple[str, bytes]]:
+        """Real heap bytes for the record decoders: the first heaps' block 0 and their user-root items.
+
+        Empty when the store has no readable heap — the decoders are `bytes`
+        entry points and must be reached on every store, ANSI included, so
+        this swallows the refusal instead of raising `Unreachable`.
+        """
+        try:
+            heaps = self.heaps
+        except Unreachable:
+            return []
+        out: list[tuple[str, bytes]] = []
+        for h in heaps[: 3 if self.thorough else 1]:
+            out.append((f"{h.label} block 0", h.heap.block(0)))
+            with contextlib.suppress(PstError):
+                out.append((f"{h.label} user root", bytes(h.heap.get(h.heap.user_root))))
+        return out
+
     @property
     def path(self) -> Path:
         """The store on disk, for the dumpers: written once, into `workdir` (a temp dir if none was given)."""
@@ -413,6 +497,110 @@ def _trailer_verify_calls(s: Store) -> Iterator[Call]:
 
 def _subnode_roots(s: Store) -> list[BlockId]:
     return [e.sub_node for e in s.nbt_entries if e.sub_node is not None]
+
+
+# --- the heap and the BTH over it (P04) ----------------------------------------------
+
+
+def _row_index_hid(node: HeapNode) -> HeapId | None:
+    """A table context's `hidRowIndex` ([MS-PST] 2.3.4.1), or None when the heap is not a TC or its TCINFO does not read."""
+    if node.client_signature is not heap.HeapNodeType.TABLE:
+        return None
+    with contextlib.suppress(PstError, struct.error):
+        return HeapId(struct.unpack_from(TCINFO_FORMAT, node.get(node.user_root), 0)[6])
+    return None
+
+
+def _from_node_calls(s: Store) -> Iterator[Call]:
+    """Every node as a heap, and the first nodes' sub-node leaves too: a node that is not a heap must refuse, never leak."""
+    for i, entry in enumerate(s.nbt_entries if s.thorough else s.nbt_entries[:4]):
+        yield call(s.reader, entry, label=str(entry.node))
+        if i >= 4 or entry.sub_node is None:
+            continue
+        leaves: list[SubNodeLeafEntry] = []
+        with contextlib.suppress(PstError):  # the subnode tree's own refusal is judged at read_subnode_tree
+            leaves = list(s.reader.read_subnode_tree(entry.sub_node).values())[:2]
+        for leaf in leaves:
+            yield call(s.reader, leaf, label=f"{entry.node}/{leaf.node}")
+
+
+def _heap_ctor_calls(s: Store) -> Iterator[Call]:
+    """The raw constructor over each node's blocks, and over what is not a heap at all."""
+    reader = s.reader
+    for entry in s.nbt_entries if s.thorough else s.nbt_entries[:4]:
+        try:
+            blocks = reader.read_data_blocks(entry.data)
+        except PstError:
+            continue  # the refusal is read_data_blocks', and is judged there
+        yield call(blocks, reader=reader, limits=s.limits, label=str(entry.node))
+    yield call([], label="no blocks")
+    yield call([b""], label="empty block")
+    yield call(s.slices[1:], label="raw slices")
+
+
+def _block_indices(h: OpenHeap) -> list[int]:
+    """0, the last block, one past it, and a negative — the last two must refuse."""
+    count = h.heap.block_count
+    return list(dict.fromkeys([0, count - 1, count, -1]))
+
+
+def _heap_ids(h: OpenHeap) -> Iterator[tuple[str, HeapId]]:
+    """HIDs to resolve in `h`: the user root, item 1 of the first and the last block, the null HID, one past `cAlloc`, one past the last block."""
+    count = min(h.heap.block_count, MAX_HEAP_BLOCK_INDEX)
+    yield "user root", h.heap.user_root
+    yield "item 1", HeapId.from_parts(1, 0)
+    yield "item 1 of the last block", HeapId.from_parts(1, count - 1)
+    yield "null", HeapId(0)
+    yield "past cAlloc", HeapId.from_parts(heap.MAX_HEAP_ITEM_INDEX, 0)
+    yield "past the last block", HeapId.from_parts(1, count)
+
+
+def _hnid_calls(s: Store) -> Iterator[Call]:
+    """An HNID on the heap side (the user root), on the node side (a sub-node the tree holds), and one no tree holds."""
+    for h in s.heaps:
+        yield call(h.heap, HeapNodeId(h.heap.user_root.raw), label=f"{h.label} user root")
+        for nid in h.subnode_nids:
+            yield call(h.heap, HeapNodeId(nid), label=f"{h.label} sub-node {nid:#x}")
+        yield call(h.heap, HeapNodeId(ABSENT_SUBNODE), label=f"{h.label} absent sub-node")
+
+
+def _tree_ctor_calls(s: Store) -> Iterator[Call]:
+    """The BTH at the user root, at a TC's `hidRowIndex`, and at two HIDs whose item is no BTHHEADER."""
+    for h in s.heaps if s.thorough else s.heaps[:2]:
+        yield call(h.heap, label=f"{h.label} user root")
+        row_index = _row_index_hid(h.heap)
+        if row_index is not None:
+            yield call(h.heap, row_index, label=f"{h.label} row index")
+        if s.thorough:
+            yield call(h.heap, HeapId.from_parts(1, 0), label=f"{h.label} item 1")
+            yield call(h.heap, HeapId(0), label=f"{h.label} null root")
+
+
+def _find_calls(s: Store) -> Iterator[Call]:
+    """A key the tree holds, two it does not, and one of the wrong length."""
+    for label, t in s.trees:
+        try:
+            held = next(iter(t))[0]
+        except (PstError, StopIteration):
+            held = None  # the walk's refusal is judged at __iter__; an empty tree holds nothing
+        if held is not None:
+            yield call(t, held, label=f"{label} held")
+        yield call(t, bytes(t.key_size), label=f"{label} zero key")
+        yield call(t, b"\xff" * t.key_size, label=f"{label} absent")
+        yield call(t, b"", label=f"{label} wrong length")
+
+
+def _heap_records(size: int) -> Builder:
+    """`_unpack_from` over the whole store, plus the same offsets inside real heap bytes (none when no heap opens)."""
+    whole = _unpack_from(size)
+
+    def build(s: Store) -> Iterator[Call]:
+        yield from whole(s)
+        for label, buf in s.heap_buffers:
+            for off in (0, max(len(buf) - size + 1, 0), len(buf), len(buf) + 1):
+                yield call(buf, off, label=f"{label}@{off}")
+
+    return build
 
 
 def _dumper_calls(dumper: Callable[..., None]) -> Builder:
@@ -505,9 +693,27 @@ ADAPTERS: dict[object, Builder] = {
     block.BlockReader.read_block: _read_block_calls,
     block.BlockReader.read_data_tree: lambda s: [call(s.reader, e.data, label=str(e.node)) for e in s.nbt_entries],
     block.BlockReader.read_data: lambda s: [call(s.reader, e.data, label=str(e.node)) for e in s.nbt_entries[:3]],
+    block.BlockReader.read_data_blocks: lambda s: [call(s.reader, e.data, label=str(e.node)) for e in s.nbt_entries[:3]],
     block.BlockReader.node_data: lambda s: [call(s.reader, e, label=str(e.node)) for e in s.nbt_entries],
+    block.BlockReader.node_data_blocks: lambda s: [call(s.reader, e, label=str(e.node)) for e in s.nbt_entries],
     block.BlockReader.read_subnode_block: lambda s: [call(s.reader, b, label=str(b)) for b in _subnode_roots(s)],
     block.BlockReader.read_subnode_tree: lambda s: [call(s.reader, b, label=str(b)) for b in _subnode_roots(s)],
+    # the heap over a node, and the BTH over the heap (P04)
+    heap.HeapNodeType.from_wire: lambda s: [call(v, label=f"{v:#04x}") for v in (*WIRE_BYTES, *heap.HeapNodeType)],  # bClientSig: the edges and all nine of 2.3.1.2
+    heap.HeapId.unpack_from: _heap_records(HeapId.SIZE),
+    heap.HeapNodeId.unpack_from: _heap_records(HeapNodeId.SIZE),
+    heap.HeapNodeHeader.unpack_from: _heap_records(heap.HeapNodeHeader.SIZE),
+    tree.HeapTreeHeader.unpack_from: _heap_records(tree.HeapTreeHeader.SIZE),
+    heap.HeapNode: _heap_ctor_calls,
+    heap.HeapNode.from_node: _from_node_calls,
+    heap.HeapNode.block: lambda s: [call(h.heap, i, label=f"{h.label} block {i}") for h in s.heaps for i in _block_indices(h)],
+    heap.HeapNode.page_map: lambda s: [call(h.heap, i, label=f"{h.label} page map {i}") for h in s.heaps for i in _block_indices(h)],
+    heap.HeapNode.get: lambda s: [call(h.heap, hid, label=f"{h.label} {why}") for h in s.heaps for why, hid in _heap_ids(h)],
+    heap.HeapNode.get_hnid: _hnid_calls,
+    tree.HeapTree: _tree_ctor_calls,
+    tree.HeapTree.__iter__: lambda s: [call(t, label=label) for label, t in s.trees],
+    tree.HeapTree.entries: lambda s: [call(t, label=label) for label, t in s.trees],
+    tree.HeapTree.find: _find_calls,
     # the CLI's dispatch, and every registered dumper, in-process
     debug.main: _main_calls,
     **{dumper: _dumper_calls(dumper) for dumper in debug.DUMPERS.values()},
@@ -526,6 +732,7 @@ STORE_FREE: frozenset[object] = frozenset(
         root.AmapStatus.from_byte,
         root.AmapStatus.from_byte_lenient,
         block.block_size,
+        heap.HeapNodeType.from_wire,
     }
 )
 
@@ -551,6 +758,10 @@ NOT_STORE_INPUT: dict[object, str] = {
     ids.BlockRef.pack: "as NodeId.pack",
     ids.PageRef.pack: "as NodeId.pack",
     prop_type.datetime_to_filetime: "takes a datetime the caller made",
+    heap.HeapId.from_parts: "typed parts, checked by the dataclass; as NodeId.from_parts",
+    heap.HeapId.pack: "as NodeId.pack",
+    heap.HeapNodeId.pack: "as NodeId.pack",
+    heap.HeapPageMap.size: "span arithmetic over offsets the page map already checked, at an index its caller range-checked",
 }
 
 
