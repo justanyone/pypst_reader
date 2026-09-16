@@ -283,30 +283,58 @@ class HeapTree:                      # BTH 2.3.2 over a HeapNode
 
 ## `pypst.ltp.prop_type` — P22 (leaf; land first)
 
+**Built** (`src/pypst/ltp/prop_type.py`, 2026-09-15). Ported from `ltp/prop_type.rs`
+and the value-decoder arms of `ltp/prop_context.rs`.
+
 ```python
 class PropType(IntEnum):             # [MS-OXCDATA] 2.11.1
     UNSPECIFIED=0x0000, NULL=0x0001, SHORT=0x0002, LONG=0x0003, FLOAT=0x0004, DOUBLE=0x0005,
     CURRENCY=0x0006, APPTIME=0x0007, ERROR=0x000A, BOOLEAN=0x000B, OBJECT=0x000D, LONGLONG=0x0014,
-    STRING8=0x001E, UNICODE=0x001F, SYSTIME=0x0040, GUID=0x0048, BINARY=0x0102,
+    STRING8=0x001E, UNICODE=0x001F, SYSTIME=0x0040, GUID=0x0048, CLSID=GUID (alias), BINARY=0x0102,
     MV_SHORT=0x1002, MV_LONG=0x1003, MV_FLOAT=0x1004, MV_DOUBLE=0x1005, MV_CURRENCY=0x1006,
     MV_APPTIME=0x1007, MV_LONGLONG=0x1014, MV_STRING8=0x101E, MV_UNICODE=0x101F,
     MV_SYSTIME=0x1040, MV_GUID=0x1048, MV_BINARY=0x1102
-    # any other value → PstUnsupportedError(f"property type 0x{v:04X}")
 
-def is_fixed_size(t: PropType) → bool
-def fixed_size(t: PropType) → int    # 1/2/4/8/16 for the fixed types; !ValueError-shaped PstFormatError otherwise
+    @classmethod
+    def from_wire(cls, value: int) → PropType
+    # the way to construct from a wPropType field. Any code upstream's TryFrom<u16> rejects —
+    # including UNSPECIFIED and the spec's ServerId/Restriction/RuleAction — is
+    # PstUnsupportedError(f"property type 0x{v:04X}"); not a u16 at all → PstFormatError.
+    # Do not rely on PropType(v): that raises ValueError.
 
-def decode(t: PropType, data: bytes | memoryview, *, codepage: str = "cp1252") → PropValue
-# PropValue = int | float | bool | bytes | str | datetime | uuid.UUID | tuple[PropValue, ...] | ObjectRef
-# SYSTIME → aware UTC datetime; out of datetime range → PstFormatError, never OverflowError
-# STRING8 → str via codecs; unknown codepage → PstUnsupportedError
-# MV_* → tuple; bad count/offsets → PstFormatError
+def is_fixed_size(t: PropType) → bool  # NULL, SHORT, LONG, FLOAT, DOUBLE, CURRENCY, APPTIME, ERROR, BOOLEAN, LONGLONG, SYSTIME, GUID
+def fixed_size(t: PropType) → int      # 0 (NULL) / 1 / 2 / 4 / 8 / 16; PstFormatError for a variable type. OBJECT is variable.
+
+DEFAULT_MAX_ITEMS = 1_000_000
+def decode(t: PropType | int, data: bytes | memoryview, *, codepage: str = "cp1252",
+           max_items: int = DEFAULT_MAX_ITEMS) → PropValue
+# `data` is the WHOLE value (the inline bytes, or the complete heap/subnode allocation). An int `t` goes through from_wire.
+# type PropValue = int | float | bool | bytes | str | datetime | uuid.UUID | ObjectRef | None | tuple[PropValue, ...]
+# NULL → None (zero bytes). Fixed types must be EXACTLY their width (a 9-byte LONGLONG is PstFormatError).
+# BOOLEAN: one byte, 0 or 1, else PstFormatError (the spec and upstream's table arm; upstream's PC arm is looser).
+# CURRENCY → int in 1/10000 units, as upstream's i64. ERROR → signed i32, as upstream. APPTIME → float days.
+# SYSTIME → aware UTC datetime (0 → 1601-01-01); negative or past 9999-12-31 → PstFormatError, never OverflowError.
+# GUID → uuid.UUID (bytes_le: Data1/2/3 little-endian). OBJECT → ObjectRef.
+# STRING8 → str via codecs, truncated at the first NUL; unknown codepage → PstUnsupportedError; undecodable → PstFormatError.
+#   Upstream has no code page (bytes → U+00XX); pass codepage="latin-1" to reproduce its output exactly.
+# UNICODE → str, UTF-16LE, truncated at the first aligned 0x0000; odd length or lone surrogate → PstFormatError.
+# MV_SHORT/LONG/FLOAT/DOUBLE/CURRENCY/APPTIME/LONGLONG/SYSTIME: NO count field — a packed array whose count is
+#   len(data) // width ([MS-PST] 2.3.3.4.1, as upstream reads them); a partial trailing element → PstFormatError.
+# MV_STRING8/MV_UNICODE/MV_BINARY: u32 count, u32 offsets, items ([MS-PST] 2.3.3.4.2); first offset must follow the
+#   table, offsets must be monotonic and in range → else PstFormatError; the last item runs to the end of data.
+# MV_GUID: u32 count then 16-byte GUIDs — upstream's layout, which contradicts [MS-PST] 2.3.3.4.1; pinned by test.
+# any multi-value count > max_items → PstLimitError (checked before allocation; distinct from PstFormatError).
 
 @dataclass(frozen=True, slots=True)
-class ObjectRef:  node: NodeId; size: int      # PT_OBJECT: points at a subnode (attachment data, embedded message)
+class ObjectRef:  node: int; size: int         # PT_OBJECT: subnode id (raw u32 for now — see changelog) and byte size
 
-def filetime_to_datetime(ft: int) → datetime; def datetime_to_filetime(dt: datetime) → int   # the round-trip pair for property tests
+def filetime_to_datetime(ft: int) → datetime   # 100 ns ticks since 1601-01-01 → aware UTC; sub-µs ticks dropped; out of range → PstFormatError
+def datetime_to_filetime(dt: datetime) → int   # inverse; naive → TypeError, before 1601 → ValueError (caller errors, not file errors)
 ```
+
+The goldens print upstream's variant names (`Integer32`, `Time`, ...); the
+map from those to `PropType` is `UPSTREAM_VARIANT_TO_PROPTYPE` in
+`tests/test_prop_type.py`, for the golden parsers to import.
 
 ## `pypst.ltp.prop_context` — P05
 
@@ -474,3 +502,14 @@ __all__ = [...]                      # the P24 contract harness iterates this
   `SIZE` on every type; `PageId` carries `index`/`search_key`/`is_internal`
   like upstream's trait; the struct-format constants are named; negative
   offsets are refused.
+- 2026-09-15 — P22 landed `pypst.ltp.prop_type`. Changes from the draft:
+  `PropType.from_wire(value)` is the constructor for wire codes (the enum's
+  own `ValueError` is not part of the contract); `decode` gained
+  `max_items` (→ `PstLimitError`) and accepts an `int` type; `PropValue`
+  includes `None` (PtypNull); `CLSID` is an alias of `GUID`; `fixed_size(NULL)`
+  is 0 and OBJECT is *not* fixed-size. **Fixed-base MV_\* values carry no
+  count** (the [MS-PST] 2.3.3.4.1 packed form, as upstream reads them) — the
+  draft's "count u32 then values" applies only to MV_STRING8/UNICODE/BINARY
+  and, following upstream against the spec, MV_GUID. **`ObjectRef.node` is a
+  raw `int`**, not `NodeId`, because P23 is being built in parallel; P05 wraps
+  it (or P23 lands first and P05 changes the annotation here in one line).

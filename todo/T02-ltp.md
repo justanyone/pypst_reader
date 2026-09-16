@@ -57,7 +57,7 @@ until this works.
 look like data. Test a row with a sparse column explicitly.
 
 ### P22-PROPTYPE
-status: ✗ not started (leaf — runs beside lane A)
+status: ✅ 2026-09-15 — `src/pypst/ltp/prop_type.py` landed; `tests/test_prop_type.py` 225 tests (266 suite-wide), all green; 30 `PropType` members (29 codes + CLSID alias) verified name-by-name against the [MS-OXCDATA] 2.11.1 table fetched from the spec; every `Value:`/`Type:` variant in the 9×3 property goldens (Integer32, Integer64, Boolean, Binary, Unicode, String8 on the corpus; all 28 upstream variants in the map) maps to a decoded PropType; 20 deliberate mutations of the decoder each confirmed red (GUID byte order, BOOLEAN leniency, signedness, over-long fixed values, FILETIME bounds ±1, limit-vs-format class, MV offset checks, lossy UTF-16, NUL alignment, MV_GUID length, NUL truncation, ObjectRef field order); FILETIME edges pinned: 0, 7, 10, 116444736000000000, 2650467743999999990, 2650467743999999999, 0x7FFFFFFFFFFFFFFF refused. No oracle line: this row has no example binary of its own — the layer rows diff its output through P05/P06.
 upstream: `crates/pst/src/ltp/prop_type.rs` (134) and the per-type `read` arms in `ltp/prop_context.rs` (1,193 — the decoders only, not the context)
 oracle:   the `Value:` lines of `read_store_props` / `read_root_folder` / `read_ipm_subtree` goldens show every type upstream produces on the corpus, in Debug form
 blocked on: none
