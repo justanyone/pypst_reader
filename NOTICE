@@ -50,7 +50,8 @@ the README there (ADR-0004). None ships in the package. Their licences:
   from java-libpst (Richard Johnson), under the Apache-2.0 option of its
   dual licence. The licence text is at
   `tests/fixtures/public/LICENSES/Apache-2.0.txt`, as §4 of that licence
-  requires.
+  requires; Tika's NOTICE attributions are at `LICENSES/NOTICE-tika.txt`
+  (§4(d)).
 - **MIT** — `pstd-inline-cid.pst`: Copyright (c) 2026 andrew3stedall
   (PSTD), a synthetic store generated with EMLtoPST (MIT). Text at
   `tests/fixtures/public/LICENSES/MIT-PSTD.txt`.

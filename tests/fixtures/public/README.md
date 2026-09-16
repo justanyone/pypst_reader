@@ -34,6 +34,9 @@ Captured oracle output for each lives in `tests/golden/`.
   redistribution of those files; `NOTICE` at the repository root repeats it.
 - `LICENSES/MIT-PSTD.txt` — MIT, Copyright (c) 2026 andrew3stedall. Covers
   `pstd-inline-cid.pst`.
+- `LICENSES/NOTICE-tika.txt` — the attribution notices from Apache Tika's
+  NOTICE file, which Apache-2.0 §4(d) requires to accompany the Tika file.
+  pstsdk, java-libpst and PSTD ship no NOTICE file (checked 2026-09-15).
 - `../Empty.pst` is MIT, Microsoft — see `NOTICE`.
 
 Apache-2.0 is not MIT. It is permissive, compatible with an MIT project, and
