@@ -2,7 +2,8 @@
 # minute so it is run, not skipped.
 #
 # The differential (oracle) suite is NOT here. It needs a Rust build of
-# ~270 MB and a couple of minutes, and it is nightly work — see row P14-CI-ORACLE.
+# ~270 MB and a couple of minutes, and it is nightly work: nightly-oracle.yml
+# (every check there is a call into scripts/nightly_oracle_local.sh).
 
 name: ci
 
@@ -28,8 +29,8 @@ jobs:
         run: uv run python scripts/check_provenance.py
       # Tier T0: every upstream `#[test]` has exactly one tagged Python twin
       # (docs/TEST-PLAN.md). This job has no `reference/` checkout, so the
-      # lint SKIPS here with exit 0 — it bites in the nightly oracle job (row
-      # P14-CI-ORACLE), which checks out the pinned upstream source.
+      # lint SKIPS here with exit 0 — it bites in the nightly oracle job
+      # (nightly-oracle.yml), which checks out the pinned upstream source.
       - name: Upstream parity lint — every upstream test has a twin (skips without reference/)
         run: uv run python scripts/check_upstream_parity.py
       - name: Quality gate — tier-1 rules clean, and the debt did not grow

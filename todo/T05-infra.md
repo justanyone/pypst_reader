@@ -1,8 +1,8 @@
 # T05 — infrastructure and release
 
 ### P14-CI-ORACLE
-status: ✗ not started
-blocked on: P02 (nothing to differ against before then)
+status: 🔶 2026-09-15 — built and validated locally; CI-green awaits the first scheduled run. `.github/workflows/nightly-oracle.yml` (cron `17 3 * * *` + dispatch, one job, 45 min, concurrency-grouped, `contents: read`, no secrets, no push) installs uv + stable Rust, fetches upstream at the pin, restores a cache keyed on `hashFiles('docs/UPSTREAM.txt')` + OS, builds the oracle, then runs seven named steps, every one a call into `scripts/nightly_oracle_local.sh` (fetch, build, parity, goldens, dump-messages, fixture, tests) so the workflow and a laptop run cannot drift. **Measured locally** (no cargo run on this machine): `SKIP_RUST=1 scripts/nightly_oracle_local.sh` exits 0 — parity lint bites (15 upstream tests, 14 twinned, 1 pending), `make_fixture.py --check basics` regenerates 35,840 bytes byte-for-byte, Rust-free slow tests green; `bash -n` parses; unknown step exits 2. 7 tests in `tests/test_nightly_script.py` (6 unit, 1 slow self-run). **Unproven until the nightly first runs:** the cargo build on ubuntu-latest, the cache restore-after-clone ordering, `capture_oracle.py --check` on the runner, the drift-diff artifact path, and the wall-clock fit under 45 min. The `dump-messages` step is guarded on `oracle/Cargo.toml` and skips until P19 lands; P19 should add `oracle/target` to the cache path.
+blocked on: nothing — the first scheduled run (or a `workflow_dispatch`) is the remaining evidence
 
 Every-push CI already runs the differential tests, against the committed
 goldens (ADR-0004 §5). What is left for a nightly job is the *re-derivation*:

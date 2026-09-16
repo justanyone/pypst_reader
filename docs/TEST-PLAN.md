@@ -54,7 +54,11 @@ so a failure names the fixture. Nine fixtures × eight examples = 72 diffs per
 layer that runs on every push, with no toolchain.
 
 The `oracle` marker keeps the goldens honest: when cargo is present,
-`capture_oracle.py --check` re-derives them and fails on drift.
+`capture_oracle.py --check` re-derives them and fails on drift. That
+re-derivation is scheduled: `.github/workflows/nightly-oracle.yml` builds the
+oracle at the pin once a night and runs it (with the T0 parity lint, the T8
+fixture regeneration, and the `oracle`/`slow` tests) through
+`scripts/nightly_oracle_local.sh`, the same script a developer runs locally.
 
 ### T3 — private-store differential, structure only, local only
 

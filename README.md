@@ -58,6 +58,18 @@ scripts/oracle.sh --list                            # what else it can dump
 The Rust is **fetched, never vendored** — it is the oracle, not the product.
 The pin lives in [docs/UPSTREAM.txt](docs/UPSTREAM.txt).
 
+The oracle's output over every public fixture is committed as goldens under
+`tests/golden/`, which is why every-push CI stays Rust-free: the differential
+tests diff Python against the *file*. A nightly job,
+[`.github/workflows/nightly-oracle.yml`](.github/workflows/nightly-oracle.yml),
+is what proves the file still agrees with the Rust. It fetches upstream at the
+pin, builds the example binaries, and checks that every upstream test has a
+Python twin, that the goldens are what the oracle emits today, that the
+synthetic fixture regenerates byte-for-byte, and that the `oracle`-marked
+tests pass live. Every one of those checks is a call into
+`scripts/nightly_oracle_local.sh`, so the same run works on a laptop
+(`SKIP_RUST=1` for the Python-only half).
+
 ### Test
 
 ```bash

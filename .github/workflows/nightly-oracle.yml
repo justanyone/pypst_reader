@@ -1,0 +1,119 @@
+# pypst nightly — the differential oracle, re-derived from source.
+#
+# Every-push CI (ci.yml) is Rust-free on purpose: its differential tests read
+# the goldens committed under tests/golden/, so the unit suite stays under a
+# minute. This job is what keeps those goldens honest. Once a night it fetches
+# the upstream Rust at the pin in docs/UPSTREAM.txt, builds the example
+# binaries, and proves four things every-push CI cannot:
+#
+#   1. every upstream #[test] still has exactly one Python twin — the parity
+#      lint SKIPS on every-push CI (no reference/ there); here it bites
+#   2. the goldens are what the oracle emits today (capture_oracle.py --check):
+#      a moved pin, a hand-edited golden, or a non-deterministic example
+#      announces itself here
+#   3. the synthetic fixture regenerates byte-for-byte from its sources with
+#      the pinned, patched generator (docs/FIXTURE-TOOLS.txt)
+#   4. the `oracle`- and `slow`-marked tests pass against the live binaries
+#
+# Every check is ONE call into scripts/nightly_oracle_local.sh, which a
+# developer runs unchanged on a laptop (SKIP_RUST=1 for the Python-only half).
+# This file installs toolchains and restores caches; it runs no check of its
+# own, so the workflow and the local run cannot drift apart.
+#
+# Nothing here pushes, needs a secret, or uploads store content. The only
+# artifact is the golden-drift diff on failure, and goldens are the oracle's
+# output over the PUBLIC corpus. A private store cannot exist on a runner: the
+# checkout holds only Empty.pst and the manifest-pinned corpus (ci.yml's
+# no-mail-stores job), so `private` tests skip, and the script refuses to run
+# the suite if one is somehow present under CI.
+
+name: nightly-oracle
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two nightlies never overlap (a manual dispatch during the scheduled run
+# waits rather than racing it for the cache); a running one is never cancelled.
+concurrency:
+  group: nightly-oracle
+  cancel-in-progress: false
+
+jobs:
+  oracle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Set only here: with it, a drifted golden is regenerated in the
+      # runner's working tree and `git diff tests/golden` lands under this
+      # directory for the upload below. Unset locally, so a developer's tree
+      # is never modified by the script.
+      NIGHTLY_OUT: nightly-out
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Fetch upstream at the pin (docs/UPSTREAM.txt) — never vendored
+        run: scripts/nightly_oracle_local.sh fetch
+
+      # Keyed on the pin and the runner OS only: a pin change invalidates the
+      # cache, nothing else does. (A stable-toolchain bump makes cargo rebuild
+      # into the same cached target/ once; the key does not change, so the
+      # cache is not re-saved until the pin next moves — accepted, it costs a
+      # rebuild per night until then, not correctness.)
+      #
+      # Restored AFTER the fetch step on purpose: get_rust_source.sh clones
+      # into reference/outlook-pst-rs, and git refuses to clone into a
+      # directory the cache had already populated with target/.
+      #
+      # Row P19's oracle/ crate (`cargo run --manifest-path oracle/Cargo.toml`)
+      # builds into oracle/target, which is not cached here; add it to `path`
+      # when that row lands.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            reference/outlook-pst-rs/target
+          key: oracle-${{ runner.os }}-${{ hashFiles('docs/UPSTREAM.txt') }}
+
+      - name: Build the oracle (upstream example binaries)
+        run: scripts/nightly_oracle_local.sh build
+
+      # The checks, one step each so a failure is legible in the run summary.
+      - name: Upstream parity lint — every upstream test has a twin (bites here, skips on every-push CI)
+        run: scripts/nightly_oracle_local.sh parity
+      - name: Goldens vs a fresh oracle — capture_oracle.py --check
+        run: scripts/nightly_oracle_local.sh goldens
+      # Guarded on oracle/Cargo.toml inside the script: row P19 adds that
+      # crate and its `dump_messages` example; until it lands this step
+      # prints "skipped" and passes, so the workflow is correct on either side.
+      - name: dump_messages goldens (row P19; skips until oracle/Cargo.toml exists)
+        run: scripts/nightly_oracle_local.sh dump-messages
+      - name: Synthetic fixture regenerates byte-for-byte — make_fixture.py --check basics
+        run: scripts/nightly_oracle_local.sh fixture
+      # `private` tests skip: no mail store can exist on this runner (see the
+      # header comment). `oracle` tests run the built binaries live.
+      - name: Live-oracle and slow tests — pytest -m "oracle or slow"
+        run: scripts/nightly_oracle_local.sh tests
+
+      # On failure only: the golden drift as a diff. Goldens derive from the
+      # public corpus, so this artifact can never contain private mail.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: golden-drift
+          path: nightly-out/
+          if-no-files-found: ignore
+          retention-days: 14
