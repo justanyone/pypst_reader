@@ -1,0 +1,54 @@
+Folder: NodeId { NormalFolder: 0x9 }
+  Name: "Top of Personal Folders"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x20 }
+  Name: "Top of Personal Folders"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x22 }
+  Name: "Deleted Items"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x23 }
+  Name: "Inbox"
+  Content Count: 6
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+  Contents Table: None
+Folder: NodeId { NormalFolder: 0x2A }
+  Name: "Sent"
+  Content Count: 1
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+  Message: NodeId { NormalMessage: 0x2B }
+    Class: "IPM.Note"
+    Subject: Unicode(UnicodeValue { "Re: Plain text: the kettle schedule" })
+    Normalized Subject: None
+    Sender Name: Unicode(UnicodeValue { "Devin Achterberg" })
+    Sender Email: Unicode(UnicodeValue { "devin@example.test" })
+    Sender SMTP: None
+    Delivery Time: Time(134120880000000000)
+    Client Submit Time: Time(134120880000000000)
+    Body Text: 94 bytes crc 0x15AB2E82 type=Unicode
+    Body HTML: None
+    Body RTF: None
+    Transport Headers: None
+    Recipients: 1
+      Recipient: type=1 name=Unicode(UnicodeValue { "Mara Okonkwo" }) email=Unicode(UnicodeValue { "mara.okonkwo@example.test" }) smtp=None
+    Attachments: None
+Folder: NodeId { NormalFolder: 0x21 }
+  Name: "Search Root"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Errors: 0
