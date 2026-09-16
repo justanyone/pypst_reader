@@ -1,0 +1,26 @@
+# Third-party tools used to GENERATE test fixtures. None is a dependency of
+# the package or of the test suite; each is fetched into reference/
+# (gitignored, never vendored) by scripts/get_fixture_tools.sh, pinned to the
+# revision below, and patched from scripts/patches/ where the pinned revision
+# needs correcting to produce a store the upstream oracle accepts.
+#
+# Moving a pin here changes every fixture the tool generates. Re-run
+# scripts/make_fixture.py --check for each synth-*.pst after a move; a
+# regenerated store is a new fixture and goes through the ADR-0004 procedure
+# (manifest, README row, goldens) like any other.
+
+# EMLtoPST — converts a directory tree of .eml files into a Unicode PST.
+# Pure Python, stdlib only. This is the tool PSTD used to generate
+# tests/fixtures/public/pstd-inline-cid.pst; the same pin is used here.
+#
+# LICENSE: the repository states "MIT" in README.md (## License) and ships
+# no LICENSE file at this revision (checked 2026-09-15). Nothing from it is
+# redistributed by this project: the tool runs at fixture-build time only,
+# and the stores it writes are our own authored data. The attribution in
+# NOTICE is a courtesy, not a licence condition we could verify.
+NAME=EMLtoPST
+URL=https://github.com/igrbtn/EMLtoPST.git
+REV=6fe9025390a96fe0095457b56f12ce241ee4ba53
+DATE=2026-09-15
+LICENSE=MIT (README statement only; no LICENSE file)
+PATCH=scripts/patches/emltopst-oracle-conformance.patch

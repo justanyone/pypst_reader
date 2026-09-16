@@ -55,6 +55,12 @@ the README there (ADR-0004). None ships in the package. Their licences:
 - **MIT** — `pstd-inline-cid.pst`: Copyright (c) 2026 andrew3stedall
   (PSTD), a synthetic store generated with EMLtoPST (MIT). Text at
   `tests/fixtures/public/LICENSES/MIT-PSTD.txt`.
+- **MIT (this project)** — `synth-basics.pst`: authored here, generated
+  with EMLtoPST (MIT, https://github.com/igrbtn/EMLtoPST, pinned and patched
+  per `docs/FIXTURE-TOOLS.txt`). EMLtoPST is a fixture-build tool only: it is
+  fetched at build time, never vendored, imported or shipped, and its output
+  is our own data. Its author's MIT statement is acknowledged here as a
+  courtesy.
 
 Together with `Empty.pst` these are the only mail stores that may be
 committed, and only through the manifest procedure. See the first block of

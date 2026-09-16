@@ -1,0 +1,25 @@
+From: Mara Okonkwo <mara.okonkwo@example.test>
+To: Devin Achterberg <devin@example.test>
+Subject: HTML body: the kettle, formatted
+Date: Mon, 05 Jan 2026 09:30:00 +0000
+Message-ID: <synth-basics-02@example.test>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="synth-basics-02-alt"
+
+--synth-basics-02-alt
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Hello Devin,
+
+This message has an HTML body with a link.
+
+- one
+- two
+
+--synth-basics-02-alt
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+<html><body><p>Hello <b>Devin</b>,</p><p>This message has an <i>HTML</i> body with a <a href="https://example.test/kettle">link</a>.</p><ul><li>one</li><li>two</li></ul></body></html>
+--synth-basics-02-alt--

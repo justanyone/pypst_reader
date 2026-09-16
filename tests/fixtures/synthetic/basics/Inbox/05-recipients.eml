@@ -1,0 +1,12 @@
+From: Mara Okonkwo <mara.okonkwo@example.test>
+To: Devin Achterberg <devin@example.test>, Priya Venkataraman <priya@example.com>
+Cc: Tomasz Wierzbicki <tomasz@example.test>
+Bcc: Ingrid Halvorsen <ingrid@example.com>
+Subject: Recipients: To, Cc and Bcc
+Date: Mon, 05 Jan 2026 11:00:00 +0000
+Message-ID: <synth-basics-05@example.test>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Four recipients across three header fields.

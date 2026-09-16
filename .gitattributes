@@ -3,3 +3,7 @@
 *.pst binary
 *.ost binary
 *.bin binary
+
+# Authored EML fixture sources keep their CRLF line endings: the PST generated
+# from them (scripts/make_fixture.py) must regenerate byte-for-byte.
+*.eml -text

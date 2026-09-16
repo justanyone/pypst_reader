@@ -1,0 +1,387 @@
+Block BTree Level: 1: Entries: 3
+ Key: 4
+ Block Page Entries: 20
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x1 }, index: UnicodeByteIndex { 0x4600 } }
+   Size: 219
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { internal: 0x1 }, index: UnicodeByteIndex { 0x49C0 } }
+   Size: 32
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x2 }, index: UnicodeByteIndex { 0x4700 } }
+   Size: 668
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { internal: 0x2 }, index: UnicodeByteIndex { 0x4E80 } }
+   Size: 32
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x3 }, index: UnicodeByteIndex { 0x4A00 } }
+   Size: 219
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { internal: 0x3 }, index: UnicodeByteIndex { 0x5240 } }
+   Size: 32
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x4 }, index: UnicodeByteIndex { 0x4B00 } }
+   Size: 833
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { internal: 0x4 }, index: UnicodeByteIndex { 0x5940 } }
+   Size: 104
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x5 }, index: UnicodeByteIndex { 0x4EC0 } }
+   Size: 219
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { internal: 0x5 }, index: UnicodeByteIndex { 0x5E80 } }
+   Size: 32
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x6 }, index: UnicodeByteIndex { 0x4FC0 } }
+   Size: 616
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { internal: 0x6 }, index: UnicodeByteIndex { 0x61C0 } }
+   Size: 32
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x7 }, index: UnicodeByteIndex { 0x5280 } }
+   Size: 219
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { internal: 0x7 }, index: UnicodeByteIndex { 0x6580 } }
+   Size: 32
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x8 }, index: UnicodeByteIndex { 0x5380 } }
+   Size: 284
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x9 }, index: UnicodeByteIndex { 0x54C0 } }
+   Size: 168
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0xA }, index: UnicodeByteIndex { 0x5580 } }
+   Size: 295
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0xB }, index: UnicodeByteIndex { 0x56C0 } }
+   Size: 586
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0xC }, index: UnicodeByteIndex { 0x59C0 } }
+   Size: 570
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0xD }, index: UnicodeByteIndex { 0x5C40 } }
+   Size: 560
+   Ref-Count: 2
+ Key: 56
+ Block Page Entries: 20
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0xE }, index: UnicodeByteIndex { 0x5EC0 } }
+   Size: 219
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0xF }, index: UnicodeByteIndex { 0x5FC0 } }
+   Size: 478
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x10 }, index: UnicodeByteIndex { 0x6200 } }
+   Size: 225
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x11 }, index: UnicodeByteIndex { 0x6300 } }
+   Size: 572
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x12 }, index: UnicodeByteIndex { 0x65C0 } }
+   Size: 216
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x13 }, index: UnicodeByteIndex { 0x66C0 } }
+   Size: 112
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x14 }, index: UnicodeByteIndex { 0x6740 } }
+   Size: 220
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x15 }, index: UnicodeByteIndex { 0x6840 } }
+   Size: 124
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x16 }, index: UnicodeByteIndex { 0x6900 } }
+   Size: 60
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x17 }, index: UnicodeByteIndex { 0x6980 } }
+   Size: 172
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x18 }, index: UnicodeByteIndex { 0x6A40 } }
+   Size: 224
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x19 }, index: UnicodeByteIndex { 0x6B40 } }
+   Size: 124
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x1A }, index: UnicodeByteIndex { 0x6C00 } }
+   Size: 60
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x1B }, index: UnicodeByteIndex { 0x6C80 } }
+   Size: 172
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x1C }, index: UnicodeByteIndex { 0x6D40 } }
+   Size: 92
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x1D }, index: UnicodeByteIndex { 0x6DC0 } }
+   Size: 124
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x1E }, index: UnicodeByteIndex { 0x6E80 } }
+   Size: 60
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x1F }, index: UnicodeByteIndex { 0x6F00 } }
+   Size: 148
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x20 }, index: UnicodeByteIndex { 0x6FC0 } }
+   Size: 92
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x21 }, index: UnicodeByteIndex { 0x7040 } }
+   Size: 124
+   Ref-Count: 2
+ Key: 136
+ Block Page Entries: 10
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x22 }, index: UnicodeByteIndex { 0x7100 } }
+   Size: 60
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x23 }, index: UnicodeByteIndex { 0x7180 } }
+   Size: 152
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x24 }, index: UnicodeByteIndex { 0x7240 } }
+   Size: 92
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x25 }, index: UnicodeByteIndex { 0x72C0 } }
+   Size: 1018
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x26 }, index: UnicodeByteIndex { 0x7700 } }
+   Size: 60
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x27 }, index: UnicodeByteIndex { 0x7780 } }
+   Size: 136
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x28 }, index: UnicodeByteIndex { 0x7840 } }
+   Size: 92
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x29 }, index: UnicodeByteIndex { 0x78C0 } }
+   Size: 299
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x2A }, index: UnicodeByteIndex { 0x7A00 } }
+   Size: 60
+   Ref-Count: 2
+  Block: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x2B }, index: UnicodeByteIndex { 0x7A80 } }
+   Size: 134
+   Ref-Count: 2
+
+Node BTree Level: 1: Entries: 3
+ Key: NodeId { Internal: 0x1 }
+ Node Page Entries: 15
+  Node: NodeId { Internal: 0x1 }
+   Data Block: UnicodeBlockId { leaf: 0x12 }
+   Size: 0xD8
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { Internal: 0x3 }
+   Data Block: UnicodeBlockId { leaf: 0x13 }
+   Size: 0x70
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { NormalFolder: 0x9 }
+   Data Block: UnicodeBlockId { leaf: 0x17 }
+   Size: 0xAC
+   Sub-Node Block: None
+   Parent Node: Some(NodeId { NormalFolder: 0x9 })
+  Node: NodeId { HierarchyTable: 0x9 }
+   Data Block: UnicodeBlockId { leaf: 0x14 }
+   Size: 0xDC
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { ContentsTable: 0x9 }
+   Data Block: UnicodeBlockId { leaf: 0x15 }
+   Size: 0x7C
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { AssociatedContentsTable: 0x9 }
+   Data Block: UnicodeBlockId { leaf: 0x16 }
+   Size: 0x3C
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { NormalFolder: 0x20 }
+   Data Block: UnicodeBlockId { leaf: 0x1B }
+   Size: 0xAC
+   Sub-Node Block: None
+   Parent Node: Some(NodeId { NormalFolder: 0x9 })
+  Node: NodeId { HierarchyTable: 0x20 }
+   Data Block: UnicodeBlockId { leaf: 0x18 }
+   Size: 0xE0
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { ContentsTable: 0x20 }
+   Data Block: UnicodeBlockId { leaf: 0x19 }
+   Size: 0x7C
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { AssociatedContentsTable: 0x20 }
+   Data Block: UnicodeBlockId { leaf: 0x1A }
+   Size: 0x3C
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { NormalFolder: 0x21 }
+   Data Block: UnicodeBlockId { leaf: 0x1F }
+   Size: 0x94
+   Sub-Node Block: None
+   Parent Node: Some(NodeId { NormalFolder: 0x9 })
+  Node: NodeId { HierarchyTable: 0x21 }
+   Data Block: UnicodeBlockId { leaf: 0x1C }
+   Size: 0x5C
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { ContentsTable: 0x21 }
+   Data Block: UnicodeBlockId { leaf: 0x1D }
+   Size: 0x7C
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { AssociatedContentsTable: 0x21 }
+   Data Block: UnicodeBlockId { leaf: 0x1E }
+   Size: 0x3C
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { NormalFolder: 0x22 }
+   Data Block: UnicodeBlockId { leaf: 0x23 }
+   Size: 0x98
+   Sub-Node Block: None
+   Parent Node: Some(NodeId { NormalFolder: 0x20 })
+ Key: NodeId { HierarchyTable: 0x22 }
+ Node Page Entries: 15
+  Node: NodeId { HierarchyTable: 0x22 }
+   Data Block: UnicodeBlockId { leaf: 0x20 }
+   Size: 0x5C
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { ContentsTable: 0x22 }
+   Data Block: UnicodeBlockId { leaf: 0x21 }
+   Size: 0x7C
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { AssociatedContentsTable: 0x22 }
+   Data Block: UnicodeBlockId { leaf: 0x22 }
+   Size: 0x3C
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { NormalFolder: 0x23 }
+   Data Block: UnicodeBlockId { leaf: 0x27 }
+   Size: 0x88
+   Sub-Node Block: None
+   Parent Node: Some(NodeId { NormalFolder: 0x20 })
+  Node: NodeId { HierarchyTable: 0x23 }
+   Data Block: UnicodeBlockId { leaf: 0x24 }
+   Size: 0x5C
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { ContentsTable: 0x23 }
+   Data Block: UnicodeBlockId { leaf: 0x25 }
+   Size: 0x3FA
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { AssociatedContentsTable: 0x23 }
+   Data Block: UnicodeBlockId { leaf: 0x26 }
+   Size: 0x3C
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { NormalMessage: 0x24 }
+   Data Block: UnicodeBlockId { leaf: 0x2 }
+   Size: 0x29C
+   Sub-Node Block: UnicodeBlockId { internal: 0x1 }
+    Sub-Node Block Entries: 1
+     Node: NodeId { RecipientTable: 0x34 }
+     Data Block: UnicodeBlockId { leaf: 0x1 }
+     Size: 0xDB
+      PageRef: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x1 }, index: UnicodeByteIndex { 0x4600 } }
+      Sub-Node Block: None
+   Parent Node: Some(NodeId { NormalFolder: 0x23 })
+  Node: NodeId { NormalMessage: 0x25 }
+   Data Block: UnicodeBlockId { leaf: 0x4 }
+   Size: 0x341
+   Sub-Node Block: UnicodeBlockId { internal: 0x2 }
+    Sub-Node Block Entries: 1
+     Node: NodeId { RecipientTable: 0x34 }
+     Data Block: UnicodeBlockId { leaf: 0x3 }
+     Size: 0xDB
+      PageRef: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x3 }, index: UnicodeByteIndex { 0x4A00 } }
+      Sub-Node Block: None
+   Parent Node: Some(NodeId { NormalFolder: 0x23 })
+  Node: NodeId { NormalMessage: 0x26 }
+   Data Block: UnicodeBlockId { leaf: 0x6 }
+   Size: 0x268
+   Sub-Node Block: UnicodeBlockId { internal: 0x3 }
+    Sub-Node Block Entries: 1
+     Node: NodeId { RecipientTable: 0x34 }
+     Data Block: UnicodeBlockId { leaf: 0x5 }
+     Size: 0xDB
+      PageRef: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x5 }, index: UnicodeByteIndex { 0x4EC0 } }
+      Sub-Node Block: None
+   Parent Node: Some(NodeId { NormalFolder: 0x23 })
+  Node: NodeId { NormalMessage: 0x27 }
+   Data Block: UnicodeBlockId { leaf: 0xB }
+   Size: 0x24A
+   Sub-Node Block: UnicodeBlockId { internal: 0x4 }
+    Sub-Node Block Entries: 4
+     Node: NodeId { RecipientTable: 0x34 }
+     Data Block: UnicodeBlockId { leaf: 0x7 }
+     Size: 0xDB
+      PageRef: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x7 }, index: UnicodeByteIndex { 0x5280 } }
+      Sub-Node Block: None
+     Node: NodeId { AttachmentTable: 0x33 }
+     Data Block: UnicodeBlockId { leaf: 0x8 }
+     Size: 0x11C
+      PageRef: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x8 }, index: UnicodeByteIndex { 0x5380 } }
+      Sub-Node Block: None
+     Node: NodeId { Attachment: 0x0 }
+     Data Block: UnicodeBlockId { leaf: 0x9 }
+     Size: 0xA8
+      PageRef: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x9 }, index: UnicodeByteIndex { 0x54C0 } }
+      Sub-Node Block: None
+     Node: NodeId { Attachment: 0x1 }
+     Data Block: UnicodeBlockId { leaf: 0xA }
+     Size: 0x127
+      PageRef: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0xA }, index: UnicodeByteIndex { 0x5580 } }
+      Sub-Node Block: None
+   Parent Node: Some(NodeId { NormalFolder: 0x23 })
+  Node: NodeId { NormalMessage: 0x28 }
+   Data Block: UnicodeBlockId { leaf: 0xD }
+   Size: 0x230
+   Sub-Node Block: UnicodeBlockId { internal: 0x5 }
+    Sub-Node Block Entries: 1
+     Node: NodeId { RecipientTable: 0x34 }
+     Data Block: UnicodeBlockId { leaf: 0xC }
+     Size: 0x23A
+      PageRef: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0xC }, index: UnicodeByteIndex { 0x59C0 } }
+      Sub-Node Block: None
+   Parent Node: Some(NodeId { NormalFolder: 0x23 })
+  Node: NodeId { NormalMessage: 0x29 }
+   Data Block: UnicodeBlockId { leaf: 0xF }
+   Size: 0x1DE
+   Sub-Node Block: UnicodeBlockId { internal: 0x6 }
+    Sub-Node Block Entries: 1
+     Node: NodeId { RecipientTable: 0x34 }
+     Data Block: UnicodeBlockId { leaf: 0xE }
+     Size: 0xDB
+      PageRef: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0xE }, index: UnicodeByteIndex { 0x5EC0 } }
+      Sub-Node Block: None
+   Parent Node: Some(NodeId { NormalFolder: 0x23 })
+  Node: NodeId { NormalFolder: 0x2A }
+   Data Block: UnicodeBlockId { leaf: 0x2B }
+   Size: 0x86
+   Sub-Node Block: None
+   Parent Node: Some(NodeId { NormalFolder: 0x20 })
+  Node: NodeId { HierarchyTable: 0x2A }
+   Data Block: UnicodeBlockId { leaf: 0x28 }
+   Size: 0x5C
+   Sub-Node Block: None
+   Parent Node: None
+ Key: NodeId { ContentsTable: 0x2A }
+ Node Page Entries: 3
+  Node: NodeId { ContentsTable: 0x2A }
+   Data Block: UnicodeBlockId { leaf: 0x29 }
+   Size: 0x12B
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { AssociatedContentsTable: 0x2A }
+   Data Block: UnicodeBlockId { leaf: 0x2A }
+   Size: 0x3C
+   Sub-Node Block: None
+   Parent Node: None
+  Node: NodeId { NormalMessage: 0x2B }
+   Data Block: UnicodeBlockId { leaf: 0x11 }
+   Size: 0x23C
+   Sub-Node Block: UnicodeBlockId { internal: 0x7 }
+    Sub-Node Block Entries: 1
+     Node: NodeId { RecipientTable: 0x34 }
+     Data Block: UnicodeBlockId { leaf: 0x10 }
+     Size: 0xE1
+      PageRef: UnicodeBlockRef { block: UnicodeBlockId { leaf: 0x10 }, index: UnicodeByteIndex { 0x6200 } }
+      Sub-Node Block: None
+   Parent Node: Some(NodeId { NormalFolder: 0x2A })

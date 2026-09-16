@@ -90,7 +90,7 @@ confirmed by `--check`, and `pstsdk-submessage`'s golden shows the embedded
 message one level down.
 
 ### P20-SYNTH
-status: ✗ not started
+status: ✅ 2026-09-15 — `synth-basics.pst` (35,840 bytes, sha256 `07f0d7f7…0595982`) is in the corpus as a first-class fixture. Oracle over it: `read_header` 0, `read_btrees` 0, `read_density_list` 0, `read_store_props` 0, `read_named_props` 0, `read_root_folder` 0, `read_ipm_subtree` 0; `read_search_updates` 1 (no NID 0x1E1 search-management queue — documented in the README row). Reproducible: yes, byte-for-byte (`make_fixture.py --check`, and `tests/test_synthetic_content.py` runs it). EMLtoPST needed patching to get there — `scripts/patches/emltopst-oracle-conformance.patch`, 5 files, +80/−27: TCINFO `rgib` were start offsets not end offsets and booleans were 4-byte cells (upstream: `InvalidTableContextBitmaskOffset`), no wastebasket/finder entry ids (`Missing PidTagIpmWastebasketEntryId`), `os.urandom` record key, wall-clock timestamps, "(No Subject)" substituted for a missing subject, RFC 2047 subjects stored as encoded-word literals. Licence note: EMLtoPST states MIT in its README only; no LICENSE file at the pin (`docs/FIXTURE-TOOLS.txt`). Tests: 44 in `test_synthetic_content.py` — 36 pass (policy, goldens, byte-level content on the unencrypted store, regeneration), 8 skip until P07–P09 land (reader tier against INTERFACES § messaging). Goldens captured in `tests/golden/synth-basics/`.
 upstream: none — EMLtoPST is `igrbtn/EMLtoPST` (MIT, pure Python) @ `6fe9025390a96fe0095457b56f12ce241ee4ba53`, the commit PSTD generated `inline-cid.pst` with
 oracle:   `scripts/oracle.sh read_ipm_subtree <generated>.pst` must succeed before a synthetic store enters the corpus
 blocked on: none

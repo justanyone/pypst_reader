@@ -130,11 +130,22 @@ def main() -> int:
         print(f"goldens match the oracle for {len(stores)} fixture(s)")
         return 0
 
-    (GOLDEN / "MANIFEST.txt").write_text(
+    # A partial capture (--fixture / --example) adds to the manifest rather
+    # than shrinking it to what was just captured.
+    manifest = GOLDEN / "MANIFEST.txt"
+    recorded = {"EXAMPLES": [], "FIXTURES": []}
+    if manifest.exists() and (args.fixture or args.example):
+        for line in manifest.read_text().splitlines():
+            key, _, value = line.partition("=")
+            if key in recorded and value:
+                recorded[key] = value.split(",")
+    all_examples = [e for e in EXAMPLES if e in set(recorded["EXAMPLES"]) | set(examples)]
+    all_fixtures = [s.stem for s in fixtures() if s.stem in set(recorded["FIXTURES"]) | {s.stem for s in stores}]
+    manifest.write_text(
         "# Oracle goldens. Regenerate with scripts/capture_oracle.py; verify with --check.\n"
         f"UPSTREAM_REV={pinned_rev()}\n"
-        f"EXAMPLES={','.join(examples)}\n"
-        f"FIXTURES={','.join(s.stem for s in stores)}\n"
+        f"EXAMPLES={','.join(all_examples)}\n"
+        f"FIXTURES={','.join(all_fixtures)}\n"
     )
     return 0
 

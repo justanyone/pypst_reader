@@ -1,0 +1,27 @@
+From: Mara Okonkwo <mara.okonkwo@example.test>
+To: Devin Achterberg <devin@example.test>
+Subject: Two attachments: notes and a picture
+Date: Mon, 05 Jan 2026 10:30:00 +0000
+Message-ID: <synth-basics-04@example.test>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="synth-basics-04-mixed"
+
+--synth-basics-04-mixed
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Two files attached: the notes and the picture.
+
+--synth-basics-04-mixed
+Content-Type: text/plain; charset="utf-8"; name="kettle-notes.txt"
+Content-Disposition: attachment; filename="kettle-notes.txt"
+Content-Transfer-Encoding: base64
+
+a2V0dGxlIG5vdGVzDQpsaW5lIHR3bw0K
+--synth-basics-04-mixed
+Content-Type: image/png; name="swatch.png"
+Content-Disposition: attachment; filename="swatch.png"
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAbElEQVR42hXNQRUAUQhCUaMYhShGeVGIQhSizB+XXA7ODDtouIHBQ4YOM8suWm5h8ZKl+0CskDiBsIioHhx76LiDw0eO3oN/4FVf+J8h0PduzBqZ8x/bxNQPwgaFy192SGgelC0q13/CJaXlA8Z7WAFXOTbyAAAAAElFTkSuQmCC
+--synth-basics-04-mixed--

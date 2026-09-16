@@ -1,0 +1,289 @@
+Patch applied to EMLtoPST @ 6fe9025390a96fe0095457b56f12ce241ee4ba53 by
+scripts/get_fixture_tools.sh. Regenerate with `git -C reference/EMLtoPST diff`
+after editing the checkout; keep this preamble.
+
+Why it exists: unpatched, the tool's output is refused by the upstream Rust
+oracle at the store and table layers (see tests/fixtures/public/README.md,
+`pstd-inline-cid.pst`), and it is not reproducible run to run. Each hunk is
+either a [MS-PST] conformance fix or a default-preserving keyword parameter;
+the CLI's behaviour is unchanged unless the new parameters are used.
+
+  eml2pst/ltp/tc.py          TCINFO.rgib are END offsets of the 8/4-, 2-, 1-byte
+                             groups and the CEB ([MS-PST] 2.3.4.1); the tool wrote
+                             start offsets. Boolean cells are 1 byte, in the 1-byte
+                             group ([MS-PST] 2.3.4.4.1); the tool wrote 4-byte cells.
+                             HNID (variable-size) columns belong to the 4-byte group.
+                             Upstream refuses with InvalidTableContextBitmaskOffset.
+  eml2pst/messaging/store.py PR_IPM_WASTEBASKET_ENTRYID / PR_FINDER_ENTRYID (upstream
+                             requires both: "Missing PidTagIpmWastebasketEntryId"),
+                             a caller-supplied record key, a caller-chosen IPM subtree,
+                             and a PR_VALID_FOLDER_MASK that reflects what was written.
+  eml2pst/pst_file.py        threads those parameters through PSTFileBuilder.
+  eml2pst/utils.py           filetime_now() honours SOURCE_DATE_EPOCH.
+  eml2pst/eml_parser.py      a missing Subject header is an empty subject, not the
+                             literal "(No Subject)" — the substitution hides the
+                             empty-subject case the synthetic fixture exists to test.
+                             RFC 2047 encoded words in Subject/From/To/Cc/Bcc are
+                             decoded; compat32 returns them verbatim, so a non-Latin
+                             subject would otherwise be stored as "=?utf-8?b?...?=".
+
+diff --git a/eml2pst/eml_parser.py b/eml2pst/eml_parser.py
+index 35f6f95..ab16f9f 100644
+--- a/eml2pst/eml_parser.py
++++ b/eml2pst/eml_parser.py
+@@ -5,6 +5,7 @@ converts them into property dicts for the messaging layer.
+ """
+ 
+ import email
++import email.header
+ import email.policy
+ import email.utils
+ from datetime import datetime, timezone
+@@ -47,10 +48,21 @@ def parse_eml_file(filepath):
+     return _parse_message(msg)
+ 
+ 
++def _decode_header(value):
++    """Decode RFC 2047 encoded words ("=?utf-8?b?...?=") to text.
++
++    compat32 hands headers back verbatim, so without this a non-ASCII
++    subject or display name is stored as the encoded-word literal.
++    """
++    if not value:
++        return ''
++    return str(email.header.make_header(email.header.decode_header(value)))
++
++
+ def _parse_message(msg):
+     """Extract properties from a parsed email.Message object."""
+     result = {
+-        'subject': (msg.get('Subject') or '(No Subject)'),
++        'subject': _decode_header(msg.get('Subject')),
+         'message_class': 'IPM.Note',
+         'body_text': None,
+         'body_html': None,
+@@ -67,7 +79,7 @@ def _parse_message(msg):
+     }
+ 
+     # Parse sender
+-    from_header = msg.get('From') or ''
++    from_header = _decode_header(msg.get('From'))
+     if from_header:
+         parsed = email.utils.parseaddr(from_header)
+         result['sender_name'] = parsed[0] or parsed[1]
+@@ -113,7 +125,7 @@ def _parse_message(msg):
+ 
+     # Parse recipients
+     for header, rtype in [('To', MAPI_TO), ('Cc', MAPI_CC), ('Bcc', MAPI_BCC)]:
+-        addr_header = msg.get(header) or ''
++        addr_header = _decode_header(msg.get(header))
+         if addr_header:
+             addrs = email.utils.getaddresses([addr_header])
+             for name, addr in addrs:
+diff --git a/eml2pst/ltp/tc.py b/eml2pst/ltp/tc.py
+index d70d560..938c012 100644
+--- a/eml2pst/ltp/tc.py
++++ b/eml2pst/ltp/tc.py
+@@ -71,7 +71,10 @@ def build_tc_node(column_defs, rows):
+ 
+     for tag in column_defs:
+         ptype = prop_type(tag)
+-        if is_fixed_type(ptype):
++        if ptype == PT_BOOLEAN:
++            # [MS-PST] 2.3.4.4.1: a boolean cell in a row is one byte
++            group_1b.append(tag)
++        elif is_fixed_type(ptype):
+             sz = fixed_size(ptype)
+             if sz >= 4:
+                 group_4b.append(tag)
+@@ -98,7 +101,9 @@ def build_tc_node(column_defs, rows):
+         'i_bit': 0,
+     }]
+ 
+-    sorted_tags = group_4b + group_2b + group_1b + group_var
++    # HNID columns are 4-byte cells and belong to the 4-byte group ([MS-PST] 2.3.4.4.1)
++    sorted_tags = group_4b + group_var + group_2b + group_1b
++    count_4b = len(group_4b) + len(group_var)
+     current_offset = 4  # User columns start after dwRowID (4 bytes)
+ 
+     # Track group boundary offsets
+@@ -108,7 +113,7 @@ def build_tc_node(column_defs, rows):
+ 
+     for i, tag in enumerate(sorted_tags):
+         ptype = prop_type(tag)
+-        cb = _column_storage_size(ptype)
++        cb = 1 if ptype == PT_BOOLEAN else _column_storage_size(ptype)
+         columns.append({
+             'tag': tag,
+             'ib_data': current_offset,
+@@ -117,11 +122,11 @@ def build_tc_node(column_defs, rows):
+         })
+         current_offset += cb
+ 
+-        if i < len(group_4b):
++        if i < count_4b:
+             offset_after_4b = current_offset
+-        elif i < len(group_4b) + len(group_2b):
++        elif i < count_4b + len(group_2b):
+             offset_after_2b = current_offset
+-        elif i < len(group_4b) + len(group_2b) + len(group_1b):
++        else:
+             offset_after_1b = current_offset
+ 
+     # If a group is empty, its boundary equals the previous group's boundary
+@@ -130,14 +135,14 @@ def build_tc_node(column_defs, rows):
+     if not group_1b:
+         offset_after_1b = offset_after_2b
+ 
+-    # rgib boundaries per [MS-PST] 2.3.4.2:
+-    # rgib[TCI_4b] = start of >=4-byte fixed group (always 0 — includes dwRowID)
+-    # rgib[TCI_2b] = end of >=4-byte group
+-    # rgib[TCI_1b] = end of 2-byte group
+-    # rgib[TCI_bm] = end of CEB = total row stride (libpff uses this as row size)
+-    rgib_0 = 0
+-    rgib_1 = offset_after_4b
+-    rgib_2 = offset_after_2b
++    # rgib boundaries per [MS-PST] 2.3.4.1 — each is the ENDING offset of a group:
++    # rgib[TCI_4b] = end of the 8/4-byte group (dwRowID, fixed >= 4 bytes, HNIDs)
++    # rgib[TCI_2b] = end of the 2-byte group
++    # rgib[TCI_1b] = end of the 1-byte group
++    # rgib[TCI_bm] = end of the Cell Existence Bitmap = total row stride
++    rgib_0 = offset_after_4b
++    rgib_1 = offset_after_2b
++    rgib_2 = offset_after_1b
+     rgib_3 = current_offset + ceb_size  # Total row size including CEB
+ 
+     # Row size = rgib[TCI_bm] (libpff uses rgib_3 directly as the row stride)
+@@ -185,7 +190,7 @@ def build_tc_node(column_defs, rows):
+                 elif ptype == PT_SHORT:
+                     struct.pack_into('<H', row_bytes, offset, value & 0xFFFF)
+                 elif ptype == PT_BOOLEAN:
+-                    struct.pack_into('<I', row_bytes, offset, 1 if value else 0)
++                    row_bytes[offset] = 1 if value else 0
+                 elif ptype == PT_SYSTIME:
+                     struct.pack_into('<Q', row_bytes, offset, value)
+                 elif ptype == PT_LONG_LONG:
+diff --git a/eml2pst/messaging/store.py b/eml2pst/messaging/store.py
+index 2beb679..2809107 100644
+--- a/eml2pst/messaging/store.py
++++ b/eml2pst/messaging/store.py
+@@ -12,11 +12,11 @@ from ..ltp.pc import build_pc_node
+ from ..mapi.properties import (
+     NID_MESSAGE_STORE, NID_ROOT_FOLDER,
+     PR_RECORD_KEY, PR_DISPLAY_NAME,
+-    PR_IPM_SUBTREE_ENTRYID,
++    PR_IPM_SUBTREE_ENTRYID, PR_IPM_WASTEBASKET_ENTRYID, PR_FINDER_ENTRYID,
+     PR_STORE_SUPPORT_MASK, PR_VALID_FOLDER_MASK,
+     PR_PST_PASSWORD,
+     DEFAULT_STORE_SUPPORT_MASK,
+-    FOLDER_IPM_SUBTREE_VALID,
++    FOLDER_IPM_SUBTREE_VALID, FOLDER_IPM_WASTEBASKET_VALID, FOLDER_FINDER_VALID,
+     PT_LONG, PT_BINARY, prop_tag,
+ )
+ 
+@@ -32,23 +32,39 @@ def make_entry_id(record_key, nid):
+     return struct.pack('<I', 0) + record_key[:16] + struct.pack('<I', nid)
+ 
+ 
+-def build_message_store(display_name="Personal Folders"):
++def build_message_store(display_name="Personal Folders", record_key=None,
++                        ipm_subtree_nid=NID_ROOT_FOLDER,
++                        wastebasket_nid=None, finder_nid=None):
+     """Build the Message Store Property Context data block.
+ 
++    Args:
++        record_key: 16-byte store UID; random when None.
++        ipm_subtree_nid: folder NID for PR_IPM_SUBTREE_ENTRYID.
++        wastebasket_nid: folder NID for PR_IPM_WASTEBASKET_ENTRYID (omitted when None).
++        finder_nid: folder NID for PR_FINDER_ENTRYID (omitted when None).
++
+     Returns:
+         Tuple of (raw_bytes, record_key) where record_key is the
+         16-byte store UID used in entry IDs.
+     """
+-    record_key = os.urandom(16)
++    if record_key is None:
++        record_key = os.urandom(16)
++    valid_folder_mask = FOLDER_IPM_SUBTREE_VALID
+ 
+     properties = [
+         (PR_RECORD_KEY, record_key),
+         (PR_DISPLAY_NAME, display_name),
+-        (PR_IPM_SUBTREE_ENTRYID, make_entry_id(record_key, NID_ROOT_FOLDER)),
++        (PR_IPM_SUBTREE_ENTRYID, make_entry_id(record_key, ipm_subtree_nid)),
+         (PR_STORE_SUPPORT_MASK, DEFAULT_STORE_SUPPORT_MASK),
+-        (PR_VALID_FOLDER_MASK, FOLDER_IPM_SUBTREE_VALID),
+         (PR_PST_PASSWORD, 0),
+     ]
++    if wastebasket_nid is not None:
++        properties.append((PR_IPM_WASTEBASKET_ENTRYID, make_entry_id(record_key, wastebasket_nid)))
++        valid_folder_mask |= FOLDER_IPM_WASTEBASKET_VALID
++    if finder_nid is not None:
++        properties.append((PR_FINDER_ENTRYID, make_entry_id(record_key, finder_nid)))
++        valid_folder_mask |= FOLDER_FINDER_VALID
++    properties.append((PR_VALID_FOLDER_MASK, valid_folder_mask))
+ 
+     return build_pc_node(properties), record_key
+ 
+diff --git a/eml2pst/pst_file.py b/eml2pst/pst_file.py
+index d308884..54631aa 100644
+--- a/eml2pst/pst_file.py
++++ b/eml2pst/pst_file.py
+@@ -70,8 +70,13 @@ def _skip_amap_pages(offset, size):
+ class PSTFileBuilder:
+     """Builds a complete PST file from folders and messages."""
+ 
+-    def __init__(self, display_name="Personal Folders"):
++    def __init__(self, display_name="Personal Folders", record_key=None,
++                 ipm_subtree_nid=None, wastebasket_nid=None, finder_nid=None):
+         self.display_name = display_name
++        self.record_key = record_key
++        self.ipm_subtree_nid = ipm_subtree_nid
++        self.wastebasket_nid = wastebasket_nid
++        self.finder_nid = finder_nid
+         self._next_nid_index = 32  # Start after reserved NIDs
+         # BID bit 1 (i-bit) distinguishes leaf (0) from internal (1) blocks.
+         # Leaf BIDs (data blocks): 4, 8, 12, 16, ... (BID % 4 == 0)
+@@ -271,7 +276,14 @@ class PSTFileBuilder:
+     def _build_internal_nodes(self):
+         """Build the required internal nodes (store, root folder, name map)."""
+         # 1. Message Store (NID 0x21)
+-        (store_pages, store_subnodes), self._record_key = build_message_store(self.display_name)
++        (store_pages, store_subnodes), self._record_key = build_message_store(
++            self.display_name,
++            record_key=self.record_key,
++            ipm_subtree_nid=(self.ipm_subtree_nid if self.ipm_subtree_nid is not None
++                             else NID_ROOT_FOLDER),
++            wastebasket_nid=self.wastebasket_nid,
++            finder_nid=self.finder_nid,
++        )
+         self._add_node(NID_MESSAGE_STORE, store_pages, store_subnodes)
+ 
+         # 2. Name-to-ID Map (NID 0x61) — required structure with GUID/entry/string streams
+diff --git a/eml2pst/utils.py b/eml2pst/utils.py
+index 34ce251..5773641 100644
+--- a/eml2pst/utils.py
++++ b/eml2pst/utils.py
+@@ -1,5 +1,6 @@
+ """Utility functions for PST file creation."""
+ 
++import os
+ import struct
+ from datetime import datetime, timezone
+ 
+@@ -20,7 +21,14 @@ def datetime_to_filetime(dt: datetime) -> int:
+ 
+ 
+ def filetime_now() -> int:
+-    """Return current time as a Windows FILETIME."""
++    """Return current time as a Windows FILETIME.
++
++    Honours SOURCE_DATE_EPOCH (reproducible-builds.org) so that a conversion
++    can be made byte-for-byte repeatable.
++    """
++    epoch = os.environ.get('SOURCE_DATE_EPOCH')
++    if epoch is not None:
++        return datetime_to_filetime(datetime.fromtimestamp(int(epoch), timezone.utc))
+     return datetime_to_filetime(datetime.now(timezone.utc))
+ 
+ 
