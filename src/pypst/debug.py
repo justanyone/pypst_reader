@@ -36,6 +36,8 @@ from pypst.ltp.prop_context import PropertyContext, PropertyRecord
 from pypst.ltp.prop_type import ObjectRef, PropType, PropValue, datetime_to_filetime
 from pypst.ltp.table_context import CellKind, CellRecord, ColumnDescriptor, TableContext
 from pypst.ltp.tree import HeapTree
+from pypst.messaging.named_prop import PS_MAPI, PS_PUBLIC_STRINGS
+from pypst.messaging.store import Store
 from pypst.ndb.block import BlockReader, DataBlock, SubNodeLeafBlock
 from pypst.ndb.btree import BlockBTree, NodeBTree, read_density_list
 from pypst.ndb.header import read_header
@@ -559,6 +561,75 @@ def dump_tc(path: Path, nid: str) -> None:
 
 
 DUMPERS["tc"] = dump_tc
+# --- the message store and its named properties (P07) ----------------------------------------
+
+
+def dump_store(path: Path) -> None:
+    """Upstream's `read_store_props` example (P07): four header lines, then the store PC.
+
+    `Display Name:`, `IPM Subtree:`, `Deleted Items:`, `Finder:` — each
+    evaluated and printed in turn, exactly as the example's `?` operators
+    order them — and then every property of `NID_MESSAGE_STORE` in
+    ascending id order, as ` Property ID: …` / `  Value: …` (the example
+    prints no `Record:` line; `dump_pc` does, and that is the only
+    difference between the two dumpers' property sections).
+
+    **The store opens where the example fails.** `pypst.messaging.store`
+    treats an absent `PidTagIpmWastebasketEntryId` or `PidTagFinderEntryId`
+    as `None` rather than a refusal (its module docstring says why), so
+    `pstd-inline-cid.pst` opens here and does not upstream. This dumper's
+    contract is the *example's*, not the library's: it refuses the same
+    absence at the same point, so its stdout and its exit status match the
+    golden byte for byte (two lines, exit 1) on that store.
+    """
+    with Store.open(path, codepage=DUMP_CODEPAGE) as store:
+        print(f"Display Name: {store.display_name}")
+        print(f"IPM Subtree: {store.ipm_subtree}")
+        wastebasket = store.wastebasket
+        if wastebasket is None:
+            raise PstFormatError("Missing PidTagIpmWastebasketEntryId on store")
+        print(f"Deleted Items: {wastebasket}")
+        finder = store.finder
+        if finder is None:
+            raise PstFormatError("Missing PidTagFinderEntryId on store")
+        print(f"Finder: {finder}")
+        pc = store.properties
+        for prop_id, record in pc.records.items():
+            for line in property_lines(prop_id, record, pc.read(record)):
+                if not line.startswith("  Record: "):
+                    print(line)
+
+
+DUMPERS["store"] = dump_store
+
+
+def dump_named_props(path: Path) -> None:
+    """Upstream's `read_named_props` example (P07): every NAMEID of `NID_NAME_TO_ID_MAP`.
+
+    Per entry: `Named Property ID: 0x%04X`, ` GUID Index: %s` (upstream's
+    `Debug for NamedPropertyGuid` — `None`, `Mapi`, `PublicStrings`,
+    `GuidIndex(n)`), the GUID itself on the next line for the three cases
+    that have one, and then either ` Number: 0x%08X` or ` String[0x%08X]:
+    %s` with the name in Rust's `{:?}` spelling.
+    """
+    with Store.open(path) as store:
+        named = store.named_properties
+        for entry in named.entries:
+            print(f"Named Property ID: 0x{entry.prop_id:04X}")
+            print(f" GUID Index: {entry.guid}")
+            if entry.guid.well_known == PS_MAPI:
+                print(f" PS_MAPI: {_rust_guid(PS_MAPI)}")
+            elif entry.guid.well_known == PS_PUBLIC_STRINGS:
+                print(f" PS_PUBLIC_STRINGS: {_rust_guid(PS_PUBLIC_STRINGS)}")
+            elif entry.guid.is_index:
+                print(f" Other: {_rust_guid(named.guid_of(entry))}")
+            if entry.is_string:
+                print(f" String[0x{entry.name_id:08X}]: {_rust_str(named.lookup_string(entry.name_id))}")
+            else:
+                print(f" Number: 0x{entry.name_id:08X}")
+
+
+DUMPERS["named_props"] = dump_named_props
 
 
 def main(argv: list[str] | None = None) -> int:

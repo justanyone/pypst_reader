@@ -77,6 +77,7 @@ import struct
 import tempfile
 import time
 import traceback
+import uuid
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -92,6 +93,10 @@ from pypst.ltp.heap import HeapId, HeapNode, HeapNodeId
 from pypst.ltp.prop_context import PropertyContext, PropertyRecord
 from pypst.ltp.prop_type import PropType
 from pypst.ltp.table_context import CellKind, CellRecord, TableContext, TableRow
+from pypst.messaging import named_prop
+from pypst.messaging import store as messaging
+from pypst.messaging.named_prop import NamedPropertyGuid, NamedPropertyMap, NameIdEntry
+from pypst.messaging.store import EntryId
 from pypst.ndb import block, btree, header, ids, page, root
 from pypst.ndb.block import SubNodeLeafEntry
 from pypst.ndb.ids import BlockId, ByteIndex, NodeId
@@ -105,7 +110,18 @@ Kind = str  # "bytes" | "file" | "reader" | "path" | "wire" | "method" | "other"
 # `from __future__ import annotations`) marks a callable as needing a parsed
 # store — the `reader` kind. Extend it when a new layer's reader class takes
 # a new kind of parsed argument.
-READER_TYPES = ("Header", "Root", "PageRef", "BlockBTree", "NodeBTree", "BlockReader", "NodeBTreeEntry", "BlockBTreeEntry", "HeapNode")
+READER_TYPES = (
+    "Header",
+    "Root",
+    "PageRef",
+    "BlockBTree",
+    "NodeBTree",
+    "BlockReader",
+    "NodeBTreeEntry",
+    "BlockBTreeEntry",
+    "HeapNode",
+    "PropertyContext",  # P07: NamedPropertyMap is built over one, so it is a reader class
+)
 WIRE_TYPES = ("PropType", "int")
 
 
@@ -239,6 +255,10 @@ MAX_SUBNODE_HEAPS = 8  # sub-node heaps opened per store: an attachment's or an 
 ABSENT_SUBNODE = 0xFFFF_FFE2  # an HNID with type bits, naming a sub-node no tree holds
 BAD_CODEPAGE = "no-such-codepage"  # a PC built on it must refuse when it decodes a string, never raise LookupError
 MAX_TABLE_ROWS = 8  # rows per table kept for the per-row and per-cell adapters; `rows()` still walks every one
+RECORD_KEY_SIZE = messaging.RECORD_KEY_SIZE
+# `wGuid >> 1` values for NamedPropertyGuid.from_wire: none, the two well-known
+# sets, the first stream index, the last legal value and the three past it.
+NAMED_GUID_CODES = (0, 1, 2, 3, 0x7FFE, 0x7FFF, 0x8000, 0xFFFF, -1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -553,6 +573,67 @@ class Store:
                 break
         return out
 
+    # --- the messaging layer over the same bytes (P07) ----------------------------
+
+    @property
+    def store(self) -> messaging.Store:
+        """The message store over these bytes — over a `BytesIO`, so the sweep opens no file descriptor.
+
+        `Unreachable` when the header, a B-tree or the 0x21 node refused:
+        the refusal is judged at `Store` / `Store.open`, whose adapters call
+        the constructor themselves.
+        """
+        return self._lazy("store", lambda: messaging.Store(io.BytesIO(self.data), limits=self.limits))
+
+    @property
+    def named_map(self) -> NamedPropertyMap:
+        """The named property map of the 0x61 node; `Unreachable` when the node is absent or is not a PC."""
+        return self._lazy("named_map", lambda: self.store.named_properties)
+
+    @property
+    def name_ids(self) -> list[NameIdEntry]:
+        """A few NAMEIDs the store actually holds, plus two no store wrote (a GUID index and a string offset past their streams)."""
+        forged = [
+            NameIdEntry(0xFFFFFFFF, NamedPropertyGuid(0x7FFF), 0x7FFF, True),
+            NameIdEntry(0xFFFFFFFF, NamedPropertyGuid(0x7FFF), 0, False),
+        ]
+        try:
+            held = list(self.named_map.entries)
+        except (Unreachable, PstError):  # the walk's refusal is judged at NamedPropertyMap's own adapters
+            return forged
+        keep = held[:4] if self.thorough else held[:1]
+        return [*keep, *held[-1:], *forged]
+
+    @property
+    def named_streams(self) -> dict[int, bytes]:
+        """The 0x61 node's four stream properties as raw bytes — empty when the map does not open."""
+        out: dict[int, bytes] = {}
+        try:
+            pc = self.named_map.properties
+        except (Unreachable, PstError):
+            return out
+        for prop_id in (named_prop.PID_TAG_NAMEID_STREAM_GUID, named_prop.PID_TAG_NAMEID_STREAM_ENTRY, named_prop.PID_TAG_NAMEID_STREAM_STRING):
+            with contextlib.suppress(PstError):
+                value = pc.get(prop_id)
+                if isinstance(value, bytes):
+                    out[prop_id] = value
+        return out
+
+    @property
+    def entry_id_buffers(self) -> list[tuple[str, bytes]]:
+        """The store's own EntryID property values — 24 real bytes each — or none when the store does not open."""
+        out: list[tuple[str, bytes]] = []
+        try:
+            pc = self.store.properties
+        except (Unreachable, PstError):
+            return out
+        for prop_id in (messaging.PID_TAG_IPM_SUB_TREE_ENTRY_ID, messaging.PID_TAG_IPM_WASTEBASKET_ENTRY_ID, messaging.PID_TAG_FINDER_ENTRY_ID):
+            with contextlib.suppress(PstError):
+                value = pc.get(prop_id)
+                if isinstance(value, bytes):
+                    out.append((f"0x{prop_id:04X}", value))
+        return out
+
     @property
     def path(self) -> Path:
         """The store on disk, for the dumpers: written once, into `workdir` (a temp dir if none was given)."""
@@ -567,6 +648,9 @@ class Store:
         return self._cache["path"]  # type: ignore[return-value]
 
     def close(self) -> None:
+        opened = self._cache.pop("store", None)
+        if opened is not None:
+            opened.close()  # type: ignore[union-attr]
         tmp = self._cache.pop("tmpdir", None)
         if tmp is not None:
             tmp.cleanup()  # type: ignore[union-attr]
@@ -952,6 +1036,117 @@ def _cell_line_calls(s: Store) -> Iterator[Call]:
     for label, column, record, value in s.table_cells:
         yield call(column, record, value, label=label)
     yield call(table_context.ColumnDescriptor(PropType.LONG, 0x67F2, 0, 4, 0), None, None, label="absent cell")
+# --- the message store and its named properties (P07) ----------------------------------
+
+
+def _store_ctor_calls(s: Store) -> Iterator[Call]:
+    """The constructor over the raw bytes, and over a slice of them: a store that is not one must refuse."""
+    yield call(io.BytesIO(s.data), limits=s.limits, label="whole")
+    if s.thorough:
+        yield call(io.BytesIO(s.data[: page.PAGE_SIZE]), limits=s.limits, label="first page only")
+        yield call(io.BytesIO(b""), limits=s.limits, label="empty")
+
+
+def _store_open_calls(s: Store) -> Iterator[Call]:
+    """`Store.open` over the store on disk — the entry point `pypst.open` is."""
+    yield call(s.path, limits=s.limits, label="default")
+    if s.thorough:
+        yield call(s.path, limits=s.limits, codepage=BAD_CODEPAGE, label="bad codepage")
+
+
+def _store_close_calls(s: Store) -> Iterator[Call]:
+    """`close()` on a store of this adapter's own, twice: it must be idempotent and must not touch `s.store`."""
+    own = messaging.Store(io.BytesIO(s.data), limits=s.limits)  # a PstError here is the SKIP the sweep records
+    yield call(own, label="first")
+    yield call(own, label="again")
+
+
+def _store_entry_id_calls(s: Store) -> Iterator[Call]:
+    """A well-known NID, one no store holds, and a NID whose 5-bit type is not a known one."""
+    for nid in (0x21, 0x122, 0xFFFFFFFF, 0):
+        yield call(s.store, NodeId(nid), label=f"{nid:#x}")
+
+
+def _store_matches_calls(s: Store) -> Iterator[Call]:
+    """An EntryID this store issued, and one whose record key is another store's."""
+    store = s.store
+    yield call(store, EntryId(bytes(RECORD_KEY_SIZE), NodeId(0x21)), label="foreign")
+    own = None
+    with contextlib.suppress(PstError):  # a store with no PidTagRecordKey is judged at the dumper
+        own = store.entry_id(NodeId(0x21))
+    if own is not None:
+        yield call(store, own, label="own")
+
+
+def _store_get_calls(s: Store) -> Iterator[Call]:
+    """The four properties this layer reads by name, one the store cannot hold, and 0."""
+    for prop_id in (messaging.PID_TAG_RECORD_KEY, messaging.PID_TAG_DISPLAY_NAME, messaging.PID_TAG_IPM_SUB_TREE_ENTRY_ID, messaging.PID_TAG_FINDER_ENTRY_ID, 0xFFFF, 0):
+        yield call(s.store, prop_id, label=f"0x{prop_id:04X}")
+
+
+def _entry_id_unpack_calls(s: Store) -> Iterator[Call]:
+    """The 24-byte record at the start, straddling the end, at the end and past it — and over the store's own EntryID values."""
+    yield from _unpack_from(EntryId.SIZE)(s)
+    for label, buf in s.entry_id_buffers:
+        for off in (0, 1, len(buf), len(buf) + 1):
+            yield call(buf, off, label=f"{label}@{off}")
+
+
+def _name_id_unpack_calls(s: Store) -> Iterator[Call]:
+    """The same four offsets over the whole store and over the real entry stream, where one opens."""
+    yield from _unpack_from(NameIdEntry.SIZE)(s)
+    data = s.named_streams.get(named_prop.PID_TAG_NAMEID_STREAM_ENTRY)
+    if data is not None:
+        for off in (0, max(len(data) - NameIdEntry.SIZE + 1, 0), len(data), len(data) + 1):
+            yield call(data, off, label=f"entry stream@{off}")
+
+
+def _named_map_ctor_calls(s: Store) -> Iterator[Call]:
+    """The map over every property context: the 0x61 node is one, and every other PC must refuse as "not a map"."""
+    for label, pc in s.contexts if s.thorough else s.contexts[:2]:
+        yield call(pc, s.limits, label=label)
+
+
+def _named_map_from_node_calls(s: Store) -> Iterator[Call]:
+    """The named nodes, plus the first node or two: a node that is not the map must refuse."""
+    wanted = [e for e in s.nbt_entries if e.node.raw in (0x61, 0x21, 0x122)]
+    extra = s.nbt_entries[:2] if s.thorough else s.nbt_entries[:1]
+    for entry in dict.fromkeys([*wanted, *extra]):
+        yield call(s.reader, entry, s.limits, label=str(entry.node))
+
+
+def _named_lookup_calls(s: Store) -> Iterator[Call]:
+    """Every id the map holds (or the first few), one below the named range, one above it, and 0."""
+    held: list[int] = []
+    with contextlib.suppress(Unreachable, PstError):  # the walk's refusal is judged at NamedPropertyMap's constructor
+        entries = s.named_map.entries
+        held = [e.prop_id for e in (entries if s.thorough else entries[:2])]
+    for prop_id in [*held, 0x7FFF, 0xFFFF, 0]:
+        yield call(s.named_map, prop_id, label=f"0x{prop_id:04X}")
+
+
+def _named_resolve_calls(s: Store) -> Iterator[Call]:
+    """A (GUID, name) pair the map issued, one it did not, and a name of the wrong shape for its GUID."""
+    named = s.named_map
+    pairs: list[tuple[uuid.UUID, str | int]] = []
+    with contextlib.suppress(PstError):
+        for entry in named.entries[: 4 if s.thorough else 1]:
+            pairs.append((named.guid_of(entry), named.name_of(entry)))
+    pairs += [(named_prop.PS_MAPI, "no such named property"), (uuid.UUID(int=0), 0xFFFFFFFF)]
+    for guid, name in pairs:
+        yield call(named, guid, name, label=f"{guid}/{name!r:.32}")
+
+
+def _named_entry_calls(s: Store) -> Iterator[Call]:
+    return [call(s.named_map, entry, label=f"0x{entry.prop_id:04X}") for entry in s.name_ids]
+
+
+def _named_string_calls(s: Store) -> Iterator[Call]:
+    """The offsets the map's own entries name, plus 0, an odd offset, the end and past it."""
+    named = s.named_map
+    data = s.named_streams.get(named_prop.PID_TAG_NAMEID_STREAM_STRING, b"")
+    offsets = [e.name_id for e in s.name_ids if e.is_string and e.name_id <= len(data)]
+    return [call(named, off, label=f"@{off:#x}") for off in dict.fromkeys([*offsets, 0, 1, len(data), len(data) + 1, 0xFFFFFFFF])]
 
 
 def _dumper_calls(dumper: Callable[..., None]) -> Builder:
@@ -1090,6 +1285,27 @@ ADAPTERS: dict[object, Builder] = {
     heap.HeapNode.get_hnid_blocks: _hnid_calls,  # the same HNIDs as get_hnid: a heap item, a sub-node, one no tree holds
     debug.format_cell_record: _cell_record_calls,
     debug.cell_lines: _cell_line_calls,
+    # the message store and the named property map over it (P07)
+    messaging.Store: _store_ctor_calls,
+    messaging.Store.open: _store_open_calls,
+    messaging.open_store: _store_open_calls,
+    messaging.Store.close: _store_close_calls,
+    messaging.Store.entry_id: _store_entry_id_calls,
+    messaging.Store.matches_record_key: _store_matches_calls,
+    messaging.Store.get: _store_get_calls,
+    messaging.EntryId.unpack_from: _entry_id_unpack_calls,
+    named_prop.NameIdEntry.unpack_from: _name_id_unpack_calls,
+    named_prop.NamedPropertyGuid.from_wire: lambda s: [call(v, label=f"{v:#x}") for v in NAMED_GUID_CODES],
+    named_prop.NamedPropertyMap: _named_map_ctor_calls,
+    named_prop.NamedPropertyMap.from_node: _named_map_from_node_calls,
+    named_prop.NamedPropertyMap.lookup: _named_lookup_calls,
+    named_prop.NamedPropertyMap.resolve: _named_resolve_calls,
+    named_prop.NamedPropertyMap.guid_of: _named_entry_calls,
+    named_prop.NamedPropertyMap.name_of: _named_entry_calls,
+    named_prop.NamedPropertyMap.hash_bucket: _named_entry_calls,
+    named_prop.NamedPropertyMap.hash_entry: _named_entry_calls,
+    named_prop.NamedPropertyMap.lookup_string: _named_string_calls,
+    named_prop.NamedPropertyMap.string_bytes: _named_string_calls,
     # the CLI's dispatch, and every registered dumper, in-process
     debug.main: _main_calls,
     **{dumper: _dumper_calls(dumper) for dumper in debug.DUMPERS.values()},
@@ -1110,6 +1326,7 @@ STORE_FREE: frozenset[object] = frozenset(
         block.block_size,
         heap.HeapNodeType.from_wire,
         table_context.existence_bitmap_size,
+        named_prop.NamedPropertyGuid.from_wire,
     }
 )
 
@@ -1140,6 +1357,7 @@ NOT_STORE_INPUT: dict[object, str] = {
     heap.HeapId.pack: "as NodeId.pack",
     heap.HeapNodeId.pack: "as NodeId.pack",
     heap.HeapPageMap.size: "span arithmetic over offsets the page map already checked, at an index its caller range-checked",
+    messaging.EntryId.pack: "serialises a checked value; as NodeId.pack",
 }
 
 

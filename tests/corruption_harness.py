@@ -15,8 +15,9 @@ two cannot disagree about what "leak" means:
 
 The entry points here are the ones that exist today (header, the two
 B-tree walks and lookups, the density list, the store node's heap/BTH
-and its property context, and the root folder's hierarchy table as a
-table context). Each later layer adds its
+and its property context, the root folder's hierarchy table as a
+table context, the message store's named accessors and the named
+property map). Each later layer adds its
 calls to `exercise` in its own row; the contract harness (P24) is the
 generic version over `pypst.__all__`.
 
@@ -46,6 +47,7 @@ from pypst.ltp.heap import HeapNode, HeapNodeId
 from pypst.ltp.prop_context import PropertyContext
 from pypst.ltp.table_context import TableContext
 from pypst.ltp.tree import HeapTree
+from pypst.messaging.store import Store
 from pypst.ndb.block import BlockReader
 from pypst.ndb.btree import BlockBTree, NodeBTree, read_density_list
 from pypst.ndb.header import Header, read_header
@@ -149,7 +151,34 @@ def exercise(data: bytes, shape: BaseShape, limits: Limits = DEFAULT_LIMITS) -> 
         # TCINFO, the column schema, every row of the matrix with every
         # present cell decoded, and every row id looked up in the index.
         outcomes.append(_attempt("tc.root_hierarchy", lambda: read_root_hierarchy_tc(f, read_header(f), limits)))
+        # P07: the message store's own accessors, and the named property map.
+        outcomes.append(_attempt("store.open", lambda: read_store(f, limits)))
+        outcomes.append(_attempt("store.named_properties", lambda: read_named_properties(f, limits)))
     return outcomes
+
+
+def read_store(f: io.BytesIO, limits: Limits) -> int:
+    """Open the message store and read every property P07 reads by name; the property count.
+
+    `wastebasket` and `finder` may legitimately be None (P07's decision —
+    `pstd-inline-cid.pst`, the default base, has neither), so reading them
+    is not a claim that they are there.
+    """
+    store = Store(f, limits=limits)
+    _ = (store.record_key, store.display_name, store.ipm_subtree, store.wastebasket, store.finder)
+    _ = store.matches_record_key(store.entry_id(store.ipm_subtree.node))
+    return len(store.properties)
+
+
+def read_named_properties(f: io.BytesIO, limits: Limits) -> int:
+    """Read NID 0x61 whole: the bucket count, the GUID stream, and every NAMEID resolved to a name; the entry count."""
+    named = Store(f, limits=limits).named_properties
+    _ = (named.bucket_count, named.guids)
+    for entry in named.entries:
+        named.guid_of(entry)
+        named.name_of(entry)
+        named.lookup(entry.prop_id)
+    return len(named)
 
 
 # Property types whose PC record value is always an HNID ([MS-PST] 2.3.3.3:

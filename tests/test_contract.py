@@ -35,7 +35,9 @@ and mutation, and reported — never fixed in `src/` by this row.
 
 from __future__ import annotations
 
+import builtins
 import dataclasses
+import inspect
 import os
 import struct
 import subprocess
@@ -49,6 +51,7 @@ import pypst
 from pypst import debug
 from pypst.errors import PstFormatError, PstLimitError, PstUnsupportedError
 from pypst.limits import DEFAULT_LIMITS, Limits
+from pypst.messaging import store as messaging
 from tests import contract, corrupt
 from tests.conftest import FIXTURES, PUBLIC, REPO, public_fixture_paths
 from tests.contract import EntryPoint, Outcome, Result
@@ -121,8 +124,15 @@ def test_top_level_all_is_the_contract(entry_points: list[EntryPoint]) -> None:
         obj = getattr(pypst, name)
         if callable(obj):
             assert contract._key(obj) in discovered, f"pypst.{name} is exported but not discovered as an entry point"
-    for private in ("open", "Store"):
-        assert private not in pypst.__all__, f"{private} is P07's; it must not be stubbed early"
+    # P07 landed the messaging entry point: `pypst.open` and `pypst.Store`
+    # are exported and are the real thing — the same objects the package
+    # defines, not a stub, and discovered under their own module.
+    assert {"EntryId", "Store", "open"} <= set(pypst.__all__), "P07 exports pypst.open, pypst.Store and pypst.EntryId"
+    assert pypst.open is messaging.open_store
+    assert pypst.Store is messaging.Store
+    assert pypst.EntryId is messaging.EntryId
+    assert pypst.open is not builtins.open, "pypst.open shadows the builtin deliberately; it must not BE it"
+    assert inspect.signature(pypst.open).parameters.keys() == {"path", "limits", "codepage"}
 
 
 def test_discovery_reaches_every_layer(entry_points: list[EntryPoint]) -> None:

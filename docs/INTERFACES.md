@@ -752,30 +752,108 @@ for `TableRowColumnValue`: `Small(<the value>)`, `Heap(<HeapId>)`,
 folder's hierarchy table, resealed); the corruption harness walks that table
 on every mutation (`tc.root_hierarchy`).
 
-## `pypst.messaging` — P07 / P08 / P09
+## `pypst.messaging` — P07 (landed) / P08 / P09
+
+**`pypst.messaging.store` and `pypst.messaging.named_prop` are built**
+(2026-09-16). Ported from `messaging/store.rs` and `messaging/named_prop.rs`
+(the read halves; the ANSI arms are not ported — ADR-0003).
 
 ```python
+# pypst.messaging.store
+ENTRY_ID_FORMAT = "<I16sI"; ENTRY_ID_SIZE = 24; RECORD_KEY_SIZE = 16
+PID_TAG_RECORD_KEY = 0x0FF9; PID_TAG_DISPLAY_NAME = 0x3001
+PID_TAG_IPM_SUB_TREE_ENTRY_ID = 0x35E0; PID_TAG_IPM_WASTEBASKET_ENTRY_ID = 0x35E3
+PID_TAG_FINDER_ENTRY_ID = 0x35E7
+
 @dataclass(frozen=True, slots=True)
-class EntryId:  record_key: bytes; node: NodeId        # 24 bytes; record_key is 16
+class EntryId:  record_key: bytes (16); node: NodeId;  SIZE = 24    # [MS-PST] 2.4.3.2
+    unpack_from(buf, offset=0) → EntryId   # !PstFormatError short buffer, negative offset, rgbFlags != 0
+    pack() → bytes                          # the inverse, for round-trip tests
+    __str__ → "EntryId { record_key: AA-BB-…, node_id: NodeId { NormalFolder: 0x401 } }"
 
 class Store:                          # P07 — the object `open()` returns
-    @classmethod open(cls, path: str | os.PathLike, *, limits: Limits = DEFAULT_LIMITS) → Store   # context manager
-    header → Header
+    __init__(self, f: BinaryIO, *, path=None, limits=DEFAULT_LIMITS, codepage="cp1252", owns_file=False)
+        # reads the header, both B-trees, a BlockReader and the store PC's records — upstream's `StoreInner::read`
+    @classmethod open(cls, path: str | os.PathLike[str], *, limits=DEFAULT_LIMITS, codepage="cp1252") → Store
+        # context manager, owns the file. OSError from opening the PATH is NOT wrapped (see below).
+    close()                           # idempotent; a borrowed file object is left alone
+    path → Path | None; limits → Limits; codepage → str
+    header → Header; reader → BlockReader; nbt → NodeBTree; bbt → BlockBTree
     properties → PropertyContext      # NID_MESSAGE_STORE's PC
-    display_name → str
-    ipm_subtree → EntryId; wastebasket → EntryId | None; finder → EntryId | None   # None where P07 decides to tolerate absence
-    named_properties → NamedPropertyMap
-    root_folder → Folder
-    open_folder(self, entry: EntryId | NodeId) → Folder
-    open_message(self, entry: EntryId | NodeId, *, parent: Folder | None = None) → Message
-    close()
+    record_key → bytes (16); display_name → str
+    ipm_subtree → EntryId             # required; !PstFormatError when absent
+    wastebasket → EntryId | None; finder → EntryId | None   # P07 tolerates absence (below)
+    entry_id(self, node: NodeId) → EntryId          # upstream's `make_entry_id`
+    matches_record_key(self, entry: EntryId) → bool # upstream's; P08's `EntryIdWrongStore`
+    get(self, prop_id: int) → PropValue | None      # one store property, decoded
+    named_properties → NamedPropertyMap             # read on first use and kept
+    # root_folder / open_folder are P08's and open_message is P09's: NOT stubbed here
+
+def open_store(path, *, limits=DEFAULT_LIMITS, codepage="cp1252") → Store   # exported as `pypst.open`
+
+# pypst.messaging.named_prop
+PS_MAPI = UUID("00020328-…"); PS_PUBLIC_STRINGS = UUID("00020329-…")     # [MS-OXPROPS] 1.3.2
+NAME_ID_FORMAT = "<IHH"; NAME_ID_SIZE = 8; GUID_SIZE = 16
+PID_TAG_NAMEID_BUCKET_COUNT = 0x0001; …_STREAM_GUID = 0x0002; …_STREAM_ENTRY = 0x0003
+PID_TAG_NAMEID_STREAM_STRING = 0x0004; PID_TAG_NAMEID_BUCKET_BASE = 0x1000
+
+@dataclass(frozen=True, slots=True)
+class NamedPropertyGuid:  raw: int      # wGuid >> 1; 0 none, 1 Mapi, 2 PublicStrings, 3+ the stream
+    from_wire(value) → NamedPropertyGuid    # !PstFormatError at 0x8000 and above (upstream's try_from)
+    is_index → bool; index → int | None; well_known → uuid.UUID | None
+    __str__ → "None" | "Mapi" | "PublicStrings" | "GuidIndex(n)"   # upstream's Debug, as the goldens print it
+
+@dataclass(frozen=True, slots=True)
+class NameIdEntry:  name_id: int; guid: NamedPropertyGuid; prop_index: int; is_string: bool;  SIZE = 8
+    unpack_from(buf, offset=0)   # !PstFormatError short buffer, wPropIdx >= 0x8000
+    prop_id → int (0x8000 + prop_index); hash_value → int   # upstream's hash_value
+
+@dataclass(frozen=True, slots=True)
+class NamedProperty:  guid: uuid.UUID; name: str | int;  is_string → bool
 
 class NamedPropertyMap:               # P07 — NID_NAME_TO_ID_MAP
-    guids → tuple[uuid.UUID, ...]
-    entries → tuple[NameIdEntry, ...]
-    lookup(self, prop_id: int) → NamedProperty | None            # 0x8000+ → (guid, name-or-id)
-    resolve(self, guid: uuid.UUID, name: str | int) → int | None   # the reverse
+    __init__(self, properties: PropertyContext, limits: Limits | None = None)   # TypeError for a non-PC
+    from_node(reader: BlockReader, entry: NodeBTreeEntry | SubNodeLeafEntry, limits=None, *, codepage="cp1252")
+    properties → PropertyContext; limits → Limits; __len__
+    bucket_count → int                # !PstFormatError absent, not Integer32, > 0xEFFF, 0 with entries,
+                                      #   or smaller than the hash buckets the map holds
+    guids → tuple[uuid.UUID, ...]     # !PstFormatError absent, not Binary, not a multiple of 16
+    entries → tuple[NameIdEntry, ...] # !PstFormatError absent, not Binary, not a multiple of 8
+    string_bytes(self, offset: int) → bytes      # the raw UTF-16LE name; !PstFormatError odd length, past the stream
+    lookup_string(self, offset: int) → str       # the same, decoded lossily (upstream's from_utf16_lossy)
+    guid_of(self, entry) → uuid.UUID  # !PstFormatError a wGuid index past the stream; UUID(int=0) for "none"
+    name_of(self, entry) → str | int
+    lookup(self, prop_id: int) → NamedProperty | None   # !PstFormatError a repeated prop id
+    resolve(self, guid: uuid.UUID, name: str | int) → int | None   # the reverse; first entry wins
+    hash_entry(self, entry) → NameIdEntry        # upstream's, with wGuid KEPT (divergence, below)
+    hash_bucket(self, entry) → tuple[NameIdEntry, ...]   # !PstNotFoundError a bucket the map does not hold
+```
 
+Divergences, each a paragraph in its module's docstring: a **missing
+`PidTagIpmWastebasketEntryId` or `PidTagFinderEntryId` is `None` and the
+store still opens** (upstream's accessors fail — which is why
+`read_store_props` exits 1 on `pstd-inline-cid.pst` — but upstream's
+`open_store` succeeds on the same file, and `read_named_props` exits 0 on
+it); an EntryID property must be **exactly** 24 bytes; store property values
+are decoded on demand; `Store.open` lets `OSError` through, because opening
+the path is the OS's business (everything about the *bytes* is a
+`PstError`); a GUID or entry stream that is not a whole number of records is
+refused where upstream's `while let Ok` drops the tail; a duplicate
+`wPropIdx` is refused; a `PidTagNameidBucketCount` of 0 with entries, or one
+smaller than the buckets present, is refused; `stream_string()` is not
+ported (its walk skips every other entry); and **`hash_entry` keeps the
+entry's `wGuid` where upstream clears it** — with `wGuid` cleared, every
+string-named property lands in a bucket that does not hold it (9/35 on
+`Empty.pst`, 34/56 on `tika-variousBodyTypes`); with it kept, all 964
+entries of all 8 Unicode stores land in the right one.
+
+`python -m pypst.debug store <file>` prints `read_store_props`'s output —
+the four header lines and then the store PC without its `Record:` lines —
+and refuses an absent wastebasket or finder exactly where the example does,
+so its stdout AND its exit status match the golden on `pstd-inline-cid`
+too. `python -m pypst.debug named_props <file>` prints `read_named_props`'s.
+
+```python
 class Folder:                         # P08
     node → NodeId; properties → PropertyContext
     display_name → str; content_count → int; unread_count → int; has_subfolders → bool
@@ -852,7 +930,9 @@ DUMPERS["header"] = dump_header              # prints upstream's read_header for
 ```
 
 Expected names, one per upstream example: `header`, `btrees`, `density_list`,
-`store_props`, `named_props`, `root_folder`, `ipm_subtree`, `search_updates`,
+`store` (the draft said `store_props`; P07 registered it as `store`, beside
+`pc`, `heap` and `bth`, which are named for the layer and not the example),
+`named_props`, `root_folder`, `ipm_subtree`, `search_updates`,
 and later `messages` (P19). A dumper prints upstream's example output for its
 layer and raises only `PstError`; `tests/golden_parsers.py` parses both sides
 with one parser and the test compares values.
@@ -884,23 +964,29 @@ the golden is missing. `tests/test_golden_drift.py` (`oracle`, `slow`) runs
 
 ## `pypst` — the top level
 
-Today (P24), sorted and deliberately small — the exception family, the
-limits, and the one reader that exists:
+Today (P07), sorted and deliberately small — the exception family, the
+limits, and the readers that exist:
 
 ```python
 from pypst import (
-    DEFAULT_LIMITS, Header, Limits,
+    DEFAULT_LIMITS, EntryId, Header, Limits,
     PstError, PstFormatError, PstLimitError, PstNotFoundError, PstUnsupportedError,
-    __version__, read_header,
+    Store, __version__, open, read_header,
 )
 __all__ == sorted(__all__)           # tests/test_contract.py asserts it, and that every name resolves
 ```
 
-The promise, when P07–P09 land (added to `__all__` by the row that lands
+`pypst.open` is `pypst.messaging.store.open_store` under another name; it
+shadows the builtin inside `pypst` deliberately (`pypst.open(path)` reads
+like `gzip.open`), and `tests/test_contract.py` pins that it is not the
+builtin. `EntryId` is exported with it, because it is what `ipm_subtree`
+and the other entry-id accessors return and a caller holds one.
+
+The promise, when P08 and P09 land (added to `__all__` by the row that lands
 each; never stubbed early):
 
 ```python
-from pypst import open, Store, Folder, Message, Attachment
+from pypst import Folder, Message, Attachment
 ```
 
 `__all__` is the enumerable contract, but not the whole of it: the T5
@@ -929,6 +1015,31 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   gained `HeapNode.get_hnid_blocks`** (additive): the row matrix must be
   read block by block because rows never straddle a block boundary.
   `pypst.debug` gained `tc`, `cell_lines` and `format_cell_record`.
+- 2026-09-16 — P07 landed `pypst.messaging.store` and
+  `pypst.messaging.named_prop`; the messaging section now describes what was
+  built and the top-level section gained `open`, `Store` and `EntryId`.
+  Changes from the draft: `Store.__init__(f: BinaryIO, …)` is the borrowing
+  constructor and `Store.open` the owning one, both taking `codepage` beside
+  `limits`; `path`, `limits`, `codepage`, `reader`, `nbt`, `bbt`,
+  `record_key`, `entry_id`, `matches_record_key` and `get` were added
+  because P08 and P09 need them and the dumpers use them; `EntryId` gained
+  `unpack_from`, `pack`, `SIZE` and upstream's `__str__`;
+  `NamedPropertyMap` gained `from_node`, `properties`, `limits`,
+  `bucket_count`, `guid_of`, `name_of`, `string_bytes`, `lookup_string`,
+  `hash_entry`, `hash_bucket` and `__len__`, and `NamedPropertyGuid` /
+  `NameIdEntry` / `NamedProperty` are named types rather than tuples.
+  **`wastebasket` and `finder` are `None` when absent and the store still
+  opens** (the row's decision, recorded in the module docstring and pinned
+  from both sides in `tests/test_store.py`). **`hash_entry` keeps `wGuid`**
+  where upstream clears it — an upstream bug found by checking all 964
+  corpus entries against the hash table they actually sit in.
+  `pypst.debug` gained `store` and `named_props`; `tests/contract.py` gained
+  `"PropertyContext"` in `READER_TYPES` (so the map classifies as a reader
+  class), a `Store`/`named_map`/`name_ids`/`named_streams`/`entry_id_buffers`
+  section on its fixture object, and 20 adapters; `tests/corrupt.py` gained
+  `node_pc_block` and the `store_lies` (9–11) and `named_prop_lies` (12–16)
+  families; the corruption harness gained `store.open` and
+  `store.named_properties`.
 
 - 2026-09-16 — P05 landed `pypst.ltp.prop_context`; its section now describes
   what was built. Changes from the draft: `limits` is optional (the heap's

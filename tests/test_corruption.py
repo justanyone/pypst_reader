@@ -62,6 +62,8 @@ EXPECTED_FAMILIES = (
     "heap_lies",
     "pc_lies",
     "tc_lies",
+    "store_lies",
+    "named_prop_lies",
 )
 
 # The smallest populated corpus store first (the default base), then

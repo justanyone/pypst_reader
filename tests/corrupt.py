@@ -1127,6 +1127,7 @@ def tc_row(row_id: int, unique: int, cells: bytes, bitmap: bytes) -> bytes:
 # the NDB's test, not the heap's, so the trailer is always made consistent.
 
 NID_MESSAGE_STORE = 0x21
+NID_NAME_TO_ID_MAP = 0x61
 _HNID_BEARING_TYPES = frozenset({0x001E, 0x001F, 0x0102})
 
 
@@ -1172,6 +1173,9 @@ def node_data_block(base: bytes, nid: int) -> _DataBlockSite:
 def store_pc_block(base: bytes) -> _DataBlockSite:
     """Where the message store's PC data block is, and its decoded bytes."""
     return node_data_block(base, NID_MESSAGE_STORE)
+
+
+node_pc_block = node_data_block  # P07's name for the same helper; both rows generalized `store_pc_block`
 
 
 def rewrite_data_block(base: bytes, site: _DataBlockSite, data: bytes) -> bytes:
@@ -1545,6 +1549,186 @@ def tc_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
                 must_raise=False,
             )
             yield lie("row0.dwRowID=0xFFFFFFFF", set_u32(data, shape["matrix"], 0xFFFFFFFF), None, must_raise=False)
+# --- store_lies: the five message-store properties the P07 accessors read by name ----
+#
+# `pc_lies` breaks what a property context reads; these break what the
+# MESSAGE STORE reads out of one that is perfectly valid. Every lie here is
+# invisible to `pypst.ltp.prop_context` — the record decodes, the value
+# decodes — and must be refused by `pypst.messaging.store`. Two of them
+# must NOT be refused: an absent `PidTagIpmWastebasketEntryId` or
+# `PidTagFinderEntryId` is tolerated on purpose (P07's decision, recorded in
+# that module's docstring and pinned here so that "fixing" it back is red).
+
+PID_TAG_RECORD_KEY = 0x0FF9
+PID_TAG_DISPLAY_NAME = 0x3001
+PID_TAG_IPM_SUB_TREE_ENTRY_ID = 0x35E0
+PID_TAG_IPM_WASTEBASKET_ENTRY_ID = 0x35E3
+PID_TAG_FINDER_ENTRY_ID = 0x35E7
+ENTRY_ID_SIZE = 24
+
+
+def _record_by_id(records: Sequence[tuple[int, int, int, int]], prop_id: int) -> tuple[int, int, int, int] | None:
+    """The `(offset, prop_id, wPropType, dwValueHnid)` of one property, or None when the PC has no such record."""
+    return next((r for r in records if r[1] == prop_id), None)
+
+
+def _can_shrink(shape: dict[str, Any], hid_index: int) -> bool:
+    """True when item `hid_index` (1-based) has a byte to spare and its end offset is in the page map."""
+    return 0 < hid_index <= shape["count"] and shape["sizes"][hid_index - 1] > 1
+
+
+def _shrink_item(data: bytes, shape: dict[str, Any], hid_index: int) -> bytes:
+    """Pull the END of heap item `hid_index` (1-based) back one byte: the item shortens, the heap stays valid."""
+    return set_u16(data, shape["rgib"] + 2 * hid_index, shape["offsets"][hid_index] - 1)
+
+
+def _hid_index(hnid: int) -> int:
+    return (hnid >> 5) & 0x7FF
+
+
+def store_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
+    """The message store's own properties: renamed, retyped, and the wrong length."""
+    site = store_pc_block(base)
+    data = site.data
+    shape = _heap_shape(data)
+    records = _pc_records(data, shape)
+    held = {r[1] for r in records}
+
+    def lie(name: str, edited: bytes, expect: type[PstError] | None, *, must_raise: bool = True) -> Mutation:
+        return Mutation(f"store_lies:{name}", rewrite_data_block(base, site, edited), expect, must_raise=must_raise)
+
+    # Each by-name property renamed one id up, which is "absent" as far as
+    # the store is concerned. The last two are the tolerated absences.
+    for prop_id, what, expect, must_raise in (
+        (PID_TAG_RECORD_KEY, "record_key", PstFormatError, True),
+        (PID_TAG_DISPLAY_NAME, "display_name", PstFormatError, True),
+        (PID_TAG_IPM_SUB_TREE_ENTRY_ID, "ipm_subtree", PstFormatError, True),
+        (PID_TAG_IPM_WASTEBASKET_ENTRY_ID, "wastebasket_is_None", None, False),
+        (PID_TAG_FINDER_ENTRY_ID, "finder_is_None", None, False),
+    ):
+        record = _record_by_id(records, prop_id)
+        if record is None or prop_id + 1 in held:
+            continue
+        yield lie(f"0x{prop_id:04X}_absent_{what}", set_u16(data, record[0], prop_id + 1), expect, must_raise=must_raise)
+
+    display = _record_by_id(records, PID_TAG_DISPLAY_NAME)
+    if display is not None:
+        # A display name that is not a string: upstream's `invalid` arm.
+        yield lie("0x3001_type=Binary", set_u16(data, display[0] + 2, 0x0102), PstFormatError)
+
+    key = _record_by_id(records, PID_TAG_RECORD_KEY)
+    if key is not None:
+        # An inline 4-byte type where the store wants 16 bytes of Binary.
+        yield lie("0x0FF9_type=Integer32", set_u16(data, key[0] + 2, 0x0003), PstFormatError)
+        if _heap_item(shape, key[3]) is not None and _can_shrink(shape, _hid_index(key[3])):
+            yield lie("0x0FF9_15_bytes", _shrink_item(data, shape, _hid_index(key[3])), PstFormatError)
+
+    ipm = _record_by_id(records, PID_TAG_IPM_SUB_TREE_ENTRY_ID)
+    if ipm is not None:
+        yield lie("0x35E0_type=Unicode", set_u16(data, ipm[0] + 2, 0x001F), PstFormatError)
+        item = _heap_item(shape, ipm[3])
+        if item is not None:
+            # rgbFlags must be zero ([MS-PST] 2.4.3.2), and the id is 24 bytes.
+            yield lie("0x35E0_rgbFlags=1", set_u32(data, item[0], 1), PstFormatError)
+            if item[1] == ENTRY_ID_SIZE and _can_shrink(shape, _hid_index(ipm[3])):
+                yield lie("0x35E0_23_bytes", _shrink_item(data, shape, _hid_index(ipm[3])), PstFormatError)
+
+
+# --- named_prop_lies: the name-to-id map's four streams (NID 0x61) -------------------
+#
+# The same technique one node over. The heap of NID 0x61 is a single data
+# block in every Unicode fixture, so its PC records can be rewritten in
+# place; the stream VALUES are heap items on the small stores and sub-nodes
+# on the large ones, so every lie that edits a stream's bytes is emitted
+# only when that stream is a heap item here.
+
+PID_TAG_NAMEID_BUCKET_COUNT = 0x0001
+PID_TAG_NAMEID_STREAM_GUID = 0x0002
+PID_TAG_NAMEID_STREAM_ENTRY = 0x0003
+PID_TAG_NAMEID_STREAM_STRING = 0x0004
+NAME_ID_SIZE = 8
+
+
+def named_prop_shape(base: bytes) -> dict[str, Any]:
+    """What the base's named property map holds, read with the landed reader — so the lies below can be honest."""
+    from pypst.messaging.store import Store
+
+    with Store(io.BytesIO(base)) as store:
+        named = store.named_properties
+        strings = [e for e in named.entries if e.is_string]
+        return {
+            "count": len(named.entries),
+            "has_string": bool(strings),
+            "first_string_offset": strings[0].name_id if strings else None,
+            "has_buckets": any(prop_id >= 0x1000 for prop_id in named.properties.records),
+        }
+
+
+def named_prop_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
+    """The name-to-id map's bucket count and its three streams, lied about in the 0x61 heap."""
+    site = node_pc_block(base, NID_NAME_TO_ID_MAP)
+    data = site.data
+    shape = _heap_shape(data)
+    records = _pc_records(data, shape)
+    held = {r[1] for r in records}
+    known = named_prop_shape(base)
+
+    def lie(name: str, edited: bytes, expect: type[PstError] | None, *, must_raise: bool = True) -> Mutation:
+        return Mutation(f"named_prop_lies:{name}", rewrite_data_block(base, site, edited), expect, must_raise=must_raise)
+
+    bucket = _record_by_id(records, PID_TAG_NAMEID_BUCKET_COUNT)
+    if bucket is not None:
+        if 0x0005 not in held:
+            yield lie("bucket_count_absent", set_u16(data, bucket[0], 0x0005), PstFormatError)
+        yield lie("bucket_count_type=Unicode", set_u16(data, bucket[0] + 2, 0x001F), PstFormatError)
+        # Upstream computes `hash_value % bucket_count`; zero is a division by zero there.
+        yield lie("bucket_count=0", set_u32(data, bucket[0] + 4, 0), PstFormatError)
+        # `0x1000 + count` must stay a u16 (upstream's own guard).
+        yield lie("bucket_count=0xF000", set_u32(data, bucket[0] + 4, 0xF000), PstFormatError)
+        if known["has_buckets"]:
+            # A count that does not describe the buckets the map actually has.
+            yield lie("bucket_count=1_below_its_buckets", set_u32(data, bucket[0] + 4, 1), PstFormatError)
+
+    for prop_id, what, present in (
+        (PID_TAG_NAMEID_STREAM_GUID, "guid_stream", True),
+        (PID_TAG_NAMEID_STREAM_ENTRY, "entry_stream", True),
+        (PID_TAG_NAMEID_STREAM_STRING, "string_stream", known["has_string"]),
+    ):
+        record = _record_by_id(records, prop_id)
+        if record is None or not present or prop_id + 0x10 in held:
+            continue
+        yield lie(f"{what}_absent", set_u16(data, record[0], prop_id + 0x10), PstFormatError)
+
+    entry_stream = _record_by_id(records, PID_TAG_NAMEID_STREAM_ENTRY)
+    if entry_stream is not None:
+        yield lie("entry_stream_type=Integer32", set_u16(data, entry_stream[0] + 2, 0x0003), PstFormatError)
+        item = _heap_item(shape, entry_stream[3])
+        if item is not None:
+            at, size = item
+            if _can_shrink(shape, _hid_index(entry_stream[3])):
+                # Not a whole number of NAMEIDs: upstream drops the tail silently.
+                yield lie("entry_stream_ragged", _shrink_item(data, shape, _hid_index(entry_stream[3])), PstFormatError)
+            if size >= NAME_ID_SIZE:
+                yield lie("entry.wPropIdx=0x8000", set_u16(data, at + 6, 0x8000), PstFormatError)
+                yield lie("entry.wGuid_index_past_the_stream", set_u16(data, at + 4, 0xFFFE), PstFormatError)
+                (guid_field,) = struct.unpack_from("<H", data, at + 4)
+                as_string = set_u32(set_u16(data, at + 4, guid_field | 0x0001), at, 0xFFFFFFF0)
+                yield lie("entry.string_offset_past_the_stream", as_string, PstFormatError)
+            if size >= 2 * NAME_ID_SIZE:
+                (first,) = struct.unpack_from("<H", data, at + 6)
+                yield lie("entry.duplicate_wPropIdx", set_u16(data, at + NAME_ID_SIZE + 6, first), PstFormatError)
+
+    guid_stream = _record_by_id(records, PID_TAG_NAMEID_STREAM_GUID)
+    if guid_stream is not None and _heap_item(shape, guid_stream[3]) is not None and _can_shrink(shape, _hid_index(guid_stream[3])):
+        yield lie("guid_stream_ragged", _shrink_item(data, shape, _hid_index(guid_stream[3])), PstFormatError)
+
+    string_stream = _record_by_id(records, PID_TAG_NAMEID_STREAM_STRING)
+    offset = known["first_string_offset"]
+    if string_stream is not None and offset is not None:
+        item = _heap_item(shape, string_stream[3])
+        if item is not None and offset + 4 <= item[1]:
+            (length,) = struct.unpack_from("<I", data, item[0] + offset)
+            yield lie("string.odd_length", set_u32(data, item[0] + offset, length | 1), PstFormatError)
 
 
 FAMILIES: tuple[Family, ...] = (
@@ -1559,6 +1743,8 @@ FAMILIES: tuple[Family, ...] = (
     heap_lies,
     pc_lies,
     tc_lies,
+    store_lies,
+    named_prop_lies,
 )
 
 
