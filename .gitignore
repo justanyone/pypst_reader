@@ -21,8 +21,10 @@
 # and CI refuse any .pst whose hash is not in that manifest. ADR-0004.
 !tests/fixtures/public/*.pst
 
-# Private fixtures — real mail, used locally, never shared.
+# Private fixtures — real mail, used locally, never shared. (Both spellings: the
+# second also matches the symlink planted in row worktrees.)
 tests/fixtures/private/
+/tests/fixtures/private
 
 # The upstream Rust source. Fetched, never vendored: scripts/get_rust_source.sh
 # Both spellings: `reference/` matches the directory, `/reference` also matches

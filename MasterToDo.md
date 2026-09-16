@@ -43,7 +43,7 @@ can start today.
 
 | Id | Pri | State | One line | Work |
 |---|---|---|---|---|
-| P01-HEADER | 1 | ✗ not started | `ndb/header.py` + `ndb/root.py` — parse the Unicode PST header, CRC-verified; **refuse ANSI** with `PstUnsupportedError` (ADR-0003). Done = `read_header` goldens match on 7/7 Unicode fixtures, 2/2 ANSI refused, corrupted copies refused. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p01-header) |
+| P01-HEADER | 1 | ⏳ in flight — agent/p01-header 2026-09-15 | `ndb/header.py` + `ndb/root.py` — parse the Unicode PST header, CRC-verified; **refuse ANSI** with `PstUnsupportedError` (ADR-0003). Done = `read_header` goldens match on 7/7 Unicode fixtures, 2/2 ANSI refused, corrupted copies refused. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p01-header) |
 | P02-BTREE | 1 | ✗ blocked on P01 | `ndb/page.py` + `ndb/btree.py` — the node and block B-trees, with a depth limit and a cycle guard that upstream does not need. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p02-btree) |
 | P11-LIMITS | 2 | ✗ not started — land WITH P02 | `limits.py`: recursion depth, allocation ceiling, item counts, `PstLimitError` everywhere they bite. Deliberate divergence — CLAUDE.md § untrusted input. | [`todo/T04-hardening.md`](todo/T04-hardening.md#p11-limits) |
 | P03-BLOCK | 2 | ✗ blocked on P02 | `ndb/block.py` — data blocks, XBLOCK/XXBLOCK trees, subnode BTrees; wire in `encode.py` and `crc.py`. First point at which real bytes come out of a real file. | [`todo/T01-ndb.md`](todo/T01-ndb.md#p03-block) |
