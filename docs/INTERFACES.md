@@ -733,12 +733,15 @@ the sum of the per-block floors. A partial row at the end of a block is
 padding and is dropped, as upstream floors.
 
 Divergences from upstream, each in the module docstring with its reason:
-`rgib[TCI_4b]` must be ≥ 8 (upstream underflows `end_4byte - 8` as a
-`usize`); a cell HNID of 0 is `None` rather than upstream's refusal of heap
-index 0; `PtypObject` columns are readable (P22/P05 decode the type);
-a repeated row id is refused; a row index entry past the matrix is
-`PstFormatError` where upstream panics; rows and the matrix's size are
-bounded by `limits`.
+`rgib[TCI_4b]` must be ≥ 8 once the row matrix is non-empty (upstream
+underflows `end_4byte - 8` as a `usize`, but only when it reads a row —
+P06b narrowed the check from TCINFO parse time to `TableContext`'s first
+matrix read, so a TCINFO that pairs `end_4byte < 8` with zero rows, as
+`synth-basics.pst`'s associated-contents table does, is accepted); a cell
+HNID of 0 is `None` rather than upstream's refusal of heap index 0;
+`PtypObject` columns are readable (P22/P05 decode the type); a repeated row
+id is refused; a row index entry past the matrix is `PstFormatError` where
+upstream panics; rows and the matrix's size are bounded by `limits`.
 
 `python -m pypst.debug tc <file> <nid-hex>` prints `read_root_folder` /
 `read_ipm_subtree`'s shape through `debug.cell_lines(column, record, value)`
@@ -1088,13 +1091,14 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   `"Folder"` in `READER_TYPES`, a `folders`/`folder_nids` section on its
   fixture object and 14 adapters; `tests/corrupt.py` gained `folder_lies`
   and the corruption harness `folder.walk` / `folder.tables`.
-  **A P06 finding, not fixed here:** `synth-basics.pst`'s root folder writes
-  an empty associated-contents table with `rgib[TCI_4b] = 4`, which P06
-  refuses when it parses the TCINFO and upstream accepts because it never
-  reads a row. That store's six `Associated Count: 0` lines therefore print
-  as `Associated Table: None`; it is the only place `debug folders` differs
-  from the goldens, and `tests/test_folder.py::test_synth_basics_associated_
-  table_is_the_one_documented_divergence` pins it line for line.
+  **A P06 finding, closed by P06b:** `synth-basics.pst`'s root folder writes
+  an empty associated-contents table with `rgib[TCI_4b] = 4`. P06 used to
+  refuse it at TCINFO parse time, where upstream accepts it because it never
+  reads a row of an empty table; P06b narrowed the check to a non-empty
+  matrix (`pypst.ltp.table_context`'s module docstring), so this store's six
+  `Associated Count: 0` lines now print as themselves and `debug folders` is
+  byte-identical on 8/8 Unicode corpus stores, pinned by
+  `tests/test_folder.py::test_synth_basics_associated_table_is_byte_identical`.
 
 - 2026-09-16 — P06 landed `pypst.ltp.table_context`; its section now
   describes what was built. Changes from the draft: `limits` is optional and

@@ -1392,6 +1392,9 @@ ADAPTERS: dict[object, Builder] = {
     table_context.existence_bitmap_size: lambda s: [call(v, label=str(v)) for v in (0, 1, 8, 9, 255, 256, 2**32, -1)],
     table_context.check_existence_bitmap: _existence_bitmap_calls,
     table_context.TableContextInfo.unpack: _tcinfo_calls,
+    # P06b: the row-header-size check, deferred from `unpack` to `TableContext._read_matrix` —
+    # exercised over every real table's own TCINFO, matrix rows or none.
+    table_context.TableContextInfo.check_row_header_fits: lambda s: [call(tc.info, label=label) for label, tc in s.tables],
     table_context.ColumnDescriptor.unpack_from: _tcoldesc_calls,
     table_context.TableContext: lambda s: [call(h.heap, s.limits, label=h.label) for h in s.heaps],
     table_context.TableContext.from_node: _context_from_node_calls,

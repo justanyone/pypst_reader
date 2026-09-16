@@ -58,11 +58,20 @@ the same answer.
 **Deliberate divergences from upstream**, each chosen to fail closed or to
 keep a real store readable:
 
-- `rgib[TCI_4b]` (the end of the 4-byte region) must be at least 8. Upstream
-  validates only `% 4 == 0` and then reads `vec![0; end_4byte_values - 8]`,
-  which underflows a `usize` for 0 or 4 — a panic in a debug build and a
-  4 GB allocation in a release one. Every row begins with `dwRowID` and
-  `rgdwData[0]`, so 8 is the format's own floor ([MS-PST] 2.3.4.4.1).
+- `rgib[TCI_4b]` (the end of the 4-byte region) must be at least 8 **once the
+  row matrix is non-empty**. Upstream validates only `% 4 == 0` at TCINFO
+  parse time and reads `vec![0; end_4byte_values - 8]` only when it reads a
+  row (`TableRowData::read`), which underflows a `usize` for 0 or 4 — a
+  panic in a debug build and a 4 GB allocation in a release one. Every row
+  begins with `dwRowID` and `rgdwData[0]`, so 8 is the format's own floor
+  ([MS-PST] 2.3.4.4.1) — for a row that exists. `synth-basics.pst`
+  (EMLtoPST) writes an empty associated-contents table whose `rgib[TCI_4b]`
+  is 4: upstream's `rows_matrix()` never reads a row of an empty table, so
+  it never trips, and prints `Associated Count: 0`. So this port defers the
+  check from `TableContextInfo._validate` (TCINFO parse time) to
+  `TableContext._read_matrix`, once the row count is known
+  (`TableContextInfo.check_row_header_fits`), and raises the same text only
+  when a row is actually there to misread.
 - A cell whose HNID is 0 on a variable-size type is `None` (no value), not
   a refusal. Upstream's `read_column` hands the 0 to `HeapId::index()`,
   which refuses index 0, so ONE such cell fails the whole table; the PC
@@ -322,14 +331,26 @@ class TableContextInfo:
                 f"TCINFO rgib[TCI_bm] {self.end_bitmap} leaves {self.end_bitmap - self.end_1byte} bitmap byte(s), "
                 f"not the {self.bitmap_size} that {len(self.columns)} columns need"
             )
+        # rgib[TCI_4b] < ROW_HEADER_SIZE is NOT refused here — see
+        # `check_row_header_fits` and the module docstring's divergence
+        # paragraph. It is only a problem once a row exists to misread.
+        for column in self.columns:
+            self._validate_column(column)
+
+    def check_row_header_fits(self) -> None:
+        """Refuse `rgib[TCI_4b]` too small for the row header — called only once a row exists to misread it.
+
+        Divergence (module docstring): upstream computes `end_4byte - 8` as a
+        usize and underflows *when it reads a row* (`TableRowData::read`),
+        which never happens for a table whose matrix is empty — so a TCINFO
+        that pairs `end_4byte < 8` with zero rows is upstream's own reading
+        of a legal file, not a bug. `TableContext` calls this once it knows
+        the row count, not at TCINFO parse time.
+        """
         if self.end_4byte < ROW_HEADER_SIZE:
-            # Divergence (module docstring): upstream computes `end_4byte - 8`
-            # as a usize and underflows. dwRowID and rgdwData[0] are always there.
             raise PstFormatError(
                 f"TCINFO rgib[TCI_4b] {self.end_4byte} is inside the row header's {ROW_HEADER_SIZE} bytes"
             )
-        for column in self.columns:
-            self._validate_column(column)
 
     def _validate_column(self, column: ColumnDescriptor) -> None:
         prop_type, offset = column.prop_type, column.offset
@@ -541,6 +562,10 @@ class TableContext:
         starts = [0]
         for count in counts:
             starts.append(starts[-1] + count)
+        if starts[-1] > 0:
+            # Only now, with an actual row to misread, is the row-header-size
+            # divergence live (module docstring; `TableContextInfo.check_row_header_fits`).
+            self._info.check_row_header_fits()
         check_count(starts[-1], self._limits.max_items, "TC rows")
         self._matrix = tuple(blocks)
         self._counts = counts

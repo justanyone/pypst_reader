@@ -265,12 +265,40 @@ def test_rgib_offsets_that_are_unaligned_or_not_monotonic_are_refused(rgib: tupl
         make_tc([make_row(1)], rgib=rgib)
 
 
-@pytest.mark.parametrize("end_4byte", [0, 4])
-def test_a_four_byte_region_inside_the_row_header_is_refused(end_4byte: int) -> None:
-    """The documented divergence: upstream computes `end_4byte - 8` as a usize and underflows."""
-    schema = [(0x0003, LTP_ROW_ID_PROP_ID, 0, 4, 0), (0x0003, LTP_ROW_VERSION_PROP_ID, 4, 4, 1)]
+def test_a_four_byte_region_that_cannot_hold_the_row_id_column_is_refused_at_parse_time() -> None:
+    """`rgib[TCI_4b] = 0` cannot even carry the row-id column (offset 0, width 4) — a structural, eager
+    refusal (P06's column-offset check) that has nothing to do with row count.
+    """
+    schema = [(0x0003, LTP_ROW_ID_PROP_ID, 0, 4, 0)]
+    with pytest.raises(PstFormatError, match="aligned inside"):
+        make_tc([], schema=schema, rgib=(0, 0, 0, 1))
+
+
+def test_a_four_byte_region_inside_the_row_header_is_refused_once_a_row_exists() -> None:
+    """The documented divergence: upstream computes `end_4byte - 8` as a usize and underflows — but only
+    when it actually reads a row (`TableRowData::read`). `rgib[TCI_4b] = 4` is `synth-basics.pst`'s own
+    shape (P06b): too small for the 8-byte row header, but large enough for the lone row-id column, so the
+    eager column-offset check does not catch it; only a non-empty matrix does, and only once read.
+    """
+    schema = [(0x0003, LTP_ROW_ID_PROP_ID, 0, 4, 0)]
+    tc = make_tc([bytes(5)], schema=schema, rgib=(4, 4, 4, 5))
     with pytest.raises(PstFormatError, match="row header"):
-        make_tc([], schema=schema, rgib=(end_4byte, end_4byte, end_4byte, end_4byte + 1))
+        _ = tc.row_count
+
+
+def test_a_four_byte_region_inside_the_row_header_is_accepted_while_the_matrix_is_empty() -> None:
+    """`synth-basics.pst` (EMLtoPST, P06b): `rgib[TCI_4b] = 4` on an empty associated-contents table.
+
+    Upstream's `rows_matrix()` never reads a row of an empty table, so it
+    never underflows and prints `Associated Count: 0`; this port now agrees
+    (the module docstring's divergence, narrowed to a non-empty matrix).
+    """
+    schema = [(0x0003, LTP_ROW_ID_PROP_ID, 0, 4, 0)]
+    # `matrix_hnid=0`, exactly `synth-basics.pst`'s own `hnidRows`: no matrix
+    # item at all (upstream's `Option<NodeId>` None), not a present-but-empty one.
+    tc = make_tc([], schema=schema, rgib=(4, 4, 4, 5), matrix_hnid=0)
+    assert tc.row_count == 0
+    assert list(tc.rows()) == []
 
 
 def test_a_nine_column_schema_needs_two_bitmap_bytes() -> None:

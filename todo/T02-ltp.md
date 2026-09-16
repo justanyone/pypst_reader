@@ -167,20 +167,53 @@ until this works.
 look like data. Test a row with a sparse column explicitly.
 
 ### P06b-EMPTY-TC
-status: ⏳ in flight — agent/p06b-empty-tc 2026-09-16
+status: ✅ 2026-09-16 — `src/pypst/ltp/table_context.py`: `TableContextInfo._validate` no
+longer refuses `rgib[TCI_4b] < ROW_HEADER_SIZE` (8) at TCINFO parse time; the check moved
+to a new public method, `TableContextInfo.check_row_header_fits`, called from
+`TableContext._read_matrix` only once the row count is known and only when it is `> 0`
+(the module docstring's divergence paragraph rewritten to say exactly this). The eager
+column-offset check (`_validate_column`) is untouched and still refuses a schema whose
+reserved row-version column does not fit `end_4byte` regardless of row count — it is a
+structural check, independent of this one.
+
+**`debug folders` on `synth-basics.pst` is now byte-identical to the golden, 8/8 Unicode
+corpus stores** (`tests/test_folder.py::test_debug_folders_is_byte_identical_to_the_golden`,
+`BYTE_IDENTICAL` now = `UNICODE_STORES`, all eight). The six `Associated Table: None` lines
+now print `Associated Count: 0`, matching `tests/golden/synth-basics/dump_messages.txt`
+exactly — verified in-process (37/37 folder lines) and confirmed the underlying cause:
+`opened.root_folder.associated_table` now returns a `TableContext` of `row_count == 0`
+instead of raising. `test_synth_basics_associated_table_is_the_one_documented_divergence`
+renamed to `test_synth_basics_associated_table_is_byte_identical` and rewritten to the 8/8
+assertion.
+
+`tests/test_table_context.py` gained two tests replacing the one that pinned the eager
+refusal: `test_a_four_byte_region_that_cannot_hold_the_row_id_column_is_refused_at_parse_time`
+(the structural check, `end_4byte = 0`, independent of row count) and
+`test_a_four_byte_region_inside_the_row_header_is_refused_once_a_row_exists` (`end_4byte = 4`,
+a single-column schema mirroring `synth-basics.pst`'s own shape, refused only once
+`tc.row_count` is read) plus the new acceptance pin,
+`test_a_four_byte_region_inside_the_row_header_is_accepted_while_the_matrix_is_empty`
+(same shape, empty matrix, `row_count == 0`, `rows() == []`). `tests/corrupt.py`'s `tc_lies`
+`rgib[TCI_4b]=4_inside_row_header` lie is unaffected: it targets NID 0x12D, the root
+hierarchy table, which carries rows on every corpus base, so it still expects
+`PstFormatError` — reverified via `tests/test_corrupt_generator.py` and
+`tests/test_corruption.py` (80 passed, 5 skipped, no change needed). `tests/contract.py`
+gained one adapter, `table_context.TableContextInfo.check_row_header_fits` (over every
+real table's own TCINFO, via `s.tables`), 0 uncovered.
+
+Whole suite `-m "not slow"`: **2355 passed** (2354 + 1 new test net of the 3-for-1
+replacement), 22 skipped, 13 deselected, 2 xfailed, in ~23s. `check_provenance.py`,
+`check_quality_ratchet.py` (tier 2 debt 0), `check_upstream_parity.py` and
+`ruff check src tests scripts` all exit 0. **Mutant confirmed red**: re-added the eager
+`check_row_header_fits()` call inside `TableContextInfo._validate` (with `__pycache__`
+cleared, `PYTHONDONTWRITEBYTECODE=1`), and
+`test_a_four_byte_region_inside_the_row_header_is_accepted_while_the_matrix_is_empty`
+failed exactly as expected (`PstFormatError: TCINFO rgib[TCI_4b] 4 is inside the row
+header's 8 bytes`); reverted and reconfirmed green.
+
 upstream: `crates/pst/src/ltp/table_context.rs` (`TableContextInfo::read`, `rows_matrix`)
 oracle:   `tests/golden/synth-basics/dump_messages.txt` (six `Associated Count: 0` lines)
-blocked on: P08 (found it)
-
-P08 found that `synth-basics.pst` (EMLtoPST) writes an empty associated-contents
-table whose TCINFO says `rgib[TCI_4b] = 4`: a row width that cannot hold the
-8-byte row header. P06 refuses it when parsing the TCINFO (the documented
-`≥ 8` divergence — upstream underflows `end_4byte - 8` as a `usize` when it
-READS a row), so `debug folders` prints `Associated Table: None` where the
-golden prints `Associated Count: 0`. Upstream never reads a row of an empty
-table, so it never trips. Accept such a TCINFO only while the row matrix is
-empty (no rows to misread), keep the refusal for a non-empty one, keep the
-`tc_lies` pins that expect it, and take P08's folder dump to 8/8.
+blocked on: none (closed)
 
 ### P22-PROPTYPE
 status: ✅ 2026-09-15 — `src/pypst/ltp/prop_type.py` landed; `tests/test_prop_type.py` 225 tests (266 suite-wide), all green; 30 `PropType` members (29 codes + CLSID alias) verified name-by-name against the [MS-OXCDATA] 2.11.1 table fetched from the spec; every `Value:`/`Type:` variant in the 9×3 property goldens (Integer32, Integer64, Boolean, Binary, Unicode, String8 on the corpus; all 28 upstream variants in the map) maps to a decoded PropType; 20 deliberate mutations of the decoder each confirmed red (GUID byte order, BOOLEAN leniency, signedness, over-long fixed values, FILETIME bounds ±1, limit-vs-format class, MV offset checks, lossy UTF-16, NUL alignment, MV_GUID length, NUL truncation, ObjectRef field order); FILETIME edges pinned: 0, 7, 10, 116444736000000000, 2650467743999999990, 2650467743999999999, 0x7FFFFFFFFFFFFFFF refused. No oracle line: this row has no example binary of its own — the layer rows diff its output through P05/P06.

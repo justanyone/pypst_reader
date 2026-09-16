@@ -14,9 +14,10 @@ property that is absent or the wrong type. `PstLimitError` and
 blocks of the committed `dump_messages` goldens — byte for byte, and then the
 same goldens re-read as values through `tests.golden_parsers.parse_dump_messages`
 and compared against `Folder.walk()` id by id, name by name, count by count.
-Seven of the eight Unicode corpus stores match byte for byte; `synth-basics`
-differs in six lines for a reason this file pins
-(`test_synth_basics_associated_table_is_the_one_documented_divergence`).
+All eight Unicode corpus stores match byte for byte, including `synth-basics`
+(`test_synth_basics_associated_table_is_byte_identical`), whose empty
+associated-contents table used to be this file's one documented divergence
+until P06b closed it (`pypst.ltp.table_context`'s module docstring).
 
 **Then the shape of the API**: the walk's order, the three tables, the
 computed `entry_id` and `folder_type`, and the decision about a null display
@@ -59,13 +60,14 @@ UNICODE_IDS = [p.stem for p in UNICODE_STORES]
 # `synth-basics.pst`'s root folder writes an EMPTY associated-contents table
 # whose TCINFO says `rgib[TCI_4b] = 4`. [MS-PST] 2.3.4.4 puts dwRowID and
 # dwRowVer in the first 8 bytes of every row, so 4 is impossible for a row
-# that exists — and the table has none. P06 refuses it when the TCINFO is
-# parsed (its landed divergence: upstream computes `end_4byte - 8` as a usize
-# and underflows), where upstream refuses it only if it ever reads a row,
-# which it never does. So the oracle prints `Associated Count: 0` and this
-# port prints `Associated Table: None` for all six of that store's folders.
-BYTE_IDENTICAL = [p for p in UNICODE_STORES if p.stem != "synth-basics"]
-BYTE_IDENTICAL_IDS = [p.stem for p in BYTE_IDENTICAL]
+# that exists — and the table has none. P06 used to refuse it when the
+# TCINFO was parsed, before the table's (empty) row count was even known;
+# P06b (`pypst.ltp.table_context`'s module docstring) narrowed that check to
+# a non-empty matrix, matching upstream's own `rows_matrix()`, which never
+# reads a row of an empty table and never trips. All eight Unicode corpus
+# stores are now byte identical to the golden.
+BYTE_IDENTICAL = UNICODE_STORES
+BYTE_IDENTICAL_IDS = UNICODE_IDS
 
 # `pstd-inline-cid.pst`'s root folder has all three tables in the node B-tree
 # and none of them parses (five bitmap bytes for five columns, and the same
@@ -350,19 +352,27 @@ def test_debug_folders_is_byte_identical_to_the_golden(store: Path, golden, caps
     assert _dumper_output(store, capsys).splitlines() == expected, store.stem
 
 
-def test_synth_basics_associated_table_is_the_one_documented_divergence(golden, capsys: pytest.CaptureFixture[str]) -> None:
-    """Six lines differ on `synth-basics`, all of one kind, and this pins exactly which (see BYTE_IDENTICAL above)."""
+def test_synth_basics_associated_table_is_byte_identical(golden, capsys: pytest.CaptureFixture[str]) -> None:
+    """P06b closed the one documented divergence: `debug folders` now matches the golden 8/8, byte for byte.
+
+    `synth-basics.pst`'s root folder's empty associated-contents table
+    carries `rgib[TCI_4b] = 4` — too small for the 8-byte row header, but
+    the table has no row for it to misread (`pypst.ltp.table_context`'s
+    module docstring). Where this used to be refused at TCINFO parse time
+    (six `Associated Table: None` lines against the golden's `Associated
+    Count: 0`), the table now opens and reports zero rows, exactly as
+    upstream's `rows_matrix()` does.
+    """
     store = next(p for p in UNICODE_STORES if p.stem == "synth-basics")
     expected = dump_messages_folder_lines(golden(store, EXAMPLE))
     got = _dumper_output(store, capsys).splitlines()
-    assert len(got) == len(expected)
-    differ = [(a, b) for a, b in zip(expected, got, strict=True) if a != b]
-    assert differ == [("  Associated Count: 0", "  Associated Table: None")] * 6
-    # ...and the cause is P06's TCINFO check, not anything in this layer.
+    assert got == expected
+    # ...and the cause is `TableContext`'s row count, not anything in this layer.
     with _store(store) as opened:
-        with pytest.raises(PstFormatError, match=r"rgib\[TCI_4b\] 4"):
-            _ = opened.root_folder.associated_table
-        assert opened.root_folder.associated_ids.__doc__  # the accessor exists; it is the table that is refused
+        table = opened.root_folder.associated_table
+        assert table is not None
+        assert len(table) == 0
+        assert opened.root_folder.associated_ids() == ()
 
 
 def test_the_dumper_starts_at_the_root_folder_not_the_ipm_subtree(empty_pst: Path, capsys: pytest.CaptureFixture[str]) -> None:
