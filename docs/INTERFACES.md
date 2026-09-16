@@ -377,14 +377,47 @@ def write_eml(message: Message, path) → None
 # Synthesised headers (Message-ID etc.) are marked with X-Pypst-Synthesized: <header names>
 ```
 
-## `pypst.debug` — P29, then every layer
+## `pypst.debug` — P29 (built), then every layer registers
 
 ```python
-python -m pypst.debug header|btrees|density_list|store_props|named_props|root_folder|ipm_subtree|search_updates|messages <file>
+python -m pypst.debug <layer> <file>      # exit 0; a PstError → "Error: …" on stderr, exit 1
+python -m pypst.debug --list              # registered layer names, one per line
+                                          # unknown/missing layer → argparse usage error, exit 2
+
+DUMPERS: dict[str, Callable[[Path], None]]   # EMPTY today; a layer row adds one entry:
+DUMPERS["header"] = dump_header              # prints upstream's read_header format for that file
 ```
 
-Each subcommand prints upstream's example output format for that layer,
-so `tests/golden_parsers.py` parses both sides with one parser.
+Expected names, one per upstream example: `header`, `btrees`, `density_list`,
+`store_props`, `named_props`, `root_folder`, `ipm_subtree`, `search_updates`,
+and later `messages` (P19). A dumper prints upstream's example output for its
+layer and raises only `PstError`; `tests/golden_parsers.py` parses both sides
+with one parser and the test compares values.
+
+The parser side (`tests/golden_parsers.py`, P29):
+
+```python
+PARSERS: dict[str, Callable[[str], Any]]   # every captured example → parser (read_header complete, the rest stubs)
+parse_read_header(text) → {
+    "version": "Unicode" | "Ansi",
+    "next_block": {"internal": bool, "index": int},   # BlockId.is_internal / .index
+    "next_page": int,                                  # PageId.raw
+    "file_eof_index", "amap_last_index", "amap_free_size", "pmap_free_size": int,   # ByteIndex.value
+    "node_btree", "block_btree": {"page": int, "index": int},                        # PageRef
+    "amap_is_valid": "Invalid" | "Valid1" | "Valid2",                                # AmapStatus name, upstream spelling
+}
+parse_block_id(s) → {"internal": bool, "index": int}
+parse_page_id(s) → int;  parse_byte_index(s) → int
+parse_node_id(s) → {"type": str, "index": int}       # type is upstream's variant name, e.g. "NormalFolder"
+parse_block_ref(s) → {"block": <block_id>, "index": int};  parse_page_ref(s) → {"page": int, "index": int}
+# Every parser raises ValueError naming the offending line on truncated or garbled input — never a partial result.
+# The `Unicode`/`Ansi` prefix on id types is OPTIONAL, so a dumper prints the `__str__` forms in § ids (no prefix).
+```
+
+`conftest.py` fixtures: `golden(store, example) → str` and
+`golden_exit(store, example) → int` (0 when no `.exit` file); both skip when
+the golden is missing. `tests/test_golden_drift.py` (`oracle`, `slow`) runs
+`scripts/capture_oracle.py --check` and fails on drift.
 
 ## `pypst` — the top level
 
@@ -399,3 +432,4 @@ __all__ = [...]                      # the P24 contract harness iterates this
 
 - 2026-09-15 — drafted from upstream's public surface (P30). Nothing above
   `errors`/`encode`/`crc` exists yet; every other section is a promise.
+- 2026-09-15 — P29: `pypst.debug` built (empty `DUMPERS` registry, `--list`, exit codes); golden parser output shapes and the optional-prefix rule recorded above.

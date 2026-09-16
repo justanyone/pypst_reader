@@ -17,7 +17,12 @@ store-level example (missing `PidTagIpmWastebasketEntryId`). Both are kept
 as goldens: the port must refuse the same inputs, in its own vocabulary.
 
 ### P29-GOLDEN-HARNESS
-status: ✗ not started
+status: ✅ 2026-09-15 — `parse_read_header` parses 9/9 read_header goldens (Empty + 8 corpus; 2 ANSI
+        → version "Ansi", prefix stripped); 84 tests added in test_golden_parsers.py (83) +
+        test_golden_drift.py (1), suite 125 passed; `--check` drift test seen red on one flipped byte
+        (named Empty/read_header), parser seen red on a flipped value and on truncation at each
+        of the 10 line boundaries; 7 stubs raise NotImplementedError describing their golden's shape;
+        `python -m pypst.debug --list` runs with an empty registry
 upstream: none
 oracle:   `tests/golden/`
 blocked on: none — **lane C starts here**

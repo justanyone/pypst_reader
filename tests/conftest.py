@@ -104,3 +104,48 @@ def run_oracle(reference: Path, example: str, *args: str, timeout: int = 120) ->
             f"oracle `{example}` failed ({result.returncode}):\n{result.stderr[-2000:]}"
         )
     return result.stdout
+
+
+# --- goldens (P29) -----------------------------------------------------------
+
+GOLDEN = REPO / "tests" / "golden"
+
+
+def _golden_path(store: Path, example: str, suffix: str) -> Path:
+    return GOLDEN / store.stem / f"{example}{suffix}"
+
+
+@pytest.fixture(scope="session")
+def golden():
+    """``golden(store, example) -> str``: the committed oracle output.
+
+    Reads ``tests/golden/<store.stem>/<example>.txt`` (captured by
+    scripts/capture_oracle.py). Skips, never fails, when the golden is
+    missing: a fixture added without a capture is a P17-style row, not a
+    failing test.
+    """
+
+    def _read(store: Path, example: str) -> str:
+        path = _golden_path(store, example, ".txt")
+        if not path.exists():
+            pytest.skip(f"no golden {path.relative_to(REPO)} — run scripts/capture_oracle.py")
+        return path.read_text()
+
+    return _read
+
+
+@pytest.fixture(scope="session")
+def golden_exit():
+    """``golden_exit(store, example) -> int``: the oracle's exit status.
+
+    0 when no ``.exit`` file exists (the capture writes one only for a
+    non-zero exit). Skips when the ``.txt`` golden itself is missing.
+    """
+
+    def _read(store: Path, example: str) -> int:
+        if not _golden_path(store, example, ".txt").exists():
+            pytest.skip(f"no golden for {store.stem}/{example} — run scripts/capture_oracle.py")
+        path = _golden_path(store, example, ".exit")
+        return int(path.read_text()) if path.exists() else 0
+
+    return _read
