@@ -1,0 +1,210 @@
+Folder: NodeId { NormalFolder: 0x9 }
+  Name: Error: Custom { kind: InvalidData, error: InvalidFolderDisplayName(Null) }
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x401 }
+  Name: "Top of Personal Folders"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x403 }
+  Name: "Deleted Items"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x404 }
+  Name: "Inbox"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x405 }
+  Name: "Outbox"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x406 }
+  Name: "Sent Items"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x409 }
+  Name: "Calendar"
+  Content Count: 1
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+  Message: NodeId { NormalMessage: 0x10006 }
+    Class: "IPM.Appointment"
+    Subject: Unicode(UnicodeValue { "\u{1}\u{1}Test appointment" })
+    Normalized Subject: None
+    Sender Name: Unicode(UnicodeValue { "Unknown" })
+    Sender Email: Unicode(UnicodeValue { "Unknown" })
+    Sender SMTP: None
+    Delivery Time: Time(131145712326210000)
+    Client Submit Time: Time(131145712326370000)
+    Body Text: 50 bytes crc 0xBE9AD267 type=Unicode
+    Body HTML: None
+    Body RTF: 3214 bytes crc 0x92EC4B39 type=Binary
+    Transport Headers: None
+    Recipients: None
+    Attachments: 2
+      Attachment: NodeId { Attachment: 0x405 }
+        Row: method=5 filename=None size=8078
+        Error: Custom { kind: InvalidData, error: AttachmentMethodNotFound }
+      Attachment: NodeId { Attachment: 0x407 }
+        Row: method=5 filename=None size=8043
+        Error: Custom { kind: InvalidData, error: AttachmentMethodNotFound }
+Folder: NodeId { NormalFolder: 0x40A }
+  Name: "Contacts"
+  Content Count: 2
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+  Message: NodeId { NormalMessage: 0x10003 }
+    Class: "IPM.Contact"
+    Subject: Unicode(UnicodeValue { "\u{1}\u{1}contact name 1" })
+    Normalized Subject: None
+    Sender Name: Unicode(UnicodeValue { "Unknown" })
+    Sender Email: Unicode(UnicodeValue { "Unknown" })
+    Sender SMTP: None
+    Delivery Time: Time(130454999083800000)
+    Client Submit Time: Time(130454999084160000)
+    Body Text: None
+    Body HTML: None
+    Body RTF: None
+    Transport Headers: None
+    Recipients: None
+    Attachments: None
+  Message: NodeId { NormalMessage: 0x10001 }
+    Error: Custom { kind: InvalidData, error: MessageSubNodeTreeNotFound }
+Folder: NodeId { NormalFolder: 0x40B }
+  Name: "Journal"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x40C }
+  Name: "Notes"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x40D }
+  Name: "Tasks"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x40E }
+  Name: "Drafts"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x40F }
+  Name: "RSS Feeds"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x410 }
+  Name: "Junk E-mail"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x402 }
+  Name: "Search Root"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { SearchFolder: 0x39 }
+  Name: "All Messages"
+  Content Count: 3
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Table: None
+  Contents Table: None
+  Hierarchy Table: None
+Folder: NodeId { SearchFolder: 0x111 }
+  Name: "SPAM Search Folder 2"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Table: None
+  Contents Table: None
+  Hierarchy Table: None
+Folder: NodeId { NormalFolder: 0x407 }
+  Name: "IPM_VIEWS"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x408 }
+  Name: "IPM_COMMON_VIEWS"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 3
+Folder: NodeId { SearchFolder: 0x4001 }
+  Name: "Reminders"
+  Content Count: 1
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Table: None
+  Contents Table: None
+  Hierarchy Table: None
+Folder: NodeId { SearchFolder: 0x4002 }
+  Name: "To-Do Search"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Table: None
+  Contents Table: None
+  Hierarchy Table: None
+Folder: NodeId { SearchFolder: 0x4003 }
+  Name: "ItemProcSearch"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Table: None
+  Contents Table: None
+  Hierarchy Table: None
+Folder: NodeId { NormalFolder: 0x411 }
+  Name: "Freebusy Data"
+  Content Count: 1
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+  Message: NodeId { NormalMessage: 0x10002 }
+    Class: "IPM.Microsoft.ScheduleData.FreeBusy"
+    Subject: Unicode(UnicodeValue { "LocalFreebusy" })
+    Normalized Subject: None
+    Sender Name: None
+    Sender Email: None
+    Sender SMTP: None
+    Delivery Time: None
+    Client Submit Time: None
+    Body Text: None
+    Body HTML: None
+    Body RTF: None
+    Transport Headers: None
+    Recipients: None
+    Attachments: None
+Folder: NodeId { SearchFolder: 0x4004 }
+  Name: "Tracked Mail Processing"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Table: None
+  Contents Table: None
+  Hierarchy Table: None
+Errors: 3

@@ -1,0 +1,6 @@
+# Share the reference checkout's target directory (the debug profile that
+# scripts/oracle.sh already uses for the upstream examples) so the outlook-pst
+# crate and its dependencies are not compiled a second time. Relative to the
+# directory containing `.cargo/`, i.e. oracle/.
+[build]
+target-dir = "../reference/outlook-pst-rs/target"

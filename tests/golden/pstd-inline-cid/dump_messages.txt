@@ -1,0 +1,9 @@
+Folder: NodeId { NormalFolder: 0x9 }
+  Name: "Top of Personal Folders"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Table: None
+  Contents Table: None
+  Hierarchy Table: None
+Errors: 0

@@ -9,6 +9,10 @@ means every differential test runs everywhere, Rust or no Rust — and the
 `oracle` marker tests re-capture when cargo IS present and fail if the goldens
 drifted, which is how a moved upstream pin announces itself.
 
+The examples are upstream's eight dumps plus `dump_messages`, our own
+non-interactive message-level dump in oracle/ (compiled against the same
+pinned crate; scripts/oracle.sh finds it there).
+
 Layout:  tests/golden/<fixture-stem>/<example>.txt
          tests/golden/<fixture-stem>/<example>.exit     (only when non-zero)
          tests/golden/MANIFEST.txt                       (which pin produced them)
@@ -47,6 +51,7 @@ EXAMPLES = [
     "read_root_folder",
     "read_ipm_subtree",
     "read_search_updates",
+    "dump_messages",  # ours: oracle/examples/dump_messages.rs (P19), via the same oracle.sh
 ]
 FORBIDDEN = {"browse_pst", "rebuild_amap"}
 

@@ -1,0 +1,69 @@
+Folder: NodeId { NormalFolder: 0x9 }
+  Name: Error: Custom { kind: InvalidData, error: InvalidFolderDisplayName(Null) }
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x401 }
+  Name: "Top of Personal Folders"
+  Content Count: 1
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+  Message: NodeId { NormalMessage: 0x10001 }
+    Class: "IPM.Post"
+    Subject: Unicode(UnicodeValue { "\u{1}\u{1}Test" })
+    Normalized Subject: None
+    Sender Name: Unicode(UnicodeValue { "Terry Mahaffey" })
+    Sender Email: Unicode(UnicodeValue { "/o=microsoft/ou=First Administrative Group/cn=Recipients/cn=terrymah" })
+    Sender SMTP: None
+    Delivery Time: Time(128601005467660000)
+    Client Submit Time: Time(128601005467660000)
+    Body Text: 16 bytes crc 0x66C05EF4 type=Unicode
+    Body HTML: 1655 bytes crc 0xB04412C7 type=Binary
+    Body RTF: None
+    Transport Headers: None
+    Recipients: None
+    Attachments: None
+Folder: NodeId { NormalFolder: 0x403 }
+  Name: "Deleted Items"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x404 }
+  Name: "Folder"
+  Content Count: 1
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+  Message: NodeId { NormalMessage: 0x10002 }
+    Class: "IPM.Post"
+    Subject: Unicode(UnicodeValue { "\u{1}\u{1}Post" })
+    Normalized Subject: None
+    Sender Name: Unicode(UnicodeValue { "Terry Mahaffey" })
+    Sender Email: Unicode(UnicodeValue { "/o=microsoft/ou=First Administrative Group/cn=Recipients/cn=terrymah" })
+    Sender SMTP: None
+    Delivery Time: Time(128601006749820000)
+    Client Submit Time: Time(128601006749820000)
+    Body Text: 16 bytes crc 0x60C6C8E8 type=Unicode
+    Body HTML: 1655 bytes crc 0xBB4BC172 type=Binary
+    Body RTF: None
+    Transport Headers: None
+    Recipients: None
+    Attachments: None
+Folder: NodeId { NormalFolder: 0x402 }
+  Name: "Search Root"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { SearchFolder: 0x111 }
+  Name: "SPAM Search Folder 2"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Table: None
+  Contents Table: None
+  Hierarchy Table: None
+Errors: 0

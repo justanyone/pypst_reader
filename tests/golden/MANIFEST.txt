@@ -1,4 +1,4 @@
 # Oracle goldens. Regenerate with scripts/capture_oracle.py; verify with --check.
 UPSTREAM_REV=cfb721daee538acc50d2bad6faac5ce724f6037d
-EXAMPLES=read_header,read_btrees,read_density_list,read_store_props,read_named_props,read_root_folder,read_ipm_subtree,read_search_updates
+EXAMPLES=read_header,read_btrees,read_density_list,read_store_props,read_named_props,read_root_folder,read_ipm_subtree,read_search_updates,dump_messages
 FIXTURES=Empty,javalibpst-dist-list,pstd-inline-cid,pstsdk-sample1,pstsdk-sample2,pstsdk-submessage,pstsdk-test_ansi,pstsdk-test_unicode,synth-basics,tika-variousBodyTypes

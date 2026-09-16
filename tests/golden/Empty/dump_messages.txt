@@ -1,0 +1,39 @@
+Folder: NodeId { NormalFolder: 0x9 }
+  Name: Error: Custom { kind: InvalidData, error: InvalidFolderDisplayName(Null) }
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x401 }
+  Name: "Top of Outlook data file"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x403 }
+  Name: "Deleted Items"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x402 }
+  Name: "Search Root"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { SearchFolder: 0x111 }
+  Name: "SPAM Search Folder 2"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Table: None
+  Contents Table: None
+  Hierarchy Table: None
+Folder: NodeId { NormalFolder: 0x404 }
+  Name: "IPM_COMMON_VIEWS"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Errors: 0

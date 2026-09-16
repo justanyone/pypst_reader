@@ -1,0 +1,54 @@
+Folder: NodeId { NormalFolder: 0x9 }
+  Name: Error: Custom { kind: InvalidData, error: InvalidFolderDisplayName(Null) }
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x401 }
+  Name: "Top of Personal Folders"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x403 }
+  Name: "Deleted Items"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x404 }
+  Name: "Folder"
+  Content Count: 1
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+  Message: NodeId { NormalMessage: 0x10001 }
+    Class: "IPM.Post"
+    Subject: String8(String8Value { "\u{1}\u{1}Post" })
+    Normalized Subject: None
+    Sender Name: String8(String8Value { "Terry Mahaffey" })
+    Sender Email: String8(String8Value { "/o=microsoft/ou=First Administrative Group/cn=Recipients/cn=terrymah" })
+    Sender SMTP: None
+    Delivery Time: Time(128601006655590000)
+    Client Submit Time: Time(128601006655590000)
+    Body Text: 8 bytes crc 0x6698E39B type=String8
+    Body HTML: 1655 bytes crc 0xBB4BC172 type=String8
+    Body RTF: None
+    Transport Headers: None
+    Recipients: None
+    Attachments: None
+Folder: NodeId { NormalFolder: 0x402 }
+  Name: "Search Root"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { SearchFolder: 0x111 }
+  Name: "SPAM Search Folder 2"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Table: None
+  Contents Table: None
+  Hierarchy Table: None
+Errors: 0

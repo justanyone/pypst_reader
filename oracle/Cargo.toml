@@ -1,0 +1,27 @@
+# pypst-oracle — our own non-interactive example binaries, compiled against the
+# pinned upstream crate (reference/outlook-pst-rs, MIT, Microsoft). Rust is the
+# oracle here, not the product: nothing in src/pypst depends on this crate.
+#
+# Build:  cargo build --manifest-path oracle/Cargo.toml --example dump_messages
+# Run:    scripts/oracle.sh dump_messages tests/fixtures/Empty.pst
+#
+# `[workspace]` is deliberately empty so this crate is not adopted by the
+# reference checkout's workspace. Build output goes to the reference target
+# directory (oracle/.cargo/config.toml) so the already-built debug artefacts
+# are reused rather than compiled a second time.
+
+[package]
+name = "pypst-oracle"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "Non-interactive dumps of a PST through the outlook-pst crate, for differential testing of pypst"
+
+[workspace]
+
+[dependencies]
+outlook-pst = { path = "../reference/outlook-pst-rs/crates/pst" }
+
+[[example]]
+name = "dump_messages"

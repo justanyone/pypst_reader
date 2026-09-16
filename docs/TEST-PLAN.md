@@ -109,6 +109,22 @@ every folder, message, recipient and attachment non-interactively. It lives in
 captured into goldens like any other example, and it is what P08–P09 diff
 against.
 
+Built (P19): `oracle/Cargo.toml` + `oracle/examples/dump_messages.rs`, a
+`[workspace]`-less crate with `outlook-pst` as a path dependency, sharing the
+reference checkout's debug `target/` via `oracle/.cargo/config.toml`.
+`scripts/oracle.sh dump_messages <pst>` runs it (`cargo build --example
+dump_messages` inside `oracle/` builds it by hand; a few seconds once the
+upstream examples are built). It walks pre-order from `NID_ROOT_FOLDER`,
+prints folders, messages (ids, class, subjects, sender, times as raw FILETIME integers,
+body kinds as byte length + CRC-32, recipient and attachment rows) and ends
+with `Errors: n`; a per-item failure never aborts the walk. Goldens live at
+`tests/golden/<fixture>/dump_messages.txt`, tested by
+`tests/test_dump_messages_golden.py`. Known ceiling at pin `cfb721da`:
+upstream's `PropertyType::try_from` lacks `PtypObject` (0x000D), so it cannot
+open any embedded-message attachment; the dump records the attachment-table
+row (`method=5`) and the refusal, and the recursion into the embedded
+message is written but unreachable until the pin moves.
+
 ### T8 — synthetic fixtures with known content
 
 `pstd-inline-cid.pst` was generated from authored EML files by EMLtoPST, a

@@ -1,0 +1,109 @@
+Folder: NodeId { NormalFolder: 0x9 }
+  Name: Error: Custom { kind: InvalidData, error: InvalidFolderDisplayName(Null) }
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x401 }
+  Name: "Top of Outlook data file"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x403 }
+  Name: "Deleted Items"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x404 }
+  Name: "Inbox"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x405 }
+  Name: "tmp"
+  Content Count: 4
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+  Message: NodeId { NormalMessage: 0x10001 }
+    Class: "IPM.Note"
+    Subject: Unicode(UnicodeValue { "\u{1}\u{1}original email" })
+    Normalized Subject: None
+    Sender Name: Unicode(UnicodeValue { "Allison, Timothy B." })
+    Sender Email: Unicode(UnicodeValue { "/O=EXCHANGELABS/OU=EXCHANGE ADMINISTRATIVE GROUP (FYDIBOHF23SPDLT)/CN=RECIPIENTS/CN=C30306CDAE2248028DE286352CC599F0-ALLISON, TI" })
+    Sender SMTP: Unicode(UnicodeValue { "tallison@mitre.org" })
+    Delivery Time: Time(131485947642894527)
+    Client Submit Time: Time(131485947630000000)
+    Body Text: 74 bytes crc 0xB4E65CDB type=Unicode
+    Body HTML: 1804 bytes crc 0x83EE00A2 type=Binary
+    Body RTF: None
+    Transport Headers: 5384 bytes crc 0x90183710 type=Unicode
+    Recipients: 1
+      Recipient: type=1 name=Unicode(UnicodeValue { "Allison, Timothy B." }) email=Unicode(UnicodeValue { "/o=ExchangeLabs/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=c30306cdae2248028de286352cc599f0-Allison, Ti" }) smtp=Unicode(UnicodeValue { "tallison@mitre.org" })
+    Attachments: None
+  Message: NodeId { NormalMessage: 0x10002 }
+    Class: "IPM.Note"
+    Subject: Unicode(UnicodeValue { "\u{1}\u{5}FW: original email" })
+    Normalized Subject: None
+    Sender Name: Unicode(UnicodeValue { "Allison, Timothy B." })
+    Sender Email: Unicode(UnicodeValue { "/O=EXCHANGELABS/OU=EXCHANGE ADMINISTRATIVE GROUP (FYDIBOHF23SPDLT)/CN=RECIPIENTS/CN=C30306CDAE2248028DE286352CC599F0-ALLISON, TI" })
+    Sender SMTP: Unicode(UnicodeValue { "tallison@mitre.org" })
+    Delivery Time: Time(131485948130901850)
+    Client Submit Time: Time(131485948120000000)
+    Body Text: 420 bytes crc 0xC8CEEEE7 type=Unicode
+    Body HTML: 2576 bytes crc 0x0E17DE88 type=Binary
+    Body RTF: None
+    Transport Headers: 5778 bytes crc 0x95A1B7E7 type=Unicode
+    Recipients: 1
+      Recipient: type=1 name=Unicode(UnicodeValue { "Allison, Timothy B." }) email=Unicode(UnicodeValue { "/o=ExchangeLabs/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=c30306cdae2248028de286352cc599f0-Allison, Ti" }) smtp=Unicode(UnicodeValue { "tallison@mitre.org" })
+    Attachments: None
+  Message: NodeId { NormalMessage: 0x10003 }
+    Class: "IPM.Note"
+    Subject: Unicode(UnicodeValue { "\u{1}\u{5}FW: original email" })
+    Normalized Subject: None
+    Sender Name: Unicode(UnicodeValue { "Allison, Timothy B." })
+    Sender Email: Unicode(UnicodeValue { "/O=EXCHANGELABS/OU=EXCHANGE ADMINISTRATIVE GROUP (FYDIBOHF23SPDLT)/CN=RECIPIENTS/CN=C30306CDAE2248028DE286352CC599F0-ALLISON, TI" })
+    Sender SMTP: Unicode(UnicodeValue { "tallison@mitre.org" })
+    Delivery Time: Time(131485948410923970)
+    Client Submit Time: Time(131485948400000000)
+    Body Text: 390 bytes crc 0x9BE48613 type=Unicode
+    Body HTML: None
+    Body RTF: 3838 bytes crc 0xDA086E01 type=Binary
+    Transport Headers: 5778 bytes crc 0x0831123E type=Unicode
+    Recipients: 1
+      Recipient: type=1 name=Unicode(UnicodeValue { "Allison, Timothy B." }) email=Unicode(UnicodeValue { "/o=ExchangeLabs/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=c30306cdae2248028de286352cc599f0-Allison, Ti" }) smtp=Unicode(UnicodeValue { "tallison@mitre.org" })
+    Attachments: None
+  Message: NodeId { NormalMessage: 0x10004 }
+    Class: "IPM.Note"
+    Subject: Unicode(UnicodeValue { "\u{1}\u{5}FW: original email" })
+    Normalized Subject: None
+    Sender Name: Unicode(UnicodeValue { "Allison, Timothy B." })
+    Sender Email: Unicode(UnicodeValue { "/O=EXCHANGELABS/OU=EXCHANGE ADMINISTRATIVE GROUP (FYDIBOHF23SPDLT)/CN=RECIPIENTS/CN=C30306CDAE2248028DE286352CC599F0-ALLISON, TI" })
+    Sender SMTP: Unicode(UnicodeValue { "tallison@mitre.org" })
+    Delivery Time: Time(131485948711416462)
+    Client Submit Time: Time(131485948700000000)
+    Body Text: 404 bytes crc 0x054AC8C6 type=Unicode
+    Body HTML: None
+    Body RTF: None
+    Transport Headers: 5778 bytes crc 0x07FDCB48 type=Unicode
+    Recipients: 1
+      Recipient: type=1 name=Unicode(UnicodeValue { "Allison, Timothy B." }) email=Unicode(UnicodeValue { "/o=ExchangeLabs/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=c30306cdae2248028de286352cc599f0-Allison, Ti" }) smtp=Unicode(UnicodeValue { "tallison@mitre.org" })
+    Attachments: None
+Folder: NodeId { NormalFolder: 0x402 }
+  Name: "Search Root"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { SearchFolder: 0x111 }
+  Name: "SPAM Search Folder 2"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Table: None
+  Contents Table: None
+  Hierarchy Table: None
+Errors: 0

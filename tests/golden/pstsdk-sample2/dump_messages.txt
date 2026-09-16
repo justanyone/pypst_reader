@@ -1,0 +1,72 @@
+Folder: NodeId { NormalFolder: 0x9 }
+  Name: Error: Custom { kind: InvalidData, error: InvalidFolderDisplayName(Null) }
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x401 }
+  Name: "Top of Outlook data file"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: true
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x403 }
+  Name: "Deleted Items"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { NormalFolder: 0x404 }
+  Name: "Sample2"
+  Content Count: 1
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+  Message: NodeId { NormalMessage: 0x10001 }
+    Class: "IPM.Note"
+    Subject: String8(String8Value { "\u{1}\u{1}Here is a sample message" })
+    Normalized Subject: None
+    Sender Name: String8(String8Value { "Terry Mahaffey" })
+    Sender Email: String8(String8Value { "/O=MICROSOFT/OU=NORTHAMERICA/CN=RECIPIENTS/CN=TERRYMAH1" })
+    Sender SMTP: String8(String8Value { "terrymah@microsoft.com" })
+    Delivery Time: Time(129131467279515197)
+    Client Submit Time: Time(129131467250000000)
+    Body Text: 79 bytes crc 0x72216A76 type=String8
+    Body HTML: 1701 bytes crc 0xE321EBB9 type=String8
+    Body RTF: None
+    Transport Headers: 1098 bytes crc 0x0632DAAC type=String8
+    Recipients: 1
+      Recipient: type=1 name=String8(String8Value { "Terry Mahaffey" }) email=String8(String8Value { "/O=MICROSOFT/OU=Northamerica/cn=Recipients/cn=terrymah1" }) smtp=String8(String8Value { "terrymah@microsoft.com" })
+    Attachments: 1
+      Attachment: NodeId { Attachment: 0x401 }
+        Row: method=1 filename=String8(String8Value { "leah_t~1.jpg" }) size=96760
+        Method: 1
+        Filename: String8(String8Value { "leah_t~1.jpg" })
+        Long Filename: String8(String8Value { "leah_thumper.jpg" })
+        Mime Tag: None
+        Content Id: None
+        Size: 96760
+        Data: 93142 bytes crc 0xB32A82DE
+Folder: NodeId { NormalFolder: 0x402 }
+  Name: "Search Root"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Count: 0
+Folder: NodeId { SearchFolder: 0x111 }
+  Name: "SPAM Search Folder 2"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Table: None
+  Contents Table: None
+  Hierarchy Table: None
+Folder: NodeId { SearchFolder: 0x4001 }
+  Name: "ItemProcSearch"
+  Content Count: 0
+  Unread Count: 0
+  Has Sub Folders: false
+  Associated Table: None
+  Contents Table: None
+  Hierarchy Table: None
+Errors: 0

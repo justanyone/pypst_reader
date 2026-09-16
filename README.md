@@ -69,6 +69,21 @@ synthetic fixture regenerates byte-for-byte, and that the `oracle`-marked
 tests pass live. Every one of those checks is a call into
 `scripts/nightly_oracle_local.sh`, so the same run works on a laptop
 (`SKIP_RUST=1` for the Python-only half).
+Upstream's only message-level example is an interactive TUI, so `oracle/`
+holds a small Rust crate of our own (MIT; it links the pinned upstream crate
+as a path dependency and copies nothing in) with the examples upstream does
+not ship. `dump_messages` walks every folder, message, recipient and
+attachment non-interactively and prints them in upstream's `Debug` style —
+body *lengths and CRC-32s*, never body text — and is captured into
+`tests/golden/` like the other eight. `scripts/oracle.sh` finds it by name:
+
+```bash
+scripts/oracle.sh dump_messages tests/fixtures/public/pstsdk-test_unicode.pst
+cd oracle && cargo build --example dump_messages     # or let oracle.sh build it
+```
+
+It builds into the reference checkout's `target/` (debug profile, the one
+`oracle.sh` already uses), so nothing is compiled twice.
 
 ### Test
 

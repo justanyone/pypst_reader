@@ -25,9 +25,16 @@ DEST="reference/outlook-pst-rs"
 [[ -d $DEST ]] || { echo "run scripts/get_rust_source.sh first" >&2; exit 1; }
 command -v cargo >/dev/null || export PATH="$HOME/.cargo/bin:$PATH"
 
+# Our own examples (oracle/, compiled against the same pinned crate) fill the
+# gaps upstream leaves — today `dump_messages`, the message-level dump that
+# upstream only offers as a TUI. Same output conventions, same goldens.
+OURS="oracle"
+
 if [[ ${1:-} == "--list" || $# -lt 1 ]]; then
     echo "examples:"
     ls "$DEST/crates/pst/examples"/*.rs | xargs -n1 basename | sed 's/\.rs$//' | sed 's/^/  /'
+    echo "examples (ours, $OURS/):"
+    ls "$OURS/examples"/*.rs | xargs -n1 basename | sed 's/\.rs$//' | sed 's/^/  /'
     exit 0
 fi
 
@@ -40,5 +47,15 @@ EXAMPLE="$1"; shift
 PST="$(cd "$(dirname -- "$1")" && pwd)/$(basename -- "$1")"; shift
 [[ -f $PST ]] || { echo "oracle.sh: no such file: $PST" >&2; exit 1; }
 
-cd "$DEST/crates/pst"
-exec cargo run --quiet --example "$EXAMPLE" -- "$PST" "$@"
+if [[ -f "$DEST/crates/pst/examples/$EXAMPLE.rs" ]]; then
+    cd "$DEST/crates/pst"
+    exec cargo run --quiet --example "$EXAMPLE" -- "$PST" "$@"
+elif [[ -f "$OURS/examples/$EXAMPLE.rs" ]]; then
+    # cd, not --manifest-path: cargo finds oracle/.cargo/config.toml (the
+    # shared target dir) from the working directory, not from the manifest.
+    cd "$OURS"
+    exec cargo run --quiet --example "$EXAMPLE" -- "$PST" "$@"
+else
+    echo "oracle.sh: no example named '$EXAMPLE' (see --list)" >&2
+    exit 1
+fi

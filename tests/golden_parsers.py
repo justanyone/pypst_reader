@@ -1,6 +1,7 @@
 """Parsers that turn the Rust oracle's ``Debug`` text into plain Python values.
 
-One parser per upstream example (the eight captured by
+One parser per captured example (upstream's eight plus our own
+``dump_messages`` from ``oracle/``, all captured by
 ``scripts/capture_oracle.py``), plus the shared value parsers for the id
 types that every example prints. A differential test parses the committed
 golden with one of these, parses ``python -m pypst.debug <layer>`` output
@@ -19,7 +20,7 @@ Two rules every parser here keeps:
   ids). One parser reads both sides, so the prefix is stripped, not required.
 
 ``parse_read_header``, ``parse_read_btrees`` and ``parse_read_density_list``
-are complete. The other five are stubs whose
+are complete. The other six are stubs whose
 ``NotImplementedError`` describes the golden's shape, so the layer row that
 lands the parser knows what it is parsing. ``PARSERS`` maps every captured
 example name to its parser, complete or stub.
@@ -469,6 +470,27 @@ def parse_read_search_updates(text: str) -> Any:
     )
 
 
+def parse_dump_messages(text: str) -> Any:
+    raise NotImplementedError(
+        "dump_messages (P08/P09; oracle/examples/dump_messages.rs): a pre-order folder walk from NID_ROOT_FOLDER. "
+        "Each folder is `Folder: <NodeId>` then two-space-indented `Name:`, `Content Count:`, `Unread Count:`, "
+        "`Has Sub Folders:` (a String/int/bool Debug, or `Error: <Debug>` when the accessor fails), then either "
+        "`Associated Count: n` or `Associated Table: None`, then `Message:` blocks for every contents-table row "
+        "(or `Contents Table: None`), then `Hierarchy Table: None` when there is none; sub-folders follow as further "
+        "`Folder:` blocks. A message is `  Message: <NodeId>` with four-space-indented `Class:`, `Subject:`, "
+        "`Normalized Subject:`, `Sender Name:`, `Sender Email:`, `Sender SMTP:` (`None` or `<Type>(<Debug value>)`), "
+        "`Delivery Time:`/`Client Submit Time:` (`None` or `Time(<i64 FILETIME>)`), `Body Text:`/`Body HTML:`/`Body RTF:`/"
+        "`Transport Headers:` (`None` or `<n> bytes crc 0x<8 hex> type=<String8|Unicode|Binary>`), "
+        "`Recipients: n|None` + `      Recipient: type=<int> name=<v> email=<v> smtp=<v>` rows, "
+        "`Attachments: n|None` + `      Attachment: <NodeId>` blocks holding `        Row: method=<int> filename=<v> size=<int>` "
+        "then `Method:`, `Filename:`, `Long Filename:`, `Mime Tag:`, `Content Id:`, `Size:`, `Data:` (`None`, "
+        "`<n> bytes crc 0x..`, or `Message`, in which case an indented `Message:` block follows), or an `Error: <Debug>` "
+        "when the attachment cannot be opened. An item that cannot be opened prints `Error: <Debug>` and is counted; "
+        "the last line is `Errors: <n>` and the exit is 1 when n > 0. At pin cfb721da upstream cannot open "
+        "embedded-message attachments (PtypObject is unparsed), so pstsdk-submessage and javalibpst-dist-list exit 1."
+    )
+
+
 PARSERS: dict[str, Callable[[str], Any]] = {
     "read_header": parse_read_header,
     "read_btrees": parse_read_btrees,
@@ -478,4 +500,5 @@ PARSERS: dict[str, Callable[[str], Any]] = {
     "read_root_folder": parse_read_root_folder,
     "read_ipm_subtree": parse_read_ipm_subtree,
     "read_search_updates": parse_read_search_updates,
+    "dump_messages": parse_dump_messages,
 }

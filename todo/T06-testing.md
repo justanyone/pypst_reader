@@ -68,7 +68,38 @@ An `xfail` twin satisfies the lint; an absent one does not.
 job; a deleted twin is seen to fail it.
 
 ### P19-ORACLE-DUMP
-status: ✗ not started
+status: ✅ 2026-09-15 — built, captured, tested; one "done means" clause blocked by an upstream bug at the pin (below)
+evidence:
+- `oracle/Cargo.toml` (+ `Cargo.lock`, `.cargo/config.toml` sharing reference's debug `target/`) and
+  `oracle/examples/dump_messages.rs` (475 lines incl. doc comment). Debug profile, first build 7.3 s (-j 4, deps
+  already cached), incremental 0.24 s. `scripts/oracle.sh dump_messages <pst>` runs it;
+  `capture_oracle.py` lists it (a filtered capture no longer rewrites MANIFEST).
+- Goldens 9/9: Empty 39 lines exit 0 · javalibpst-dist-list 210 exit 1 · pstd-inline-cid 9 exit 0 ·
+  pstsdk-sample1 72 · pstsdk-sample2 72 · pstsdk-submessage 58 exit 1 · pstsdk-test_ansi 54 ·
+  pstsdk-test_unicode 69 · tika-variousBodyTypes 109 (all exit 0 unless stated).
+  `--check --example dump_messages` twice: identical. A full re-capture left the other 72 goldens
+  byte-identical (only MANIFEST gained the example).
+- Exits explained: upstream reads BOTH ANSI stores (they did not "error at open"; pypst still refuses
+  them, ADR-0003). pstd-inline-cid opens (the dump never asks for the wastebasket id) but its IPM
+  subtree is the root folder with no hierarchy/contents tables → 9 lines. pstsdk-submessage: 1 error;
+  javalibpst-dist-list: 3 (two the same cause, one `MessageSubNodeTreeNotFound` on message 0x10001 in
+  Contacts — upstream requires a sub-node tree on every message).
+- **Upstream bug at pin cfb721da** (found by differential probing, reproduced in a scratch copy, never
+  in reference/): `crates/pst/src/ltp/prop_type.rs` `PropertyType::try_from(u16)` has no `0x000D`
+  (`PtypObject`) arm although the enum declares `Object = 0x000D`, and `HeapTreeInner::entries` stops
+  at the first undecodable leaf record (`while let Ok`). Every embedded-message attachment carries
+  `PidTagAttachDataObject` (0x3701) as PtypObject, so the attachment PC is truncated before 0x3705 and
+  `UnicodeAttachment::read` fails with `AttachmentMethodNotFound`. Consequence: the "embedded message
+  one level down" clause cannot be met through this oracle; the golden shows the attachment-table row
+  (`Row: method=5 filename=… size=11494`) then the refusal, and `dump_messages.rs` already implements
+  the recursion for a fixed pin. `tests/test_dump_messages_golden.py::test_submessage_shows_embedded_
+  attachment_row` asserts the refusal explicitly so a pin move that fixes it fails loudly.
+- Also unreachable through upstream's public API: attachments *of* an embedded message (it is
+  `Rc<dyn Message>`; `sub_nodes()` is crate-private) — the dump prints their `Row:` only.
+- Tests: `tests/test_dump_messages_golden.py`, 45 (44 golden, no Rust needed; 1 `oracle`-marked
+  rebuild-and-compare on Empty.pst). Each of the 12 test functions shown red once by mutating the
+  goldens, then restored by re-capture. Suite 900 passed / 6 skipped / 2 xfailed; ruff, provenance,
+  quality ratchet, parity all green. `parse_dump_messages` stub registered in `golden_parsers.PARSERS`.
 upstream: `crates/pst/examples/browse_pst.rs` (the TUI — what to dump, not how)
 oracle:   this row *builds* the oracle for P08/P09
 blocked on: none (needs someone comfortable writing ~200 lines of Rust)
