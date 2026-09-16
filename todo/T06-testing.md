@@ -114,6 +114,13 @@ asserting **what the messages say**, which no vendor fixture permits.
 `pstd-inline-cid.pst` is refused by upstream's store layer. A synthetic store
 that the oracle refuses is not admitted unless the refusal is the point.
 
+**Follow-up (P20b, optional):** EMLtoPST writes `wSig = 0` on every page and
+block trailer; upstream does not enforce it, so the store reads, but it is a
+spec MUST violation pinned in `tests/spec/test_ms_pst_trailers.py`
+(`ZERO_SIG_WRITERS`). Adding `ComputeSig` to the conformance patch would make
+`synth-basics` a fully conformant store and let that pin be removed.
+
+
 ### P24-CONTRACT
 status: ✗ not started
 upstream: none

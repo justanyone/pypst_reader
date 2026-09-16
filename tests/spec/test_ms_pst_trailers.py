@@ -46,7 +46,10 @@ MAX_PAGES = 10_000  # a cycle in a corrupt B-tree must end the test, not the run
 # (spec: "For BBT, NBT, and DList pages, a page / block signature is computed").
 # The store still opens in Outlook, so a reader cannot treat a zero signature
 # as fatal; the test pins the deviation so it is known rather than ignored.
-ZERO_SIG_WRITERS = {"pstd-inline-cid": "EMLtoPST (PSTD fixture)"}
+ZERO_SIG_WRITERS = {
+    "pstd-inline-cid": "EMLtoPST (PSTD fixture)",
+    "synth-basics": "EMLtoPST (our P20 fixture; the conformance patch does not yet compute wSig)",
+}
 
 
 @dataclass
