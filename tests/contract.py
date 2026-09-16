@@ -86,20 +86,22 @@ from typing import Any
 
 import pypst
 from pypst import block_sig, crc, debug, encode, limits, rtf
-from pypst.errors import PstError
+from pypst.errors import PstError, PstFormatError
 from pypst.limits import DEFAULT_LIMITS, Limits
 from pypst.ltp import heap, prop_context, prop_type, table_context, tree
 from pypst.ltp.heap import HeapId, HeapNode, HeapNodeId
 from pypst.ltp.prop_context import PropertyContext, PropertyRecord
 from pypst.ltp.prop_type import PropType
 from pypst.ltp.table_context import CellKind, CellRecord, TableContext, TableRow
+from pypst.messaging import folder as folder_mod
 from pypst.messaging import named_prop
 from pypst.messaging import store as messaging
+from pypst.messaging.folder import Folder
 from pypst.messaging.named_prop import NamedPropertyGuid, NamedPropertyMap, NameIdEntry
 from pypst.messaging.store import EntryId
 from pypst.ndb import block, btree, header, ids, page, root
 from pypst.ndb.block import SubNodeLeafEntry
-from pypst.ndb.ids import BlockId, ByteIndex, NodeId
+from pypst.ndb.ids import NID_ROOT_FOLDER, BlockId, ByteIndex, NodeId, NodeIdType
 from tests.corruption_harness import DEFAULT_TIMEOUT, Hang, Watchdog
 
 # --- discovery ---------------------------------------------------------------------
@@ -121,6 +123,8 @@ READER_TYPES = (
     "BlockBTreeEntry",
     "HeapNode",
     "PropertyContext",  # P07: NamedPropertyMap is built over one, so it is a reader class
+    "Store",  # P08: a Folder is built over an open Store, so it is a reader class
+    "Folder",  # P08: `pypst.debug`'s folder helpers take one, so they need one too
 )
 WIRE_TYPES = ("PropType", "int")
 
@@ -633,6 +637,37 @@ class Store:
                 if isinstance(value, bytes):
                     out.append((f"0x{prop_id:04X}", value))
         return out
+
+    # --- the folder tree over the same bytes (P08) --------------------------------
+
+    @property
+    def folders(self) -> list[Folder]:
+        """The root folder and every folder `walk()` reaches before it refuses; `Unreachable` when 0x122 will not open.
+
+        `_drain` keeps the partial walk on purpose: `pstd-inline-cid.pst`'s
+        root folder opens and its hierarchy table does not, and the folder
+        entry points must still be reached on that store.
+        """
+        return self._lazy("folders", lambda: self._drain(self.store.root_folder.walk()))
+
+    @property
+    def folder_nids(self) -> list[NodeId]:
+        """Every NID a folder adapter aims at: the ones the store holds, and four no store can open.
+
+        The forged four are a folder NID the NBT does not hold, a NID whose
+        5-bit type is not a folder's, a NID whose type is not a type at all
+        (0x09 is unassigned in [MS-PST] 2.2.2.1), and 0.
+        """
+        forged = [NodeId(0xFFFF_FFE2), NodeId(0x21), NodeId(0x9), NodeId(0)]
+        held: list[NodeId] = [NID_ROOT_FOLDER]
+        try:
+            held += [f.node for f in self.folders]
+            with contextlib.suppress(PstError):
+                held += list(self.folders[0].subfolder_ids())
+        except Unreachable:
+            pass
+        keep = list(dict.fromkeys(held))
+        return [*(keep if self.thorough else keep[:2]), *forged]
 
     @property
     def path(self) -> Path:
@@ -1149,6 +1184,90 @@ def _named_string_calls(s: Store) -> Iterator[Call]:
     return [call(named, off, label=f"@{off:#x}") for off in dict.fromkeys([*offsets, 0, 1, len(data), len(data) + 1, 0xFFFFFFFF])]
 
 
+def _folders(s: Store) -> list[Folder]:
+    """The folders an adapter calls a method on: all of them when thorough, else the first two."""
+    return s.folders if s.thorough else s.folders[:2]
+
+
+def _folder_ctor_calls(s: Store) -> Iterator[Call]:
+    """Every folder NID the store holds, plus the four no store can open (`Store.folder_nids`)."""
+    for nid in s.folder_nids:
+        yield call(s.store, nid, label=str(nid))
+
+
+def _folder_open_calls(s: Store) -> Iterator[Call]:
+    """The same NIDs, plus this store's own EntryID for the root and another store's for the same node."""
+    store = s.store
+    for nid in s.folder_nids:
+        yield call(store, nid, label=str(nid))
+    with contextlib.suppress(PstError):  # a store with no PidTagRecordKey is judged at Store.entry_id
+        yield call(store, store.entry_id(NID_ROOT_FOLDER), label="own entry id")
+    yield call(store, EntryId(bytes(RECORD_KEY_SIZE), NID_ROOT_FOLDER), label="foreign entry id")
+
+
+def _open_folder_calls(s: Store) -> Iterator[Call]:
+    """`Store.open_folder` over the same set, through the store rather than the class."""
+    store = s.store
+    for nid in s.folder_nids:
+        yield call(store, nid, label=str(nid))
+    yield call(store, EntryId(bytes(RECORD_KEY_SIZE), NID_ROOT_FOLDER), label="foreign entry id")
+
+
+def _folder_calls(s: Store) -> Iterator[Call]:
+    """One call per folder, no arguments — the three id lists and the sub-folder walk."""
+    for f in _folders(s):
+        yield call(f, label=str(f.node))
+
+
+def _folder_table_calls(s: Store) -> Iterator[Call]:
+    """Every folder against every node type: the three tables it has, and types that are not tables at all."""
+    types = tuple(NodeIdType) if s.thorough else (NodeIdType.HIERARCHY_TABLE, NodeIdType.NORMAL_FOLDER)
+    for f in _folders(s):
+        for node_type in types:
+            yield call(f, node_type, label=f"{f.node} {node_type.debug_name}")
+
+
+def _folder_get_calls(s: Store) -> Iterator[Call]:
+    """The four properties this layer reads by name, one no folder holds, and 0."""
+    ids = (
+        folder_mod.PID_TAG_DISPLAY_NAME,
+        folder_mod.PID_TAG_CONTENT_COUNT,
+        folder_mod.PID_TAG_CONTENT_UNREAD_COUNT,
+        folder_mod.PID_TAG_SUBFOLDERS,
+        0xFFFF,
+        0,
+    )
+    for f in _folders(s):
+        for prop_id in ids if s.thorough else ids[:1]:
+            yield call(f, prop_id, label=f"{f.node} 0x{prop_id:04X}")
+
+
+def _folder_walk_calls(s: Store) -> Iterator[Call]:
+    """The walk from every folder, at the default ceiling and at the two that must refuse a real tree."""
+    for f in _folders(s):
+        yield call(f, label=str(f.node))
+        if s.thorough:
+            yield call(f, max_depth=1, label=f"{f.node} max_depth=1")
+            yield call(f, max_depth=0, label=f"{f.node} max_depth=0")
+
+
+def _debug_folder_calls(s: Store) -> Iterator[Call]:
+    """`debug.folder_lines` over every folder: the whole block the dumper prints, formatting included."""
+    return _folder_calls(s)
+
+
+def _debug_folder_accessor_calls(s: Store) -> Iterator[Call]:
+    """Both arms of the example's `result_debug`: a renderer that returns, and one that refuses."""
+
+    def refuse() -> str:
+        raise PstFormatError("adapter: the accessor refused")
+
+    for f in _folders(s):
+        for prop_id in (folder_mod.PID_TAG_DISPLAY_NAME, folder_mod.PID_TAG_SUBFOLDERS):
+            yield call(f, prop_id, lambda f=f: str(f.display_name), label=f"{f.node} 0x{prop_id:04X} value")
+            yield call(f, prop_id, refuse, label=f"{f.node} 0x{prop_id:04X} refused")
+
+
 def _dumper_calls(dumper: Callable[..., None]) -> Builder:
     """A registered dumper over the store on disk, its extra positional arguments built by parameter name."""
     extras = list(inspect.signature(dumper).parameters)[1:]
@@ -1306,6 +1425,21 @@ ADAPTERS: dict[object, Builder] = {
     named_prop.NamedPropertyMap.hash_entry: _named_entry_calls,
     named_prop.NamedPropertyMap.lookup_string: _named_string_calls,
     named_prop.NamedPropertyMap.string_bytes: _named_string_calls,
+    # the folder tree over the store (P08)
+    messaging.Store.open_folder: _open_folder_calls,
+    folder_mod.Folder: _folder_ctor_calls,
+    folder_mod.Folder.open: _folder_open_calls,
+    folder_mod.Folder.get: _folder_get_calls,
+    folder_mod.Folder.table: _folder_table_calls,
+    folder_mod.Folder.subfolder_ids: _folder_calls,
+    folder_mod.Folder.message_ids: _folder_calls,
+    folder_mod.Folder.associated_ids: _folder_calls,
+    folder_mod.Folder.contents: _folder_calls,
+    folder_mod.Folder.subfolders: _folder_calls,
+    folder_mod.Folder.walk: _folder_walk_calls,
+    debug.folder_lines: _debug_folder_calls,
+    debug.folder_table: _folder_table_calls,
+    debug.folder_accessor: _debug_folder_accessor_calls,
     # the CLI's dispatch, and every registered dumper, in-process
     debug.main: _main_calls,
     **{dumper: _dumper_calls(dumper) for dumper in debug.DUMPERS.values()},

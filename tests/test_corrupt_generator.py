@@ -56,6 +56,7 @@ PINNED = {
         "tc_lies": TC_LIES,
         "store_lies": 9,
         "named_prop_lies": 12,
+        "folder_lies": 12,
     },
     "Empty": {
         "truncations": 62,
@@ -71,6 +72,7 @@ PINNED = {
         "tc_lies": TC_LIES,
         "store_lies": 11,
         "named_prop_lies": 16,
+        "folder_lies": 12,
     },
 }
 
@@ -385,6 +387,7 @@ def test_families_are_named_and_ordered() -> None:
         "tc_lies",
         "store_lies",
         "named_prop_lies",
+        "folder_lies",
     ]
 
 

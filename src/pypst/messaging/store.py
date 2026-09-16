@@ -28,11 +28,11 @@ header, the node and block B-trees, a `BlockReader`, and the store PC's
 record table. Named properties are read on first use, as upstream's
 `store.named_property_map()` is.
 
-**`root_folder`, `open_folder` and `open_message` are deliberately absent.**
-They are rows P08 (folders) and P09 (messages), which will add them to this
-class; `docs/INTERFACES.md` § `pypst.messaging` has their signatures. This
-row stops at the store object so that the layer below it can be proved
-against the oracle before anything is built on it.
+**`root_folder` and `open_folder` were added by P08** (folders) and return
+`pypst.messaging.folder.Folder`; `open_message` is still P09's and is
+deliberately absent. `folder` imports this module, so the two accessors
+import it inside the call rather than at module scope — the cycle is real
+and is broken at the only point where it does not matter.
 
 **Deliberate divergences from upstream**, each chosen to fail closed or to
 fit Python's conventions:
@@ -80,7 +80,7 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
-from typing import BinaryIO, ClassVar, Self
+from typing import TYPE_CHECKING, BinaryIO, ClassVar, Self
 
 from pypst.errors import PstFormatError
 from pypst.limits import DEFAULT_LIMITS, Limits
@@ -90,7 +90,16 @@ from pypst.messaging.named_prop import NamedPropertyMap
 from pypst.ndb.block import BlockReader
 from pypst.ndb.btree import BlockBTree, NodeBTree
 from pypst.ndb.header import Header, read_header
-from pypst.ndb.ids import NID_MESSAGE_STORE, NID_NAME_TO_ID_MAP, NodeId, _unpack
+from pypst.ndb.ids import (
+    NID_MESSAGE_STORE,
+    NID_NAME_TO_ID_MAP,
+    NID_ROOT_FOLDER,
+    NodeId,
+    _unpack,
+)
+
+if TYPE_CHECKING:
+    from pypst.messaging.folder import Folder
 
 __all__ = [
     "ENTRY_ID_FORMAT",
@@ -169,9 +178,9 @@ class Store:
     default) and `close()` leaves it alone.
     """
 
-    # P08 adds `root_folder` and `open_folder`; P09 adds `open_message`.
-    # They are not stubbed here: docs/INTERFACES.md § `pypst.messaging`
-    # carries their signatures until the row that builds them lands.
+    # P09 adds `open_message`. It is not stubbed here:
+    # docs/INTERFACES.md § `pypst.messaging` carries its signature until
+    # the row that builds it lands.
 
     __slots__ = (
         "_bbt",
@@ -373,6 +382,33 @@ class Store:
     def get(self, prop_id: int) -> PropValue | None:
         """One store property by id, decoded — `None` when it is absent or its HNID is 0."""
         return self._properties.get(prop_id)
+
+    # --- the folder tree (P08) --------------------------------------------------------
+
+    @property
+    def root_folder(self) -> Folder:
+        """`NID_ROOT_FOLDER` (0x122) — the walk's origin, above the IPM subtree.
+
+        The oracle's `dump_messages` starts here rather than at
+        `ipm_subtree`, so that the wastebasket, the search root and the
+        search folders are all reachable; `Folder.walk()` from here visits
+        every folder in the store.
+        """
+        return self.open_folder(NID_ROOT_FOLDER)
+
+    def open_folder(self, entry: EntryId | NodeId) -> Folder:
+        """Upstream's `Store::open_folder`: one folder by EntryID (or bare NID).
+
+        `PstFormatError` for a NID whose type is neither `NormalFolder` nor
+        `SearchFolder`, and for an `EntryId` whose record key is another
+        store's (upstream's `EntryIdWrongStore`); `PstNotFoundError` when the
+        node B-tree does not hold the node.
+        """
+        from pypst.messaging.folder import (
+            Folder,  # the import cycle, broken here (module docstring)
+        )
+
+        return Folder.open(self, entry)
 
     # --- the named property map ------------------------------------------------------
 

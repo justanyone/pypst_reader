@@ -10,8 +10,10 @@ line by line, and is memory-safe against bytes an attacker chose.
 Status: EARLY. The encoding, CRC, id, header, page, B-tree, block, heap,
 BTH and property-context layers are ported and tested, and so is the message
 store on top of them: `pypst.open(path)` returns a `Store` whose name,
-record key, entry ids and named-property map can be read. Folders (P08) and
-messages (P09) are not built yet, so a `Store` cannot yet be walked — see
+record key, entry ids and named-property map can be read, and its folder
+tree walked: `store.root_folder.walk()` yields every `Folder` in the store,
+with the NIDs of the messages in each. Messages themselves (P09) are not
+built yet, so a folder's contents are ids and not objects — see
 docs/INTERFACES.md § "pypst — the top level" for the rest of the promise,
 docs/PORTING-PLAN.md for the order of work and MasterToDo.md for what is
 actually next.
@@ -38,6 +40,7 @@ from pypst.errors import (
     PstUnsupportedError,
 )
 from pypst.limits import DEFAULT_LIMITS, Limits
+from pypst.messaging.folder import Folder
 from pypst.messaging.store import EntryId, Store
 from pypst.messaging.store import open_store as open
 from pypst.ndb.header import Header, read_header
@@ -47,6 +50,7 @@ __version__ = "0.0.1"
 __all__ = [
     "DEFAULT_LIMITS",
     "EntryId",
+    "Folder",
     "Header",
     "Limits",
     "PstError",

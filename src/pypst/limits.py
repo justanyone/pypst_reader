@@ -77,6 +77,14 @@ MAX_SUBNODE_DEPTH = 2
 # so a well-formed BTH never needs more than 4 index levels. 8 is double that.
 MAX_HEAP_TREE_DEPTH = 8
 
+# No format bound: a folder's hierarchy table may name any folder in the store,
+# so [MS-PST] permits a chain as long as there are folders. Practical: Outlook's
+# own folder tree is 3–5 deep and its path limit stops users far short of this;
+# `oracle/examples/dump_messages.rs` uses the same 64 for its walk, so the two
+# agree on every store either can read. A `VisitedSet` catches the cyclic case;
+# this ceiling catches the pathological-but-acyclic one.
+MAX_FOLDER_DEPTH = 64
+
 # No format bound: an attachment's embedded message is a subnode with its own
 # subnode tree, recursively. Practical: a forwarded-forwarded-forwarded chain
 # is 3–4 deep; 16 refuses only a store built to recurse.
@@ -158,6 +166,7 @@ class Limits:
     max_xblock_depth: int = MAX_XBLOCK_DEPTH
     max_subnode_depth: int = MAX_SUBNODE_DEPTH
     max_heap_tree_depth: int = MAX_HEAP_TREE_DEPTH
+    max_folder_depth: int = MAX_FOLDER_DEPTH
     max_embedded_message_depth: int = MAX_EMBEDDED_MESSAGE_DEPTH
     max_allocation: int = MAX_ALLOCATION
     max_file_size: int = MAX_FILE_SIZE
@@ -251,6 +260,7 @@ __all__ = [
     "MAX_EMBEDDED_MESSAGE_DEPTH",
     "MAX_FILE_SIZE",
     "MAX_FOLDERS",
+    "MAX_FOLDER_DEPTH",
     "MAX_HEAP_ITEMS",
     "MAX_HEAP_TREE_DEPTH",
     "MAX_ITEMS",

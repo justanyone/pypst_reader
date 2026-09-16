@@ -21,12 +21,14 @@ Two rules every parser here keeps:
 
 ``parse_read_header``, ``parse_read_btrees``, ``parse_read_density_list``,
 ``parse_read_store_props``, ``parse_read_named_props``,
-``parse_read_root_folder`` and ``parse_read_ipm_subtree`` are complete
+``parse_read_root_folder``, ``parse_read_ipm_subtree`` and
+``parse_dump_messages`` (its folder blocks in full, its message blocks as
+raw lines for P09) are complete
 (the last four landed with P05, which also added ``parse_value`` — the
 ``Debug`` grammar of upstream's ``PropertyValue`` — for every later layer
-that prints one). The other two are stubs whose ``NotImplementedError``
-describes the golden's shape, so the layer row that lands the parser knows
-what it is parsing. ``PARSERS`` maps every captured example name to its
+that prints one). The one remaining stub has a ``NotImplementedError``
+``NotImplementedError`` describing the golden's shape, so the layer row
+that lands the parser knows what it is parsing. ``PARSERS`` maps every captured example name to its
 parser, complete or stub.
 """
 
@@ -851,25 +853,148 @@ def parse_read_search_updates(text: str) -> Any:
     )
 
 
-def parse_dump_messages(text: str) -> Any:
-    raise NotImplementedError(
-        "dump_messages (P08/P09; oracle/examples/dump_messages.rs): a pre-order folder walk from NID_ROOT_FOLDER. "
-        "Each folder is `Folder: <NodeId>` then two-space-indented `Name:`, `Content Count:`, `Unread Count:`, "
-        "`Has Sub Folders:` (a String/int/bool Debug, or `Error: <Debug>` when the accessor fails), then either "
-        "`Associated Count: n` or `Associated Table: None`, then `Message:` blocks for every contents-table row "
-        "(or `Contents Table: None`), then `Hierarchy Table: None` when there is none; sub-folders follow as further "
-        "`Folder:` blocks. A message is `  Message: <NodeId>` with four-space-indented `Class:`, `Subject:`, "
-        "`Normalized Subject:`, `Sender Name:`, `Sender Email:`, `Sender SMTP:` (`None` or `<Type>(<Debug value>)`), "
-        "`Delivery Time:`/`Client Submit Time:` (`None` or `Time(<i64 FILETIME>)`), `Body Text:`/`Body HTML:`/`Body RTF:`/"
-        "`Transport Headers:` (`None` or `<n> bytes crc 0x<8 hex> type=<String8|Unicode|Binary>`), "
-        "`Recipients: n|None` + `      Recipient: type=<int> name=<v> email=<v> smtp=<v>` rows, "
-        "`Attachments: n|None` + `      Attachment: <NodeId>` blocks holding `        Row: method=<int> filename=<v> size=<int>` "
-        "then `Method:`, `Filename:`, `Long Filename:`, `Mime Tag:`, `Content Id:`, `Size:`, `Data:` (`None`, "
-        "`<n> bytes crc 0x..`, or `Message`, in which case an indented `Message:` block follows), or an `Error: <Debug>` "
-        "when the attachment cannot be opened. An item that cannot be opened prints `Error: <Debug>` and is counted; "
-        "the last line is `Errors: <n>` and the exit is 1 when n > 0. At pin cfb721da upstream cannot open "
-        "embedded-message attachments (PtypObject is unparsed), so pstsdk-submessage and javalibpst-dist-list exit 1."
-    )
+# --- dump_messages (P08 folders; P09 fills in the message blocks) --------------------
+
+# The labels a FOLDER block prints at indent 2. Everything else at that indent
+# belongs to a message (`Message:`), and everything deeper belongs inside one.
+_FOLDER_LABELS = (
+    "Name:",
+    "Content Count:",
+    "Unread Count:",
+    "Has Sub Folders:",
+    "Associated Count:",
+    "Associated Table:",
+    "Contents Table:",
+    "Hierarchy Table:",
+    "Error:",
+)
+
+_FOLDER = re.compile(r"^Folder: (NodeId \{ .+ \})$")
+_MESSAGE = re.compile(r"^  Message: (NodeId \{ .+ \})$")
+_ERRORS = re.compile(r"^Errors: (\d+)$")
+_RESULT_ERROR = re.compile(r"^Error: (.+)$")
+
+
+def dump_messages_folder_lines(text: str) -> list[str]:
+    """Just the folder blocks of a ``dump_messages`` golden, in order — what ``debug folders`` prints.
+
+    A ``Folder:`` line and, under it, the two-space-indented lines whose
+    label is a folder's (``_FOLDER_LABELS``). The ``Message:`` blocks a
+    folder's contents table produces sit at indent 2 and deeper and are
+    dropped, as is the ``Errors:`` trailer, which counts message- and
+    attachment-level failures this filter cannot see. Order is preserved, so
+    the ``… Table: None`` lines that upstream prints AFTER a folder's
+    messages still follow its ``Associated`` line, which is where the dumper
+    prints them.
+    """
+    def wanted(line: str) -> bool:
+        if line.startswith("Folder: "):
+            return True
+        indented = line.startswith("  ") and not line.startswith("   ")
+        return indented and line[2:].startswith(_FOLDER_LABELS)
+
+    return [line for line in text.splitlines() if wanted(line)]
+
+
+def _folder_value(lines: list[str], i: int, label: str) -> tuple[Any, int]:
+    """One ``  <label>: <value>`` line as its value, or ``{"error": <Debug text>}`` when the accessor failed."""
+    text = _labelled(lines, i, f"  {label}")
+    m = _RESULT_ERROR.match(text)
+    if m:
+        return {"error": m.group(1)}, i + 1
+    if label == "Name":
+        cur = _TextCursor(text)
+        value = cur.string()
+        cur.done()
+        return value, i + 1
+    if label == "Has Sub Folders":
+        if text not in ("true", "false"):
+            raise ValueError(f"line {i + 1}: `{label}:` is {text!r}, not a bool")
+        return text == "true", i + 1
+    try:
+        return int(text), i + 1
+    except ValueError:
+        raise ValueError(f"line {i + 1}: `{label}:` is {text!r}, not an i32") from None
+
+
+def parse_dump_messages(text: str) -> dict[str, Any]:
+    """``oracle/examples/dump_messages.rs``: the pre-order folder walk, plus the message blocks verbatim.
+
+    ``{"folders": [<folder>, …], "errors": int | None}`` where a folder is::
+
+        {"node": <node_id>, "name": str | {"error": …}, "content_count": int | {"error": …},
+         "unread_count": …, "has_subfolders": bool | {"error": …},
+         "associated_count": int | None,          # None when `Associated Table: None`
+         "contents_table": bool, "hierarchy_table": bool,   # False when `… Table: None`
+         "messages": [{"node": <node_id>, "lines": [str, …]}, …],
+         "error": str | None}                     # the folder could not be opened at all
+
+    The message blocks are kept as their raw lines: P09 lands their parser
+    (``docs/INTERFACES.md`` § messaging), and P08 needs only that they are
+    delimited correctly so the folder walk either side of them is exact.
+    ``errors`` is the trailer, ``None`` when the text has none (a store the
+    example refused before the walk). Garbled input is ``ValueError`` naming
+    the line; never a partial result.
+    """
+    lines = _lines(text)
+    out: dict[str, Any] = {"folders": [], "errors": None}
+    i = 0
+    while i < len(lines):
+        if (m := _ERRORS.match(lines[i])) is not None:
+            out["errors"] = int(m.group(1))
+            i += 1
+            if i != len(lines):
+                raise ValueError(f"line {i + 1}: {lines[i]!r} follows the Errors trailer")
+            break
+        m = _FOLDER.match(lines[i])
+        if m is None:
+            raise ValueError(f"line {i + 1}: expected `Folder:` or `Errors:`, got {lines[i]!r}")
+        folder: dict[str, Any] = {
+            "node": parse_node_id(m.group(1)),
+            "name": None,
+            "content_count": None,
+            "unread_count": None,
+            "has_subfolders": None,
+            "associated_count": None,
+            "contents_table": True,
+            "hierarchy_table": True,
+            "messages": [],
+            "error": None,
+        }
+        i += 1
+        if i < len(lines) and lines[i].startswith("  Error: "):
+            folder["error"] = lines[i].removeprefix("  Error: ")
+            i += 1
+            out["folders"].append(folder)
+            continue
+        for key, label in (
+            ("name", "Name"),
+            ("content_count", "Content Count"),
+            ("unread_count", "Unread Count"),
+            ("has_subfolders", "Has Sub Folders"),
+        ):
+            folder[key], i = _folder_value(lines, i, label)
+        if i < len(lines) and lines[i] == "  Associated Table: None":
+            i += 1
+        else:
+            folder["associated_count"], i = _folder_value(lines, i, "Associated Count")
+        while i < len(lines) and (m := _MESSAGE.match(lines[i])) is not None:
+            block = {"node": parse_node_id(m.group(1)), "lines": [lines[i]]}
+            i += 1
+            while i < len(lines) and lines[i].startswith("    "):
+                block["lines"].append(lines[i])
+                i += 1
+            folder["messages"].append(block)
+        if i < len(lines) and lines[i] == "  Contents Table: None":
+            folder["contents_table"] = False
+            i += 1
+        if i < len(lines) and lines[i] == "  Hierarchy Table: None":
+            folder["hierarchy_table"] = False
+            i += 1
+        out["folders"].append(folder)
+    if not out["folders"]:
+        raise ValueError("no `Folder:` block in the text")
+    return out
 
 
 PARSERS: dict[str, Callable[[str], Any]] = {

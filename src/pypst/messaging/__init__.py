@@ -8,5 +8,15 @@ IPM subtree, the wastebasket and the finder. `named_prop` (P07) reads
 into (GUID, name-or-number) pairs — without it a reader silently cannot
 see any Outlook-specific property.
 
-`folder` (P08) and `message`/`attachment` (P09) are not built yet.
+`folder` (P08) is the tree over it: `Store.root_folder` opens
+`NID_ROOT_FOLDER` (0x122) and `Folder.walk()` yields every folder in the
+store, pre-order and cycle-guarded, each with its display name, its counts
+and the NIDs its three tables name. `message`/`attachment` (P09) are not
+built yet, so a folder hands back message ids rather than messages.
 """
+
+from pypst.messaging.folder import Folder
+from pypst.messaging.named_prop import NamedPropertyMap
+from pypst.messaging.store import EntryId, Store, open_store
+
+__all__ = ["EntryId", "Folder", "NamedPropertyMap", "Store", "open_store"]

@@ -23,9 +23,11 @@ from tests.golden_parsers import (
     PARSERS,
     READ_DENSITY_LIST_LABELS,
     READ_HEADER_LABELS,
+    dump_messages_folder_lines,
     parse_block_id,
     parse_block_ref,
     parse_byte_index,
+    parse_dump_messages,
     parse_node_id,
     parse_page_id,
     parse_page_ref,
@@ -41,6 +43,7 @@ from tests.golden_parsers import (
 )
 
 ALL_STORES = [FIXTURES / "Empty.pst", *public_fixture_paths()]
+EXAMPLE_DUMP = "dump_messages"
 ALL_IDS = ["Empty", *public_fixture_ids()]
 
 ANSI_STORES = {"pstsdk-sample2", "pstsdk-test_ansi"}
@@ -299,6 +302,7 @@ COMPLETE = {
     "read_named_props",
     "read_root_folder",
     "read_ipm_subtree",
+    "dump_messages",
 }
 
 
@@ -796,3 +800,107 @@ def test_every_value_line_in_every_golden_parses() -> None:
                 lines += 1
     assert lines > 1000, f"only {lines} Value:/Record: lines found; the goldens moved"
     assert seen == {"Integer32", "Integer64", "Boolean", "Binary", "Unicode", "String8"}, seen
+
+
+# --- dump_messages (P08's folder blocks; the message blocks stay raw for P09) --------
+
+
+DUMP_MESSAGES_STORES = [p for p in ALL_STORES]
+DUMP_MESSAGES_IDS = [p.stem for p in ALL_STORES]
+
+
+@pytest.mark.parametrize("store", DUMP_MESSAGES_STORES, ids=DUMP_MESSAGES_IDS)
+def test_dump_messages_parses_every_golden_whole(store: Path, golden) -> None:
+    """Every folder block, every message block and the trailer — and nothing left over."""
+    text = golden(store, EXAMPLE_DUMP)
+    parsed = parse_dump_messages(text)
+    assert parsed["errors"] == int(text.rstrip("\n").rsplit("Errors: ", 1)[1])
+    folders = parsed["folders"]
+    assert len(folders) == sum(1 for ln in text.splitlines() if ln.startswith("Folder: "))
+    counted = sum(len(f["messages"]) for f in folders)
+    assert counted == sum(1 for ln in text.splitlines() if ln.startswith("  Message: "))
+    # Every message block keeps its own lines and nothing else's.
+    for folder in folders:
+        for message in folder["messages"]:
+            assert message["lines"][0].startswith("  Message: ")
+            assert all(ln.startswith("    ") for ln in message["lines"][1:])
+
+
+@pytest.mark.parametrize("store", DUMP_MESSAGES_STORES, ids=DUMP_MESSAGES_IDS)
+def test_dump_messages_folder_lines_is_the_folder_blocks_exactly(store: Path, golden) -> None:
+    """The filter keeps every folder line, in order, and drops every message line."""
+    text = golden(store, EXAMPLE_DUMP)
+    kept = dump_messages_folder_lines(text)
+    assert [ln for ln in kept if ln.startswith("Folder: ")] == [ln for ln in text.splitlines() if ln.startswith("Folder: ")]
+    assert not any(ln.startswith("  Message: ") for ln in kept)
+    assert not any(ln.startswith("Errors: ") for ln in kept)
+    # 5 or 6 lines per folder in the goldens: the four properties, the
+    # associated line, and a `… Table: None` for each absent table.
+    folders = sum(1 for ln in kept if ln.startswith("Folder: "))
+    assert folders * 6 <= len(kept) <= folders * 9
+
+
+def test_dump_messages_reads_the_error_form_of_every_accessor() -> None:
+    """`result_debug`'s `Error: <Debug>` in place of a value comes back as `{"error": …}`, not as a string."""
+    text = (
+        "Folder: NodeId { NormalFolder: 0x9 }\n"
+        "  Name: Error: Custom { kind: InvalidData, error: InvalidFolderDisplayName(Null) }\n"
+        "  Content Count: 0\n"
+        "  Unread Count: 0\n"
+        "  Has Sub Folders: true\n"
+        "  Associated Count: 0\n"
+        "Errors: 0\n"
+    )
+    folder = parse_dump_messages(text)["folders"][0]
+    assert folder["name"] == {"error": "Custom { kind: InvalidData, error: InvalidFolderDisplayName(Null) }"}
+    assert (folder["content_count"], folder["unread_count"], folder["has_subfolders"]) == (0, 0, True)
+    assert (folder["associated_count"], folder["contents_table"], folder["hierarchy_table"]) == (0, True, True)
+
+
+def test_dump_messages_reads_the_absent_table_lines() -> None:
+    text = (
+        "Folder: NodeId { SearchFolder: 0x111 }\n"
+        '  Name: "SPAM Search Folder 2"\n'
+        "  Content Count: 0\n"
+        "  Unread Count: 0\n"
+        "  Has Sub Folders: false\n"
+        "  Associated Table: None\n"
+        "  Contents Table: None\n"
+        "  Hierarchy Table: None\n"
+    )
+    folder = parse_dump_messages(text)["folders"][0]
+    assert folder["name"] == "SPAM Search Folder 2"
+    assert folder["associated_count"] is None
+    assert folder["contents_table"] is False and folder["hierarchy_table"] is False
+    assert parse_dump_messages(text)["errors"] is None  # our dumper prints no trailer
+
+
+def test_dump_messages_reads_a_folder_that_could_not_be_opened() -> None:
+    text = "Folder: NodeId { NormalFolder: 0x9 }\n  Error: Custom { kind: InvalidData, error: EntryIdWrongStore }\nErrors: 1\n"
+    folder = parse_dump_messages(text)["folders"][0]
+    assert folder["error"] == "Custom { kind: InvalidData, error: EntryIdWrongStore }"
+    assert folder["name"] is None and folder["messages"] == []
+
+
+@pytest.mark.parametrize(
+    ("text", "match"),
+    [
+        ("", "no `Folder:` block"),
+        ("Name: x\n", "expected `Folder:` or `Errors:`"),
+        ("Folder: NodeId { NormalFolder: 0x9 }\n", "expected '  Name'"),
+        ("Errors: 0\nFolder: NodeId { NormalFolder: 0x9 }\n", "follows the Errors trailer"),
+        (
+            'Folder: NodeId { NormalFolder: 0x9 }\n  Name: "a"\n  Content Count: many\n',
+            "not an i32",
+        ),
+        (
+            'Folder: NodeId { NormalFolder: 0x9 }\n  Name: "a"\n  Content Count: 0\n  Unread Count: 0\n  Has Sub Folders: yes\n',
+            "not a bool",
+        ),
+    ],
+    ids=["empty", "no folder", "truncated", "after trailer", "bad count", "bad bool"],
+)
+def test_dump_messages_refuses_garbled_input(text: str, match: str) -> None:
+    """Never a partial result: a shape the oracle cannot have printed is a `ValueError` naming the line."""
+    with pytest.raises(ValueError, match=match):
+        parse_dump_messages(text)

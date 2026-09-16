@@ -524,7 +524,7 @@ def test_initial_dictionary_has_crlf_at_168() -> None:
 # --- Waits on the messaging layer -----------------------------------------------------
 
 
-@pytest.mark.xfail(reason="P09: needs the messaging layer to hand over PR_RTF_COMPRESSED", raises=ImportError, strict=True)
+@pytest.mark.xfail(reason="P09: needs the messaging layer to hand over PR_RTF_COMPRESSED", raises=AttributeError, strict=True)
 def test_public_fixture_rtf_bodies_decompress_to_rtf() -> None:
     """A licensed public store's RTF bodies begin with `{\\rtf1` once decompressed.
 

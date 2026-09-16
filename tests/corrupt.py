@@ -1731,6 +1731,105 @@ def named_prop_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
             yield lie("string.odd_length", set_u32(data, item[0] + offset, length | 1), PstFormatError)
 
 
+# --- folder_lies: the root folder's own properties, and the children its hierarchy table names ---
+#
+# Two nodes, one family. `store_lies` is the model for the first half: the
+# root folder's property context (NID_ROOT_FOLDER, 0x122) is a PC like the
+# message store's, and the four properties [MS-PST] 2.4.4.1 requires are
+# renamed and retyped there. The second half is `tc_lies`' technique on the
+# root HIERARCHY table (0x12D), but aimed a layer higher: a row's dwRowID is
+# the CHILD FOLDER's NID, so rewriting it is how a store says "my child is a
+# node that does not exist", "my child is me" (a cycle the `VisitedSet` must
+# catch) or "my child is the message store". Every one of these is a perfectly
+# valid table context and a perfectly valid property context; only
+# `pypst.messaging.folder` can refuse them.
+
+NID_ROOT_FOLDER = 0x122
+PID_TAG_FOLDER_DISPLAY_NAME = 0x3001
+PID_TAG_CONTENT_COUNT = 0x3602
+PID_TAG_CONTENT_UNREAD_COUNT = 0x3603
+PID_TAG_SUBFOLDERS = 0x360A
+
+
+def _folder_walks(base: bytes) -> bool:
+    """Whether the base's OWN folder walk works — pstd-inline-cid's does not (its hierarchy table will not parse).
+
+    As `_tc_opens`: a lie is evidence only when the unmutated structure was
+    readable. Over a base whose root hierarchy table this port already
+    refuses, the row lies below still yield, but with no `expect` and no
+    `must_raise`.
+    """
+    from pypst.errors import PstError
+    from pypst.messaging.store import Store
+
+    try:
+        with Store(io.BytesIO(base)) as store:
+            return len(list(store.root_folder.walk())) > 1
+    except PstError:
+        return False
+
+
+def folder_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
+    """The root folder's four required properties, and the child NIDs its hierarchy table names."""
+    site = node_pc_block(base, NID_ROOT_FOLDER)
+    data = site.data
+    shape = _heap_shape(data)
+    records = _pc_records(data, shape)
+    held = {r[1] for r in records}
+
+    def lie(name: str, edited: bytes, expect: type[PstError] | None, *, must_raise: bool = True) -> Mutation:
+        return Mutation(f"folder_lies:{name}", rewrite_data_block(base, site, edited), expect, must_raise=must_raise)
+
+    # Each required property renamed one id up: absent, as far as the folder is
+    # concerned. `must_raise` is False because the harness's folder walk reads
+    # the four accessors under `suppress(PstError)` — an absent one is a fact
+    # about the file, and upstream prints it rather than failing the walk.
+    for prop_id, what in (
+        (PID_TAG_FOLDER_DISPLAY_NAME, "display_name"),
+        (PID_TAG_CONTENT_COUNT, "content_count"),
+        (PID_TAG_CONTENT_UNREAD_COUNT, "unread_count"),
+        (PID_TAG_SUBFOLDERS, "has_subfolders"),
+    ):
+        record = _record_by_id(records, prop_id)
+        if record is None:
+            continue
+        free = next((i for i in range(prop_id + 1, 0x10000) if i not in held), None)
+        if free is not None:
+            yield lie(f"0x{prop_id:04X}_absent_{what}", set_u16(data, record[0], free), None, must_raise=False)
+        # ...and retyped: the record still decodes, and the accessor must not
+        # hand a caller the wrong Python type for it.
+        wrong = 0x0102 if prop_id == PID_TAG_FOLDER_DISPLAY_NAME else 0x001F
+        yield lie(f"0x{prop_id:04X}_type_{what}", set_u16(data, record[0] + 2, wrong), None, must_raise=False)
+
+    # The hierarchy table: the child NIDs, which only the folder layer reads.
+    usable = _folder_walks(base)
+    tc_site = node_data_block(base, NID_ROOT_HIERARCHY_TABLE)
+    tc_data = tc_site.data
+    tc_shape = _tc_shape(tc_data)
+
+    def row_lie(name: str, edited: bytes, expect: type[PstError] | None, *, must_raise: bool = True) -> Mutation:
+        return Mutation(
+            f"folder_lies:{name}",
+            rewrite_data_block(base, tc_site, edited),
+            expect if usable else None,
+            must_raise=must_raise and usable,
+        )
+
+    matrix = tc_shape["matrix"]
+    if matrix is not None and tc_shape["rgib"][3] <= tc_shape["matrix_size"]:
+        for name, nid, expect in (
+            # A child the node B-tree does not hold.
+            ("row0.child_absent", 0xFFFF_FFE2, PstNotFoundError),
+            # A child that is this very folder: the cycle the VisitedSet exists for.
+            ("row0.child_is_the_root_folder", NID_ROOT_FOLDER, PstLimitError),
+            # A child whose NID_TYPE is not a folder's ([MS-PST] 2.4.4.4.1 says it is).
+            ("row0.child_is_the_message_store", NID_MESSAGE_STORE, PstFormatError),
+            # A child whose 5-bit type is not a type at all (0x09 is unassigned).
+            ("row0.child_type_unassigned", 0x1209, PstFormatError),
+        ):
+            yield row_lie(name, set_u32(tc_data, matrix, nid), expect)
+
+
 FAMILIES: tuple[Family, ...] = (
     truncations,
     bit_flips,
@@ -1745,6 +1844,7 @@ FAMILIES: tuple[Family, ...] = (
     tc_lies,
     store_lies,
     named_prop_lies,
+    folder_lies,
 )
 
 

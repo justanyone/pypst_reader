@@ -51,6 +51,7 @@ MAX_BTREE_DEPTH: int = 8                # BTPAGE.cLevel u8; upstream page.rs ref
 MAX_XBLOCK_DEPTH: int = 2               # [MS-PST] 2.2.2.8.3.2: XXBLOCK → XBLOCK → data
 MAX_SUBNODE_DEPTH: int = 2              # [MS-PST] 2.2.2.8.3.3: SIBLOCK → SLBLOCK (nested subnode trees are the embedded-message axis)
 MAX_HEAP_TREE_DEPTH: int = 8            # BTHHEADER.bIdxLevels u8; fan-out ≥ 179 per 3580-byte allocation → 4 levels cover MAX_HEAP_ITEMS
+MAX_FOLDER_DEPTH: int = 64              # no format bound; practical (P08 added it; oracle/examples/dump_messages.rs uses the same 64)
 MAX_EMBEDDED_MESSAGE_DEPTH: int = 16    # no format bound; practical
 MAX_ALLOCATION: int = 256 * 2**20       # largest single bytes a walk assembles; XBLOCK cbTotal is u32 (4 GiB), Outlook writes ≤ 150 MB
 MAX_FILE_SIZE: int = 64 * 2**30         # ROOT.ibFileEof is u64; Outlook's MaxLargeFileSize default is 50 GiB; next power of two
@@ -752,7 +753,7 @@ for `TableRowColumnValue`: `Small(<the value>)`, `Heap(<HeapId>)`,
 folder's hierarchy table, resealed); the corruption harness walks that table
 on every mutation (`tc.root_hierarchy`).
 
-## `pypst.messaging` — P07 (landed) / P08 / P09
+## `pypst.messaging` — P07, P08 (landed) / P09
 
 **`pypst.messaging.store` and `pypst.messaging.named_prop` are built**
 (2026-09-16). Ported from `messaging/store.rs` and `messaging/named_prop.rs`
@@ -787,7 +788,7 @@ class Store:                          # P07 — the object `open()` returns
     matches_record_key(self, entry: EntryId) → bool # upstream's; P08's `EntryIdWrongStore`
     get(self, prop_id: int) → PropValue | None      # one store property, decoded
     named_properties → NamedPropertyMap             # read on first use and kept
-    # root_folder / open_folder are P08's and open_message is P09's: NOT stubbed here
+    root_folder → Folder; open_folder(entry) → Folder    # added by P08, below; open_message is P09's
 
 def open_store(path, *, limits=DEFAULT_LIMITS, codepage="cp1252") → Store   # exported as `pypst.open`
 
@@ -853,15 +854,85 @@ and refuses an absent wastebasket or finder exactly where the example does,
 so its stdout AND its exit status match the golden on `pstd-inline-cid`
 too. `python -m pypst.debug named_props <file>` prints `read_named_props`'s.
 
-```python
-class Folder:                         # P08
-    node → NodeId; properties → PropertyContext
-    display_name → str; content_count → int; unread_count → int; has_subfolders → bool
-    subfolders() → Iterator[Folder]   # hierarchy table; depth > limits → PstLimitError
-    messages() → Iterator[Message]    # contents table
-    associated() → Iterator[Message]
-    walk() → Iterator[Folder]         # pre-order, self first
+**`pypst.messaging.folder` is built** (2026-09-16). Ported from
+`messaging/folder.rs` (`FolderProperties` and the read half of
+`FolderInner`/`UnicodeFolder`; the write half and the ANSI arm are not
+ported — ADR-0003). `Store` gained the two accessors its comment promised.
 
+```python
+# pypst.messaging.folder
+PID_TAG_DISPLAY_NAME = 0x3001; PID_TAG_CONTENT_COUNT = 0x3602
+PID_TAG_CONTENT_UNREAD_COUNT = 0x3603; PID_TAG_SUBFOLDERS = 0x360A
+FOLDER_NODE_TYPES = (NodeIdType.NORMAL_FOLDER, NodeIdType.SEARCH_FOLDER)
+
+class Folder:                         # P08 — one folder: its PC, and the three tables at its NID's index
+    __init__(self, store: Store, node: NodeId)        # !TypeError non-Store/non-NodeId; !PstFormatError a NID
+                                                      #   whose type is not a folder's; !PstNotFoundError absent
+    @classmethod open(cls, store: Store, entry: EntryId | NodeId) → Folder   # !PstFormatError EntryID in wrong store
+    store → Store; node → NodeId; properties → PropertyContext   # the FILE's PC — nothing injected (below)
+    entry_id → EntryId                # upstream's injected PidTagEntryId (0x0FFF)
+    folder_type → int                 # upstream's injected PidTagFolderType (0x3601): 0 root, 2 search, 1 other
+    get(self, prop_id: int) → PropValue | None
+    display_name → str                # !PstFormatError absent, or not a string (PtypNull included — see below)
+    content_count → int; unread_count → int          # !PstFormatError absent or not Integer32
+    has_subfolders → bool                            # !PstFormatError absent or not Boolean
+    table(self, node_type: NodeIdType) → TableContext | None    # upstream's read_table; None ONLY when the NBT
+                                                                #   has no such node (divergence, below)
+    hierarchy_table / contents_table / associated_table → TableContext | None   # 0x0D / 0x0E / 0x0F, read once, kept
+    subfolder_ids() → tuple[NodeId, ...]             # matrix order; () when there is no hierarchy table
+    message_ids() → tuple[NodeId, ...]; associated_ids() → tuple[NodeId, ...]
+    contents() → tuple[EntryId, ...]                 # message_ids() as this store's EntryIDs — P09's open_message input
+    subfolders() → Iterator[Folder]                  # each child opened, matrix order
+    walk(self, *, max_depth: int | None = None) → Iterator[Folder]
+        # pre-order, self first, children in matrix order — the oracle's dump_folder order. Iterative (no Python
+        # recursion). max_depth defaults to limits.max_folder_depth (P08 added it). !PstLimitError depth past the
+        # ceiling, a folder reached twice (a cycle), or more than limits.max_folders children in one table.
+    __str__ → "Folder { NodeId { NormalFolder: 0x401 } }"
+
+# pypst.messaging.store, added by P08
+class Store:
+    root_folder → Folder                              # NID_ROOT_FOLDER (0x122), NOT ipm_subtree
+    open_folder(self, entry: EntryId | NodeId) → Folder
+```
+
+Divergences, each a paragraph in `folder.py`'s docstring: **a table node
+that exists but will not parse is a refusal, not `None`** (upstream's
+`read_table(..).ok()?` turns every error into "absent", which is how its
+`dump_messages` prints `Hierarchy Table: None` for `pstd-inline-cid.pst` —
+a caller cannot tell "no sub-folders" from "sub-folder list unreadable", and
+the two lead to opposite actions); **the two properties upstream injects
+into its property map (`PidTagEntryId`, `PidTagFolderType`) are attributes
+here**, so `properties` is what the file holds; **`walk()` is iterative,
+depth-bounded and cycle-guarded**, where upstream has no walk at all.
+
+**The display-name decision: refuse, as upstream does.** Six of the eight
+Unicode corpus stores have a root folder whose `PidTagDisplayName` record
+has a zero HNID, and the oracle prints `Name: Error: …
+InvalidFolderDisplayName(Null)` there. `display_name` raises
+`PstFormatError` at the same point rather than returning `None`:
+[MS-PST] 2.4.4.1 makes the property required, and a caller handed `None`
+writes it into a path or a report as the empty string. The lenient reading
+is still one call away (`folder.properties.get(0x3001)`).
+
+`python -m pypst.debug folders <file>` prints exactly the folder blocks of
+`dump_messages.txt` — a pre-order walk from `NID_ROOT_FOLDER`, no `Message:`
+blocks, no `Errors:` trailer — through `debug.folder_lines(folder)`,
+`debug.folder_accessor(folder, prop_id, render)` (the example's
+`result_debug`: the accessor's value, or upstream's `Error: Custom { kind:
+InvalidData, error: … }` text in its place) and `debug.folder_table(folder,
+node_type)` (the example's `.ok()?`, so a corrupt table prints as absent
+there and only there). `tests.golden_parsers.dump_messages_folder_lines(text)`
+filters a golden down to exactly that, and `parse_dump_messages(text)` reads
+the whole example into values (folder blocks in full; message blocks as raw
+lines until P09).
+
+`tests/corrupt.py` gained the `folder_lies` family (12 on both bases: the
+root folder's four required properties absent and retyped, and the root
+hierarchy table's first row id pointed at a node that is not there, at the
+folder itself, at the message store and at an unassigned NID type); the
+corruption harness gained `folder.walk` and `folder.tables`.
+
+```python
 class Message:                        # P09
     node → NodeId; properties → PropertyContext
     message_class → str; subject → str; normalized_subject → str   # prefix byte stripped (T03 trap)
@@ -964,12 +1035,12 @@ the golden is missing. `tests/test_golden_drift.py` (`oracle`, `slow`) runs
 
 ## `pypst` — the top level
 
-Today (P07), sorted and deliberately small — the exception family, the
+Today (P08), sorted and deliberately small — the exception family, the
 limits, and the readers that exist:
 
 ```python
 from pypst import (
-    DEFAULT_LIMITS, EntryId, Header, Limits,
+    DEFAULT_LIMITS, EntryId, Folder, Header, Limits,
     PstError, PstFormatError, PstLimitError, PstNotFoundError, PstUnsupportedError,
     Store, __version__, open, read_header,
 )
@@ -982,11 +1053,11 @@ like `gzip.open`), and `tests/test_contract.py` pins that it is not the
 builtin. `EntryId` is exported with it, because it is what `ipm_subtree`
 and the other entry-id accessors return and a caller holds one.
 
-The promise, when P08 and P09 land (added to `__all__` by the row that lands
-each; never stubbed early):
+The promise, when P09 lands (added to `__all__` by the row that lands it;
+never stubbed early):
 
 ```python
-from pypst import Folder, Message, Attachment
+from pypst import Message, Attachment
 ```
 
 `__all__` is the enumerable contract, but not the whole of it: the T5
@@ -998,6 +1069,32 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
 ---
 
 ## Changelog
+
+- 2026-09-16 — P08 landed `pypst.messaging.folder` and added
+  `Store.root_folder` / `Store.open_folder`; `Folder` joins `pypst.__all__`
+  and `pypst.messaging.__all__` (the package's `__init__` gained one).
+  Changes from the draft: `messages()` and `associated()` are **not** here —
+  they need P09's `Message`, so this row lands `message_ids()`,
+  `associated_ids()` and `contents()` (the same rows as NIDs and as
+  EntryIDs); `subfolders()` yields child `Folder`s and `subfolder_ids()` the
+  raw NIDs; `walk` takes `max_depth`; `open`, `table`, the three table
+  accessors, `entry_id`, `folder_type`, `get`, `store` and `__str__` were
+  added. **`pypst.limits` gained `MAX_FOLDER_DEPTH` / `Limits.max_folder_depth`
+  (64, additive)**, which is what bounds the walk. `pypst.debug` gained
+  `folders`, `folder_lines`, `folder_accessor` and `folder_table`;
+  `tests/golden_parsers.py` completed `parse_dump_messages` (folder blocks
+  as values, message blocks as raw lines for P09) and added
+  `dump_messages_folder_lines`; `tests/contract.py` gained `"Store"` and
+  `"Folder"` in `READER_TYPES`, a `folders`/`folder_nids` section on its
+  fixture object and 14 adapters; `tests/corrupt.py` gained `folder_lies`
+  and the corruption harness `folder.walk` / `folder.tables`.
+  **A P06 finding, not fixed here:** `synth-basics.pst`'s root folder writes
+  an empty associated-contents table with `rgib[TCI_4b] = 4`, which P06
+  refuses when it parses the TCINFO and upstream accepts because it never
+  reads a row. That store's six `Associated Count: 0` lines therefore print
+  as `Associated Table: None`; it is the only place `debug folders` differs
+  from the goldens, and `tests/test_folder.py::test_synth_basics_associated_
+  table_is_the_one_documented_divergence` pins it line for line.
 
 - 2026-09-16 — P06 landed `pypst.ltp.table_context`; its section now
   describes what was built. Changes from the draft: `limits` is optional and

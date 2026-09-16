@@ -36,12 +36,14 @@ from pypst.ltp.prop_context import PropertyContext, PropertyRecord
 from pypst.ltp.prop_type import ObjectRef, PropType, PropValue, datetime_to_filetime
 from pypst.ltp.table_context import CellKind, CellRecord, ColumnDescriptor, TableContext
 from pypst.ltp.tree import HeapTree
+from pypst.messaging import folder as folder_mod
+from pypst.messaging.folder import Folder
 from pypst.messaging.named_prop import PS_MAPI, PS_PUBLIC_STRINGS
 from pypst.messaging.store import Store
 from pypst.ndb.block import BlockReader, DataBlock, SubNodeLeafBlock
 from pypst.ndb.btree import BlockBTree, NodeBTree, read_density_list
 from pypst.ndb.header import read_header
-from pypst.ndb.ids import BlockId, NodeId
+from pypst.ndb.ids import NID_ROOT_FOLDER, BlockId, NodeId, NodeIdType
 from pypst.ndb.page import BlockBTreeEntry, BTreePage, IntermediateEntry, NodeBTreeEntry
 
 # A dumper takes the store's path and, for the few that need one, the
@@ -630,6 +632,133 @@ def dump_named_props(path: Path) -> None:
 
 
 DUMPERS["named_props"] = dump_named_props
+
+
+# --- the folder tree (P08) ---------------------------------------------------------------
+
+# Upstream's `MessagingError` variant names, per property, for the two shapes
+# `FolderProperties`' accessors can fail in: absent, and present-but-wrong-type.
+_FOLDER_ERRORS: dict[int, tuple[str, str]] = {
+    folder_mod.PID_TAG_DISPLAY_NAME: ("FolderDisplayNameNotFound", "InvalidFolderDisplayName"),
+    folder_mod.PID_TAG_CONTENT_COUNT: ("FolderContentCountNotFound", "InvalidFolderContentCount"),
+    folder_mod.PID_TAG_CONTENT_UNREAD_COUNT: ("FolderUnreadCountNotFound", "InvalidFolderUnreadCount"),
+    folder_mod.PID_TAG_SUBFOLDERS: ("FolderHasSubfoldersNotFound", "InvalidFolderHasSubfolders"),
+}
+
+
+def _messaging_error(name: str) -> str:
+    """Upstream's `Debug` for the `io::Error` a `MessagingError` converts into."""
+    return f"Error: Custom {{ kind: InvalidData, error: {name} }}"
+
+
+def folder_accessor(folder: Folder, prop_id: int, render: Callable[[], str]) -> str:
+    """One accessor's value, or the oracle's `Error: …` text in its place (`result_debug` in dump_messages.rs).
+
+    The accessor is the library's, so what is printed is what a caller would
+    get. Only the *refusal* is re-rendered: upstream names the property and
+    the variant of the value it found, which `PropertyRecord.value_type`
+    gives, so `Name: Error: Custom { kind: InvalidData, error:
+    InvalidFolderDisplayName(Null) }` reproduces exactly.
+    """
+    try:
+        return render()
+    except PstError:
+        missing, invalid = _FOLDER_ERRORS[prop_id]
+        record = folder.properties.records.get(prop_id)
+        if record is None:
+            return _messaging_error(missing)
+        return _messaging_error(f"{invalid}({record.value_type.debug_name})")
+
+
+def folder_table(folder: Folder, node_type: NodeIdType) -> TableContext | None:
+    """Upstream's `self.read_table(kind).ok()?`: a table that will not parse is reported as absent.
+
+    A deliberate re-creation of upstream's swallow, and the one place this
+    port does it. `Folder.table` refuses a present-but-corrupt table
+    (`pypst.messaging.folder`'s module docstring says why), which is the
+    right answer for a caller; here the contract is the *example's*, so that
+    the dumper's output matches `dump_messages.txt` byte for byte on
+    `pstd-inline-cid.pst`, whose three root-folder tables are all present in
+    the node B-tree and all unreadable by upstream and by this port alike.
+    The same pattern as `dump_store`, which reproduces its example's refusal.
+    """
+    try:
+        return folder.table(node_type)
+    except PstError:
+        return None
+
+
+def folder_lines(folder: Folder) -> list[str]:
+    """The six-to-eight line block `dump_messages` prints for one folder, without the `Folder:` line.
+
+    Upstream's order, which is not the obvious one: the four properties,
+    then the ASSOCIATED table's row count, then the contents table (whose
+    rows are the `Message:` blocks this dumper stops before) and then the
+    hierarchy table — each printing a `… Table: None` line only when it is
+    absent.
+    """
+    out = [
+        f"  Name: {folder_accessor(folder, folder_mod.PID_TAG_DISPLAY_NAME, lambda: _rust_str(folder.display_name))}",
+        f"  Content Count: {folder_accessor(folder, folder_mod.PID_TAG_CONTENT_COUNT, lambda: str(folder.content_count))}",
+        f"  Unread Count: {folder_accessor(folder, folder_mod.PID_TAG_CONTENT_UNREAD_COUNT, lambda: str(folder.unread_count))}",
+        f"  Has Sub Folders: {folder_accessor(folder, folder_mod.PID_TAG_SUBFOLDERS, lambda: 'true' if folder.has_subfolders else 'false')}",
+    ]
+    associated = folder_table(folder, NodeIdType.ASSOC_CONTENTS_TABLE)
+    out.append("  Associated Table: None" if associated is None else f"  Associated Count: {len(associated)}")
+    if folder_table(folder, NodeIdType.CONTENTS_TABLE) is None:
+        out.append("  Contents Table: None")
+    if folder_table(folder, NodeIdType.HIERARCHY_TABLE) is None:
+        out.append("  Hierarchy Table: None")
+    return out
+
+
+def dump_folders(path: Path) -> None:
+    """`folders <file>`: the folder blocks of `oracle/examples/dump_messages.rs`, and nothing else (P08).
+
+    A pre-order walk from `NID_ROOT_FOLDER` (0x122 — NOT the IPM subtree:
+    starting above it is what puts the wastebasket, the search root and the
+    search folders in the dump), children in row-matrix order, each folder's
+    block at column 0 whatever its depth — all exactly as `dump_folder` does
+    it. The `Message:` blocks the oracle prints between a folder's
+    `Associated Count:` and its children are P09's and are omitted here, as
+    is the `Errors:` trailer, which counts errors this dumper cannot see;
+    `tests/golden_parsers.dump_messages_folder_lines` filters a golden down
+    to exactly what this prints.
+
+    Error handling is the example's, not the library's: a folder that cannot
+    be opened prints an indented `Error:` line and the walk continues, so
+    one unreadable folder does not hide the rest of the tree. No corpus
+    store has one — the text of that line is this port's, since the
+    exception is — and `python -m pypst.debug folders` still exits 0, as the
+    example does when its `Errors:` count is what makes it exit 1.
+    """
+    limits = DEFAULT_LIMITS
+    with Store.open(path, codepage=DUMP_CODEPAGE) as store:
+        seen: set[NodeId] = set()
+        stack: list[tuple[NodeId, int]] = [(NID_ROOT_FOLDER, 0)]
+        while stack:
+            node, depth = stack.pop()
+            print(f"Folder: {node}")
+            if depth > limits.max_folder_depth:
+                print(f'  Error: "folder depth exceeds {limits.max_folder_depth}"')
+                continue
+            if node in seen:
+                print('  Error: "folder already visited (cycle in the hierarchy)"')
+                continue
+            seen.add(node)
+            try:
+                folder = store.open_folder(node)
+                lines = folder_lines(folder)
+                children = folder.subfolder_ids() if folder_table(folder, NodeIdType.HIERARCHY_TABLE) is not None else ()
+            except PstError as exc:
+                print(f"  Error: {exc}")
+                continue
+            for line in lines:
+                print(line)
+            stack.extend((child, depth + 1) for child in reversed(children))
+
+
+DUMPERS["folders"] = dump_folders
 
 
 def main(argv: list[str] | None = None) -> int:

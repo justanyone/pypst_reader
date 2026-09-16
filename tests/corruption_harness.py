@@ -16,8 +16,8 @@ two cannot disagree about what "leak" means:
 The entry points here are the ones that exist today (header, the two
 B-tree walks and lookups, the density list, the store node's heap/BTH
 and its property context, the root folder's hierarchy table as a
-table context, the message store's named accessors and the named
-property map). Each later layer adds its
+table context, the message store's named accessors, the named
+property map and the folder tree from NID_ROOT_FOLDER). Each later layer adds its
 calls to `exercise` in its own row; the contract harness (P24) is the
 generic version over `pypst.__all__`.
 
@@ -35,6 +35,7 @@ detecting it at all.
 from __future__ import annotations
 
 import concurrent.futures
+import contextlib
 import io
 import struct
 import time
@@ -154,6 +155,11 @@ def exercise(data: bytes, shape: BaseShape, limits: Limits = DEFAULT_LIMITS) -> 
         # P07: the message store's own accessors, and the named property map.
         outcomes.append(_attempt("store.open", lambda: read_store(f, limits)))
         outcomes.append(_attempt("store.named_properties", lambda: read_named_properties(f, limits)))
+        # P08: the folder tree from NID_ROOT_FOLDER — every folder's PC and
+        # its four named properties, under the walk's own depth ceiling and
+        # cycle guard; then the two tables the walk does not follow.
+        outcomes.append(_attempt("folder.walk", lambda: walk_folders(f, limits)))
+        outcomes.append(_attempt("folder.tables", lambda: read_folder_tables(f, limits)))
     return outcomes
 
 
@@ -168,6 +174,41 @@ def read_store(f: io.BytesIO, limits: Limits) -> int:
     _ = (store.record_key, store.display_name, store.ipm_subtree, store.wastebasket, store.finder)
     _ = store.matches_record_key(store.entry_id(store.ipm_subtree.node))
     return len(store.properties)
+
+
+def walk_folders(f: io.BytesIO, limits: Limits) -> int:
+    """Walk every folder from `NID_ROOT_FOLDER` and read everything P08 reads; the folder count.
+
+    The four named properties are read through `contextlib.suppress(PstError)`
+    because a folder that legitimately lacks one (the root folder's
+    `PidTagDisplayName` is `PtypNull` on most corpus stores) is not what this
+    harness is hunting; a `PstError` there says nothing about the mutation.
+    What must not escape is anything that is not a `PstError`, and that is
+    judged the same way whether it comes from an accessor or the walk.
+    """
+    count = 0
+    for folder in Store(f, limits=limits).root_folder.walk():
+        count += 1
+        for accessor in ("display_name", "content_count", "unread_count", "has_subfolders"):
+            with contextlib.suppress(PstError):
+                getattr(folder, accessor)
+    return count
+
+
+def read_folder_tables(f: io.BytesIO, limits: Limits) -> int:
+    """Every folder's contents and associated-contents tables, as the ids they name; the id count.
+
+    Kept apart from `walk_folders` on purpose. The walk follows the
+    HIERARCHY tables only, and a store whose CONTENTS table this port
+    refuses (`synth-basics.pst` writes an empty associated-contents table
+    with `rgib[TCI_4b]` of 4, which P06 refuses and upstream accepts because
+    it never reads a row) would otherwise stop the walk at its first folder
+    and hide every mutation aimed further in.
+    """
+    count = 0
+    for folder in Store(f, limits=limits).root_folder.walk():
+        count += len(folder.message_ids()) + len(folder.associated_ids())
+    return count
 
 
 def read_named_properties(f: io.BytesIO, limits: Limits) -> int:
