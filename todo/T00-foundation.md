@@ -7,7 +7,17 @@ are the first thing to port because every struct above them holds one, and
 because four of upstream's fifteen tests live here.
 
 ### P23-IDS
-status: ✗ not started
+status: ✅ 2026-09-15 — `src/pypst/ndb/ids.py` + `src/pypst/block_sig.py`. 103 tests in
+        tests/test_ids.py, tests/test_block_sig.py, tests/parity/test_ids_parity.py
+        (99 pass, 4 skip = the 2 ANSI stores × 2 differentials). Header ids unpacked
+        from the fixtures' own bytes at the [MS-PST] 2.2.2.6/2.2.2.7 offsets reproduce
+        the read_header golden text on 7/7 Unicode stores; every NodeId and BlockRef
+        in the read_btrees goldens rebuilt from parts and printed back on 7/7 stores
+        the oracle accepted (18 of 20 node types plus the `invalid` form seen); the
+        4/4 upstream tests twinned and tagged. 19 deliberate breaks of the source:
+        18 went red, 1 was an equivalent mutant (compute_sig's u32 input mask cannot
+        change the result; documented in the module). Full suite 140 passed / 4
+        skipped; check_provenance, check_quality_ratchet and ruff green.
 upstream: `crates/pst/src/ndb/node_id.rs` (239), `ndb/block_id.rs` (304), `ndb/byte_index.rs` (115), `ndb/block_ref.rs` (135), `block_sig.rs` (32)
 oracle:   none directly — but `read_header` and `read_btrees` goldens print every one of these types in Debug form, and P01/P02 diff against them
 blocked on: none — **start here**

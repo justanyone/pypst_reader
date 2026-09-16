@@ -67,10 +67,14 @@ crc.compute_crc(data: bytes) → int     # u32
 (Names as landed in P00; check the modules. `CryptMethod` moves to `ndb.header`
 in P01 if it is not already an enum.)
 
-## `pypst.ndb.ids` + `pypst.block_sig` — P23
+## `pypst.ndb.ids` + `pypst.block_sig` — landed (P23)
 
 ```python
-class NodeIdType(IntEnum):          # [MS-PST] 2.2.2.1 — the 5-bit nidType; unknown value → PstFormatError
+NODE_ID_FORMAT = "<I"; BLOCK_ID_FORMAT = "<Q"; BYTE_INDEX_FORMAT = "<Q"; BLOCK_REF_FORMAT = "<QQ"
+MAX_NODE_INDEX = (1 << 27) - 1
+MAX_BLOCK_INDEX = (1 << 62) - 1
+
+class NodeIdType(IntEnum):          # [MS-PST] 2.2.2.1 — the 5-bit nidType, named as the spec names them
     HID = 0x00, INTERNAL = 0x01, NORMAL_FOLDER = 0x02, SEARCH_FOLDER = 0x03,
     NORMAL_MESSAGE = 0x04, ATTACHMENT = 0x05, SEARCH_UPDATE_QUEUE = 0x06,
     SEARCH_CRITERIA_OBJECT = 0x07, ASSOC_MESSAGE = 0x08, CONTENTS_TABLE_INDEX = 0x0A,
@@ -78,56 +82,85 @@ class NodeIdType(IntEnum):          # [MS-PST] 2.2.2.1 — the 5-bit nidType; un
     CONTENTS_TABLE = 0x0E, ASSOC_CONTENTS_TABLE = 0x0F, SEARCH_CONTENTS_TABLE = 0x10,
     ATTACHMENT_TABLE = 0x11, RECIPIENT_TABLE = 0x12, SEARCH_TABLE_INDEX = 0x13,
     LTP = 0x1F
+    debug_name → str                # the name upstream prints and the goldens contain: HID → "HeapNode",
+                                    # SEARCH_CRITERIA_OBJECT → "SearchCriteria", ASSOC_MESSAGE → "AssociatedMessage",
+                                    # ASSOC_CONTENTS_TABLE → "AssociatedContentsTable", LTP → "ListsTablesProperties",
+                                    # every other member → its CamelCase spelling
+    @classmethod from_debug_name(cls, name: str) → NodeIdType   # !PstFormatError; the inverse, for golden parsers
 
-@dataclass(frozen=True, slots=True)
+# Every value type below: @dataclass(frozen=True, slots=True); a raw value outside its width (negative,
+# too wide, bool, float) → PstFormatError in __post_init__; `SIZE: ClassVar[int]` is the on-disk size;
+# unpack_from(buf: bytes | bytearray | memoryview, offset: int = 0) raises PstFormatError on a short
+# buffer, an offset past the end, or a NEGATIVE offset (struct would count it from the end; we refuse);
+# pack() → bytes is the inverse, for round-trip tests.
+
 class NodeId:                       # u32
-    raw: int
-    @classmethod from_parts(cls, id_type: NodeIdType, index: int) → NodeId   # index > MAX_NODE_INDEX → PstFormatError
-    id_type → NodeIdType            # !PstFormatError on an unknown 5-bit value
+    raw: int                        # NodeId(raw) holds ANY u32, an unknown 5-bit type included — upstream's From<u32>;
+                                    # the B-tree that contains such a node must stay walkable (goldens print them `invalid`)
+    SIZE = 4
+    @classmethod from_parts(cls, id_type: NodeIdType, index: int) → NodeId   # strict: unknown type or index > MAX_NODE_INDEX → PstFormatError
+    @classmethod unpack_from(cls, buf, offset=0) → NodeId
+    pack() → bytes
+    id_type → NodeIdType            # !PstFormatError on an unknown 5-bit value — THIS is where an unknown type is refused
     index → int                     # 27 bits
-    __str__ → "NodeId { <Type>: 0x<index hex> }"   # upstream's Debug form, so goldens parse
+    __str__ → "NodeId { <debug_name>: 0x<index, %X> }" | "NodeId { invalid: 0x<raw, %08X> }"
 
-MAX_NODE_INDEX = (1 << 27) - 1
-NID_MESSAGE_STORE = NodeId(0x21); NID_NAME_TO_ID_MAP = NodeId(0x61); NID_ROOT_FOLDER = NodeId(0x122)
-# ...and the rest of upstream's NID_* constants, verbatim values
+NID_MESSAGE_STORE = NodeId(0x21); NID_NAME_TO_ID_MAP = NodeId(0x61); NID_NORMAL_FOLDER_TEMPLATE = NodeId(0xA1)
+NID_SEARCH_FOLDER_TEMPLATE = NodeId(0xC1); NID_ROOT_FOLDER = NodeId(0x122); NID_SEARCH_MANAGEMENT_QUEUE = NodeId(0x1E1)
+NID_SEARCH_ACTIVITY_LIST = NodeId(0x201); NID_RESERVED1 = NodeId(0x241); NID_SEARCH_DOMAIN_OBJECT = NodeId(0x261)
+NID_SEARCH_GATHERER_QUEUE = NodeId(0x281); NID_SEARCH_GATHERER_DESCRIPTOR = NodeId(0x2A1); NID_RESERVED2 = NodeId(0x2E1)
+NID_RESERVED3 = NodeId(0x301); NID_SEARCH_GATHERER_FOLDER_QUEUE = NodeId(0x321)      # all of upstream's, [MS-PST] 2.4.1
 
-@dataclass(frozen=True, slots=True)
 class BlockId:                      # u64; bit 1 = internal, bit 0 reserved, rest index
     raw: int
+    SIZE = 8
     @classmethod from_parts(cls, is_internal: bool, index: int) → BlockId     # index > MAX_BLOCK_INDEX → PstFormatError
+    @classmethod unpack_from(cls, buf, offset=0) → BlockId
+    pack() → bytes
     is_internal → bool
     index → int
-    search_key → int                # what the BBT is keyed on (raw with the reserved bit cleared)
-    __str__ → "BlockId { leaf: 0x<hex> }" | "BlockId { internal: 0x<hex> }"
+    search_key → int                # what the BBT is keyed on: raw with the reserved bit cleared
+    __str__ → "BlockId { leaf: 0x<index, %X> }" | "BlockId { internal: 0x<index, %X> }"
 
-MAX_BLOCK_INDEX = (1 << 62) - 1
-
-@dataclass(frozen=True, slots=True)
-class PageId:                       # u64, same layout as BlockId; distinct type on purpose
+class PageId:                       # u64, the whole value is the index; distinct type on purpose
     raw: int
-    __str__ → "PageId: 0x<hex>"
+    SIZE = 8
+    @classmethod unpack_from(cls, buf, offset=0) → PageId
+    pack() → bytes
+    is_internal → bool              # always False
+    index → int; search_key → int   # both == raw
+    __str__ → "PageId: 0x<raw, %X>"
 
-@dataclass(frozen=True, slots=True)
-class ByteIndex:                    # u64 file offset. Not an int: you may not add two of these.
+class ByteIndex:                    # u64 file offset. Not an int: ByteIndex + ByteIndex is a TypeError.
     value: int
-    __str__ → "ByteIndex { 0x<hex> }"
+    SIZE = 8
+    @classmethod unpack_from(cls, buf, offset=0) → ByteIndex
+    pack() → bytes
+    __str__ → "ByteIndex { 0x<value, %X> }"
 
-@dataclass(frozen=True, slots=True)
 class BlockRef:                     # BREF, [MS-PST] 2.2.2.4 — struct "<QQ"
     block: BlockId
     index: ByteIndex
     SIZE = 16
-    @classmethod unpack_from(cls, buf: bytes | memoryview, offset: int = 0) → BlockRef   # short buffer → PstFormatError
+    @classmethod unpack_from(cls, buf, offset=0) → BlockRef
+    pack() → bytes
+    __str__ → "BlockRef { block: <BlockId>, index: <ByteIndex> }"
 
-@dataclass(frozen=True, slots=True)
-class PageRef:                      # same bytes, page-typed
+class PageRef:                      # same bytes, page-typed: the header's NBT/BBT roots, every B-tree child
     page: PageId
     index: ByteIndex
+    SIZE = 16
+    @classmethod unpack_from(cls, buf, offset=0) → PageRef
+    pack() → bytes
+    __str__ → "PageRef { page: <PageId>, index: <ByteIndex> }"
 
-block_sig.compute_sig(index: int, block_id: int) → int     # u16; [MS-PST] 5.5; both inputs masked to u32 first
+block_sig.compute_sig(index: int, block_id: int) → int     # u16; [MS-PST] 5.5; both inputs masked to u32 first (upstream's `as u32`)
 ```
 
-Upstream's `Unicode*` prefix is dropped: there is only one variant here.
+Upstream's `Unicode*` prefix is dropped: there is only one variant here. Every
+`__str__` is upstream's `Debug` text with that prefix removed, and
+`tests/test_ids.py` checks it against every id in the read_header and
+read_btrees goldens. Nothing here has `next()`: it has no read-path caller.
 
 ## `pypst.ndb.header` + `pypst.ndb.root` — P01
 
@@ -433,3 +466,11 @@ __all__ = [...]                      # the P24 contract harness iterates this
 - 2026-09-15 — drafted from upstream's public surface (P30). Nothing above
   `errors`/`encode`/`crc` exists yet; every other section is a promise.
 - 2026-09-15 — P29: `pypst.debug` built (empty `DUMPERS` registry, `--list`, exit codes); golden parser output shapes and the optional-prefix rule recorded above.
+- 2026-09-15 — P23 landed `pypst.ndb.ids` and `pypst.block_sig`; its section
+  now describes what was built. Changes from the draft: `NodeId(raw)` and
+  `unpack_from` accept an unknown 5-bit type (the refusal is at `id_type`, as
+  upstream; goldens print such nodes as `invalid`); `NodeIdType.debug_name` /
+  `from_debug_name` added for golden parsers; `unpack_from`, `pack()` and
+  `SIZE` on every type; `PageId` carries `index`/`search_key`/`is_internal`
+  like upstream's trait; the struct-format constants are named; negative
+  offsets are refused.
