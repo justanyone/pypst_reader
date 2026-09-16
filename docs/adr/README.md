@@ -12,7 +12,7 @@ weeks, is that weight.
 |---|---|---|
 | [0001](0001-a-port-rather-than-bindings.md) | accepted | A port rather than bindings — what pure Python buys, and what it costs |
 | [0002](0002-attribution-and-patent-posture.md) | accepted | Attribution is mechanical, and the patent posture is inherited rather than created |
-| [0003](0003-unicode-only.md) | accepted | Unicode stores only; ANSI is refused here and belongs to a sibling `pypst_reader_nu` |
+| [0003](0003-unicode-only.md) | accepted | Unicode stores only; ANSI is refused here and belongs to a sibling `pypstreader_nu` |
 | [0004](0004-public-fixture-corpus.md) | accepted | A hash-pinned public fixture corpus — what may enter it, and why Apache-2.0 test data is fine |
 
 ## Expected next

@@ -6,7 +6,7 @@ decoded block would be wrong in a way that looks like a structural bug.
 
 from __future__ import annotations
 
-from pypst._tables import KEY_DATA, KEY_DATA_I, KEY_DATA_R, KEY_DATA_S
+from pypstreader._tables import KEY_DATA, KEY_DATA_I, KEY_DATA_R, KEY_DATA_S
 from tests.parity import upstream_test
 
 

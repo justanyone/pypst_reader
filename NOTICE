@@ -2,7 +2,7 @@
 
 ## Derivation
 
-`pypst` is a pure-Python port of the read path of
+`pypstreader` is a pure-Python port of the read path of
 **[microsoft/outlook-pst-rs](https://github.com/microsoft/outlook-pst-rs)** —
 "Outlook PST Store Provider in Rust", a clean-room implementation of the
 [MS-PST] open specification.
@@ -27,7 +27,7 @@ notice is telling the truth.
 This project is **not** affiliated with, sponsored by, or endorsed by Microsoft
 Corporation. "Microsoft", "Outlook" and "Windows" are trademarks of Microsoft
 Corporation; upstream's own README reserves them, and nothing here grants a
-licence to them. The project is named `pypst`, and any user-visible string that
+licence to them. The project is named `pypstreader`, and any user-visible string that
 would imply Microsoft authorship or endorsement is a bug.
 
 ## Test fixture

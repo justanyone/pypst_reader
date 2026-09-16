@@ -1,4 +1,4 @@
-# pypst nightly — the differential oracle, re-derived from source.
+# pypstreader nightly — the differential oracle, re-derived from source.
 #
 # Every-push CI (ci.yml) is Rust-free on purpose: its differential tests read
 # the goldens committed under tests/golden/, so the unit suite stays under a

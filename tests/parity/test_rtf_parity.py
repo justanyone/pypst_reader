@@ -11,7 +11,7 @@ pages independently.
 
 from __future__ import annotations
 
-from pypst.rtf import decompress_rtf
+from pypstreader.rtf import decompress_rtf
 from tests.parity import upstream_test
 from tests.rtf_compress import compress_rtf
 

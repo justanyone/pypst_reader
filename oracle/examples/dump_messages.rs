@@ -1,7 +1,7 @@
 //! dump_messages — a non-interactive dump of every folder, message, recipient
-//! and attachment in a PST, for the differential tests of pypst rows P08/P09.
+//! and attachment in a PST, for the differential tests of pypstreader rows P08/P09.
 //!
-//! This file is part of pypst (MIT). It uses the `outlook-pst` crate
+//! This file is part of pypstreader (MIT). It uses the `outlook-pst` crate
 //! (https://github.com/microsoft/outlook-pst-rs, MIT, Copyright (c) Microsoft
 //! Corporation) as a path dependency and is modelled on that crate's
 //! `browse_pst` example, whose only message-level view is an interactive TUI.

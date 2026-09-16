@@ -151,10 +151,10 @@ public callable an adapter (or a reason) in `tests/contract.py`, the
 discovered-entry-point contract (T5), which fails naming any it does not know.
 
 Stubs waiting for their layer, each `pytest.importorskip`-guarded in
-`test_corruption.py`: P03 (`pypst.ndb.block`) — a leaf BBTENTRY `cb`
+`test_corruption.py`: P03 (`pypstreader.ndb.block`) — a leaf BBTENTRY `cb`
 larger than the file, a leaf data block past EOF, an XXBLOCK chain 10 000
 deep, an XBLOCK `lcbTotal` of 4 GB, a subnode tree cycle; P04
-(`pypst.ltp.heap`) — a BTH cycle, an HID past the block. The
+(`pypstreader.ltp.heap`) — a BTH cycle, an HID past the block. The
 `P03 landed? add:` note in `corrupt.py` names the family (`block_lies`,
 `heap_lies`) and the builders each row is expected to add.
 

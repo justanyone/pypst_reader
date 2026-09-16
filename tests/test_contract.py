@@ -25,7 +25,7 @@ mutation, and the entry point, and the exception type):
   garbage count that the default refuses as a limit is refused as a format
   error a few bytes later when the ceiling is lifted.
 
-Plus the process boundary, slow: `python -m pypst.debug <dumper> <store>`
+Plus the process boundary, slow: `python -m pypstreader.debug <dumper> <store>`
 for every registered dumper over every fixture and five mutations exits 0
 or 1 with `Error:` on stderr, never a traceback.
 
@@ -47,11 +47,11 @@ from pathlib import Path
 
 import pytest
 
-import pypst
-from pypst import debug
-from pypst.errors import PstFormatError, PstLimitError, PstUnsupportedError
-from pypst.limits import DEFAULT_LIMITS, Limits
-from pypst.messaging import store as messaging
+import pypstreader
+from pypstreader import debug
+from pypstreader.errors import PstFormatError, PstLimitError, PstUnsupportedError
+from pypstreader.limits import DEFAULT_LIMITS, Limits
+from pypstreader.messaging import store as messaging
 from tests import contract, corrupt
 from tests.conftest import FIXTURES, PUBLIC, REPO, public_fixture_paths
 from tests.contract import EntryPoint, Outcome, Result
@@ -115,39 +115,39 @@ def _data(path: Path) -> bytes:
 
 
 def test_top_level_all_is_the_contract(entry_points: list[EntryPoint]) -> None:
-    """Every name in `pypst.__all__` resolves, the list is sorted, and each callable in it is a discovered entry point."""
-    assert pypst.__all__ == sorted(pypst.__all__), "pypst.__all__ is kept sorted"
-    assert len(set(pypst.__all__)) == len(pypst.__all__)
+    """Every name in `pypstreader.__all__` resolves, the list is sorted, and each callable in it is a discovered entry point."""
+    assert pypstreader.__all__ == sorted(pypstreader.__all__), "pypstreader.__all__ is kept sorted"
+    assert len(set(pypstreader.__all__)) == len(pypstreader.__all__)
     discovered = {contract._key(ep.obj) for ep in entry_points}
-    for name in pypst.__all__:
-        assert hasattr(pypst, name), f"pypst.__all__ names {name!r}, which pypst does not define"
-        obj = getattr(pypst, name)
+    for name in pypstreader.__all__:
+        assert hasattr(pypstreader, name), f"pypstreader.__all__ names {name!r}, which pypstreader does not define"
+        obj = getattr(pypstreader, name)
         if callable(obj):
-            assert contract._key(obj) in discovered, f"pypst.{name} is exported but not discovered as an entry point"
-    # P07 landed the messaging entry point: `pypst.open` and `pypst.Store`
+            assert contract._key(obj) in discovered, f"pypstreader.{name} is exported but not discovered as an entry point"
+    # P07 landed the messaging entry point: `pypstreader.open` and `pypstreader.Store`
     # are exported and are the real thing — the same objects the package
     # defines, not a stub, and discovered under their own module.
-    assert {"EntryId", "Store", "open"} <= set(pypst.__all__), "P07 exports pypst.open, pypst.Store and pypst.EntryId"
-    assert pypst.open is messaging.open_store
-    assert pypst.Store is messaging.Store
-    assert pypst.EntryId is messaging.EntryId
-    assert pypst.open is not builtins.open, "pypst.open shadows the builtin deliberately; it must not BE it"
-    assert inspect.signature(pypst.open).parameters.keys() == {"path", "limits", "codepage"}
+    assert {"EntryId", "Store", "open"} <= set(pypstreader.__all__), "P07 exports pypstreader.open, pypstreader.Store and pypstreader.EntryId"
+    assert pypstreader.open is messaging.open_store
+    assert pypstreader.Store is messaging.Store
+    assert pypstreader.EntryId is messaging.EntryId
+    assert pypstreader.open is not builtins.open, "pypstreader.open shadows the builtin deliberately; it must not BE it"
+    assert inspect.signature(pypstreader.open).parameters.keys() == {"path", "limits", "codepage"}
 
 
 def test_discovery_reaches_every_layer(entry_points: list[EntryPoint]) -> None:
     """The walk finds the modules and the shapes it must: functions, classmethods, methods along the MRO."""
     names = {ep.name for ep in entry_points}
     for expected in (
-        "pypst.ndb.header.read_header",
-        "pypst.ndb.header.Header.parse",
-        "pypst.ndb.btree.NodeBTree.find",
-        "pypst.ndb.btree.NodeBTree.__iter__",
-        "pypst.ndb.btree.BlockBTree.pages",  # inherited from _BTree
-        "pypst.ndb.block.BlockReader.node_data",
-        "pypst.ltp.prop_type.decode",
-        "pypst.rtf.decompress_rtf",
-        "pypst.debug.main",
+        "pypstreader.ndb.header.read_header",
+        "pypstreader.ndb.header.Header.parse",
+        "pypstreader.ndb.btree.NodeBTree.find",
+        "pypstreader.ndb.btree.NodeBTree.__iter__",
+        "pypstreader.ndb.btree.BlockBTree.pages",  # inherited from _BTree
+        "pypstreader.ndb.block.BlockReader.node_data",
+        "pypstreader.ltp.prop_type.decode",
+        "pypstreader.rtf.decompress_rtf",
+        "pypstreader.debug.main",
     ):
         assert expected in names, f"{expected} not discovered; discovery is broken or the name moved"
     assert not [n for n in names if n.split(".")[1].startswith("_")], "private modules are not part of the contract"
@@ -213,13 +213,13 @@ def test_fixture_never_leaks(store: Path, entry_points: list[EntryPoint], watchd
     assert not failures, f"{len(failures)} problem(s) over {store.name}:\n" + "\n".join(failures)
 
     by_name = {o.entry_point: o for o in outcomes}
-    header = by_name["pypst.ndb.header.read_header"]
+    header = by_name["pypstreader.ndb.header.read_header"]
     adapted = {name for name, how in contract.coverage().items() if how == "adapter"}
     reader_points = {ep.name for ep in entry_points if ep.kind in ("reader", "method")} & adapted
     skipped = {o.entry_point for o in outcomes if o.kind is Result.SKIP}
     if is_ansi(data):
         assert header.error_type == "PstUnsupportedError", f"{store.name}: ANSI must be refused as unsupported, got {header}"
-        whole = next(o for o in outcomes if o.entry_point == "pypst.ndb.header.Header.parse" and o.label == "whole")
+        whole = next(o for o in outcomes if o.entry_point == "pypstreader.ndb.header.Header.parse" and o.label == "whole")
         assert whole.error_type == "PstUnsupportedError"
         reached_readers = {o.entry_point for o in outcomes if o.kind is not Result.SKIP} & reader_points
         assert not reached_readers, f"{store.name}: entry points that need a parsed header ran on an ANSI store: {sorted(reached_readers)}"
@@ -298,7 +298,7 @@ def test_limits_bite(store: Path, entry_points: list[EntryPoint], watchdog: Watc
     outcomes = contract.sweep(data, limits=LIMITS_NO_FILE, watchdog=watchdog, workdir=tmp_path, entry_points_=entry_points, thorough=False)
     assert not contract.problems(outcomes), f"{store.name} with max_file_size=1:\n" + "\n".join(contract.problems(outcomes))
     for o in outcomes:
-        if kinds.get(o.entry_point) in READER_KINDS and o.kind is Result.PST_ERROR and o.entry_point != "pypst.ndb.header.read_header":
+        if kinds.get(o.entry_point) in READER_KINDS and o.kind is Result.PST_ERROR and o.entry_point != "pypstreader.ndb.header.read_header":
             assert isinstance(o.error, PstFormatError | PstUnsupportedError), f"{store.name} with max_file_size=1: {o}"
 
 
@@ -335,7 +335,7 @@ def test_defaults_are_not_tight(store: Path, entry_points: list[EntryPoint], wat
 
 def _cli(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     env = {**os.environ, "PYTHONPATH": str(REPO / "src"), "PYTHONDONTWRITEBYTECODE": "1"}
-    return subprocess.run([sys.executable, "-m", "pypst.debug", *args], capture_output=True, text=True, check=False, cwd=cwd, env=env, timeout=120)
+    return subprocess.run([sys.executable, "-m", "pypstreader.debug", *args], capture_output=True, text=True, check=False, cwd=cwd, env=env, timeout=120)
 
 
 def _cli_extras(dumper: object) -> list[str]:
@@ -361,7 +361,7 @@ def _cli_stores(tmp_path: Path) -> list[tuple[str, Path]]:
 
 @pytest.mark.slow
 def test_debug_cli_never_tracebacks(tmp_path: Path) -> None:
-    """`python -m pypst.debug <dumper> <store>` over every fixture and five mutations: exit 0 clean, or exit 1 with `Error:` — never a traceback."""
+    """`python -m pypstreader.debug <dumper> <store>` over every fixture and five mutations: exit 0 clean, or exit 1 with `Error:` — never a traceback."""
     failures = []
     for label, path in _cli_stores(tmp_path):
         for name, dumper in sorted(debug.DUMPERS.items()):

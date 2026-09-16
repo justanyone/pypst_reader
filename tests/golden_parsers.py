@@ -4,7 +4,7 @@ One parser per captured example (upstream's eight plus our own
 ``dump_messages`` from ``oracle/``, all captured by
 ``scripts/capture_oracle.py``), plus the shared value parsers for the id
 types that every example prints. A differential test parses the committed
-golden with one of these, parses ``python -m pypst.debug <layer>`` output
+golden with one of these, parses ``python -m pypstreader.debug <layer>`` output
 with the *same* function, and compares the values — never the strings, since
 upstream's formatting is upstream's to change.
 
@@ -15,7 +15,7 @@ Two rules every parser here keeps:
   parser that silently returns nine of ten fields turns a corrupted golden
   into a passing test.
 - **The ``Unicode``/``Ansi`` prefix is optional.** Upstream prints
-  ``UnicodeBlockId { leaf: 0x4C }``; ``pypst`` has no ANSI variant and its
+  ``UnicodeBlockId { leaf: 0x4C }``; ``pypstreader`` has no ANSI variant and its
   ``__str__`` prints ``BlockId { leaf: 0x4C }`` (``docs/INTERFACES.md`` §
   ids). One parser reads both sides, so the prefix is stripped, not required.
 
@@ -329,7 +329,7 @@ def _parse_node_page(c: _Cursor) -> dict[str, Any]:
     children: list[dict[str, Any]] = []
     for _ in range(int(count)):
         if c.next_is(_KEY_INVALID):
-            # Upstream prints this and skips the subtree; pypst refuses such a store.
+            # Upstream prints this and skips the subtree; pypstreader refuses such a store.
             key = int(c.take(_KEY_INVALID, "`Invalid Key: 0x..`").group(1), 16)
             children.append({"invalid_key": key, "page": None})
             continue
@@ -388,7 +388,7 @@ def parse_read_density_list(text: str) -> dict[str, Any] | None:
     ``{"backfill_complete": bool, "current_page": int, "entries": [int, …]
     (the raw u32s), "page_type": str, "signature": int, "crc": int,
     "block_id": int}``. A store with no density list makes upstream print a
-    single ``Error: …`` line (exit 0), which parses to ``None``; pypst's
+    single ``Error: …`` line (exit 0), which parses to ``None``; pypstreader's
     dumper refuses such a store instead (exit 1), so a test compares
     ``None`` with that refusal.
     """
@@ -723,7 +723,7 @@ def parse_read_store_props(text: str) -> dict[str, Any]:
     the store lacks one (pstd-inline-cid stops after ``IPM Subtree:``), and
     the partial output is still a claim about what WAS printed. A property
     group is ``_properties``' dict with ``record`` None (the example prints
-    no ``Record:`` line; ``python -m pypst.debug pc`` does, and parses here
+    no ``Record:`` line; ``python -m pypstreader.debug pc`` does, and parses here
     too). Truncated or garbled input is ``ValueError``.
     """
     lines = _lines(text)

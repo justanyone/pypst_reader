@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import random
 
-from pypst.block_sig import compute_sig
+from pypstreader.block_sig import compute_sig
 
 
 def _reference(index: int, block_id: int) -> int:

@@ -15,10 +15,10 @@ Rules:
   before the change (`docs/AGENTS.md`), and add a line to the changelog at the
   bottom.
 - Every parsed structure is `@dataclass(frozen=True, slots=True)`. Every
-  failure is a `PstError` subclass from `pypst.errors`. Every fixed-width
+  failure is a `PstError` subclass from `pypstreader.errors`. Every fixed-width
   integer is masked where it is computed.
 - `__str__` on a value type must be stable: golden parsers (`tests/golden_parsers.py`)
-  round-trip through it, and `pypst.debug` prints it.
+  round-trip through it, and `pypstreader.debug` prints it.
 
 Conventions for reading this file: `→ X` is the return type; `!E` after a
 signature lists the exception types it may raise beyond the universal
@@ -26,7 +26,7 @@ signature lists the exception types it may raise beyond the universal
 
 ---
 
-## `pypst.errors` — exists
+## `pypstreader.errors` — exists
 
 ```python
 class PstError(Exception)                       # the family; nothing else escapes a public entry point
@@ -38,7 +38,7 @@ class PstNotFoundError(PstFormatError)          # a B-tree key the tree does not
 
 Additive only. P11 adds nothing here; it raises `PstLimitError`.
 
-## `pypst.limits` — exists (P11)
+## `pypstreader.limits` — exists (P11)
 
 Not a port: upstream has no equivalent (Rust's bounds checks make a panic
 survivable; an unbounded Python loop is a hang). Every default cites the
@@ -88,7 +88,7 @@ a cycle is corruption by any reading, but every walk's contract above already
 promises `PstLimitError` for it, and a caller that hits one has the same move
 either way: stop.
 
-## `pypst.encode`, `pypst.crc` — exist
+## `pypstreader.encode`, `pypstreader.crc` — exist
 
 ```python
 encode.decode_block(data: bytes | bytearray | memoryview, method: CryptMethod, key: int) → bytes
@@ -98,7 +98,7 @@ crc.compute_crc(data: bytes) → int     # u32
 (Names as landed in P00; check the modules. `CryptMethod` moves to `ndb.header`
 in P01 if it is not already an enum.)
 
-## `pypst.ndb.ids` + `pypst.block_sig` — landed (P23)
+## `pypstreader.ndb.ids` + `pypstreader.block_sig` — landed (P23)
 
 ```python
 NODE_ID_FORMAT = "<I"; BLOCK_ID_FORMAT = "<Q"; BYTE_INDEX_FORMAT = "<Q"; BLOCK_REF_FORMAT = "<QQ"
@@ -193,10 +193,10 @@ Upstream's `Unicode*` prefix is dropped: there is only one variant here. Every
 `tests/test_ids.py` checks it against every id in the read_header and
 read_btrees goldens. Nothing here has `next()`: it has no read-path caller.
 
-## `pypst.ndb.header` + `pypst.ndb.root` — landed (P01)
+## `pypstreader.ndb.header` + `pypstreader.ndb.root` — landed (P01)
 
 ```python
-# pypst.ndb.root
+# pypstreader.ndb.root
 ROOT_FORMAT = "<IQQQQQQQQBBH"
 class AmapStatus(IntEnum):  INVALID = 0x00, VALID1 = 0x01, VALID2 = 0x02
     debug_name → str                 # "Invalid" | "Valid1" | "Valid2" — upstream's spelling; __str__ is the same
@@ -216,12 +216,12 @@ class Root:                          # [MS-PST] 2.2.2.5, Unicode layout, 72 byte
     @classmethod unpack_from(cls, buf, offset=0) → Root        # short buffer / bad offset → PstFormatError
     # dwReserved, bReserved, wReserved are read and discarded (spec: readers SHOULD ignore)
 
-# pypst.ndb.header
+# pypstreader.ndb.header
 HEADER_MAGIC = 0x4E444221; HEADER_MAGIC_CLIENT = 0x4D53      # "!BDN" and "SM" read little-endian
 CLIENT_VERSION = 19; PLATFORM_CREATE = PLATFORM_ACCESS = 0x01; SENTINEL = 0x80
 CRYPT_METHOD_EDPCRYPTED = 0x10                                # the spec's name; refused by name
 HEADER_SIZE = 564
-from pypst.encode import CryptMethod                         # NONE/PERMUTE/CYCLIC live with the decoders; re-exported
+from pypstreader.encode import CryptMethod                         # NONE/PERMUTE/CYCLIC live with the decoders; re-exported
 
 class Version(IntEnum):  ANSI_14 = 14, ANSI_15 = 15, UNICODE = 23, UNICODE_4K_36 = 36, UNICODE_4K_37 = 37
     is_ansi → bool
@@ -238,7 +238,7 @@ class Header:                        # [MS-PST] 2.2.2.6, Unicode layout, 564 byt
     root: Root
     SIZE = 564
     @classmethod parse(cls, buf: bytes | bytearray | memoryview) → Header
-        # !PstUnsupportedError  wVer 14/15 ("ANSI (pre-2003) store, wVer=14; … see pypst_reader_nu"),
+        # !PstUnsupportedError  wVer 14/15 ("ANSI (pre-2003) store, wVer=14; … see pypstreader_nu"),
         #                       wVer 36/37 (4 KB-page store), bCryptMethod 0x10 (EDP/WIP)
         # !PstFormatError       short buffer, bad dwMagic, bad wMagicClient, unknown wVer, partial or full
         #                       CRC mismatch, wVerClient ≠ 19, platform bytes ≠ 1, dwAlign ≠ 0,
@@ -250,7 +250,7 @@ class Header:                        # [MS-PST] 2.2.2.6, Unicode layout, 564 byt
 read_header(f: BinaryIO) → Header    # seeks to 0, reads SIZE bytes; short read → PstFormatError; OSError is not caught
 ```
 
-`python -m pypst.debug header <file>` prints the ten `read_header` lines in
+`python -m pypstreader.debug header <file>` prints the ten `read_header` lines in
 upstream's format (`__str__` forms, no `Unicode` prefix) so `parse_read_header`
 compares values directly; on an ANSI store it exits 1 with the
 `PstUnsupportedError` message on stderr.
@@ -258,7 +258,7 @@ compares values directly; on an ANSI store it exits 1 with the
 Changes from the draft, and why: `wVer` 36/37 are **refused**
 (`PstUnsupportedError`), not parsed — they are the 4 KB-page layout, upstream
 refuses them too, and reading them with 512-byte-page assumptions is the
-plausible-garbage outcome. `CryptMethod` stays in `pypst.encode` (it was
+plausible-garbage outcome. `CryptMethod` stays in `pypstreader.encode` (it was
 already an enum there) and gains no `WINDOWS_EFS` member: 0x10 is the constant
 `CRYPT_METHOD_EDPCRYPTED` and is refused before the enum is consulted, so
 `decode_block` can never be handed it. `AmapStatus` has the two conversions
@@ -266,14 +266,14 @@ because upstream's read is lenient and the rest of this package is not.
 `tests/corrupt.py` (mutation helpers; `reseal_header` recomputes both CRCs)
 is the seed P12 extends.
 
-## `pypst.ndb.page` + `pypst.ndb.btree` — landed (P02)
+## `pypstreader.ndb.page` + `pypstreader.ndb.btree` — landed (P02)
 
 Unicode arms only. `page.py` parses one 512-byte page; `btree.py` reads
 pages from the file and walks them. AMap/PMap/FMap/FPMap contents are not
 ported (write-path only); `PageType` still names them.
 
 ```python
-# pypst.ndb.page
+# pypstreader.ndb.page
 PAGE_SIZE = 512; PAGE_DATA_SIZE = 496; BTREE_ENTRIES_SIZE = 488; MAX_BTREE_LEVEL = 8
 DENSITY_LIST_OFFSET = 0x4200; DENSITY_LIST_INDEX = ByteIndex(0x4200); DENSITY_LIST_MAX_ENTRIES = 119
 class PageType(IntEnum):  BBT = 0x80, NBT = 0x81, FMAP = 0x82, PMAP = 0x83, AMAP = 0x84, FPMAP = 0x85, DL = 0x86
@@ -317,7 +317,7 @@ class DensityListPage:               # DLISTPAGE 2.2.2.7.2
     backfill_complete: bool; current_page: int; entries: tuple[DensityListEntry, ...]; trailer: PageTrailer
     parse(page_bytes, index=DENSITY_LIST_INDEX) → DensityListPage   # !PstFormatError count > 119, padding, ptype != DL, CRC
 
-# pypst.ndb.btree
+# pypstreader.ndb.btree
 read_page(f, index: ByteIndex, limits=DEFAULT_LIMITS) → bytes     # one seek + one 512-byte read; !PstFormatError short read or index+512 > limits.max_file_size
 read_density_list(f, limits=DEFAULT_LIMITS) → DensityListPage     # !PstFormatError when the slot is not a DL page (upstream: InvalidPageType(0))
 
@@ -335,15 +335,15 @@ class NodeBTree / BlockBTree:
     # Divergence: an NBT intermediate key > 32 bits → PstFormatError (upstream's example skips the subtree).
 ```
 
-`python -m pypst.debug btrees` prints upstream's `read_btrees` format; the block
+`python -m pypstreader.debug btrees` prints upstream's `read_btrees` format; the block
 section byte for byte, the node section down to each entry's data block id,
 `Size:` (from the BBT entry) for a leaf data block, sub-node block id and parent —
 the data-tree and sub-node-tree lines under those are blocks (P03), which
-extends the dumper. `python -m pypst.debug density_list` prints
+extends the dumper. `python -m pypstreader.debug density_list` prints
 `read_density_list`'s seven lines; a store without the page is refused (exit 1)
 where upstream prints an `Error:` line with exit 0.
 
-## `pypst.ndb.block` — landed (P03)
+## `pypstreader.ndb.block` — landed (P03)
 
 Unicode arm only. One block at a time through the block B-tree, the
 XBLOCK/XXBLOCK data trees and the SLBLOCK/SIBLOCK subnode trees over them.
@@ -406,11 +406,11 @@ trailer bid's index, XBLOCK `cLevel`, `lcbTotal` against the assembled
 length, slack in a tree block's `cb`. `PstNotFoundError` from the BBT
 propagates unwrapped for every absent bid.
 
-`python -m pypst.debug btrees` now prints upstream's `read_btrees` output in
+`python -m pypstreader.debug btrees` now prints upstream's `read_btrees` output in
 full — data trees (`Data Tree Level:`/`Total Size:`/`Block:`, a data
 block's TRAILER bid and decoded length) and sub-node trees (`Sub-Node Block
 Entries:`, `PageRef:`, nested `Sub-Node Block:`), quirks included — byte-
-identical on 8/8 Unicode corpus stores. `python -m pypst.debug node <file>
+identical on 8/8 Unicode corpus stores. `python -m pypstreader.debug node <file>
 <nid-hex>` prints `Node:`, `Data Length:`, `Data CRC32:` (zlib), `Sub-Nodes:`
 — the way to compare a node's bytes without printing them. `main` now passes
 extra positional arguments to a dumper that declares them.
@@ -425,13 +425,13 @@ the dumper and the tests need one block at a time. `limits` defaults to
 `DEFAULT_LIMITS`. `tests/corrupt.py` gained the block builders (`data_block`,
 `xblock`, `slblock`, `siblock`, `block_trailer`, `file_with_blocks`) for P12.
 
-## `pypst.ltp.heap` + `pypst.ltp.tree` — landed (P04)
+## `pypstreader.ltp.heap` + `pypstreader.ltp.tree` — landed (P04)
 
 Unicode arm only. The Heap-on-Node over a node's data blocks and its
 sub-node tree, and the BTree-on-Heap over that.
 
 ```python
-# pypst.ltp.heap
+# pypstreader.ltp.heap
 HEAP_ID_FORMAT = "<I"; HEAP_HEADER_FORMAT = "<HBBII"; HEAP_HEADER_SIZE = 12; HEAP_SIGNATURE = 0xEC
 PAGE_HEADER_FORMAT = "<H"; PAGE_HEADER_SIZE = 2; BITMAP_HEADER_FORMAT = "<H64s"; BITMAP_HEADER_SIZE = 66
 FIRST_BITMAP_BLOCK = 8; BITMAP_PERIOD = 128          # HNBITMAPHDR at blocks 8, 136, 264, … (2.3.1.4)
@@ -485,7 +485,7 @@ class HeapNode:
     get_hnid_blocks(self, hnid: HeapNodeId) → list[bytes]   # the same bytes as the BLOCKS they are stored in (added by P06 for
                                                      # the row matrix, whose rows never straddle a block); a heap item is one block
 
-# pypst.ltp.tree
+# pypstreader.ltp.tree
 BTH_HEADER_FORMAT = "<BBBBI"; BTH_HEADER_SIZE = 8; KEY_SIZES = (2, 4, 8, 16); MAX_ENTRY_SIZE = 32
 
 @dataclass(frozen=True, slots=True)
@@ -525,7 +525,7 @@ are refused (upstream slices/returns empty); a page **not a whole number of
 records is `PstFormatError`** where upstream's `while let Ok` silently drops
 the tail (P19's finding); levels, cycles and counts are bounded by `limits`.
 
-`python -m pypst.debug heap <file> <nid-hex>` prints the HNHDR and every
+`python -m pypstreader.debug heap <file> <nid-hex>` prints the HNHDR and every
 block's page map as counts and item lengths; `bth <file> <nid-hex>` prints
 the BTH at the user root and each leaf record as `key=<hex> value=<hex>`.
 Neither has an upstream twin.
@@ -548,9 +548,9 @@ module constants added for the dumper and the tests; `HeapId` gained
 PC of a real store, resealed); the corruption harness now walks the store
 PC's heap and BTH on every mutation.
 
-## `pypst.ltp.prop_type` — P22 (leaf; land first)
+## `pypstreader.ltp.prop_type` — P22 (leaf; land first)
 
-**Built** (`src/pypst/ltp/prop_type.py`, 2026-09-15). Ported from `ltp/prop_type.rs`
+**Built** (`src/pypstreader/ltp/prop_type.py`, 2026-09-15). Ported from `ltp/prop_type.rs`
 and the value-decoder arms of `ltp/prop_context.rs`.
 
 ```python
@@ -575,7 +575,7 @@ class PropType(IntEnum):             # [MS-OXCDATA] 2.11.1
 def is_fixed_size(t: PropType) → bool  # NULL, SHORT, LONG, FLOAT, DOUBLE, CURRENCY, APPTIME, ERROR, BOOLEAN, LONGLONG, SYSTIME, GUID
 def fixed_size(t: PropType) → int      # 0 (NULL) / 1 / 2 / 4 / 8 / 16; PstFormatError for a variable type. OBJECT is variable.
 
-DEFAULT_MAX_ITEMS = MAX_MV_ITEMS               # from pypst.limits (P11); 1_000_000
+DEFAULT_MAX_ITEMS = MAX_MV_ITEMS               # from pypstreader.limits (P11); 1_000_000
 def decode(t: PropType | int, data: bytes | memoryview, *, codepage: str = "cp1252",
            max_items: int = DEFAULT_MAX_ITEMS) → PropValue
 # `data` is the WHOLE value (the inline bytes, or the complete heap/subnode allocation). An int `t` goes through from_wire.
@@ -606,9 +606,9 @@ The goldens print upstream's variant names (`Integer32`, `Time`, ...); the
 map from those to `PropType` is `UPSTREAM_VARIANT_TO_PROPTYPE` in
 `tests/test_prop_type.py`, for the golden parsers to import.
 
-## `pypst.ltp.prop_context` — P05
+## `pypstreader.ltp.prop_context` — P05
 
-**Built** (`src/pypst/ltp/prop_context.py`, 2026-09-16). Ported from
+**Built** (`src/pypstreader/ltp/prop_context.py`, 2026-09-16). Ported from
 `ltp/prop_context.rs` (the record types, `PropertyContextInner::properties`
 and `read_property`; the value decoders are P22's).
 
@@ -658,7 +658,7 @@ HNID carries type bits is `PstFormatError` (upstream reads the item at `raw
 `BTreeMap` keeps the last); the BTH widths are checked before anything is
 read; counts are bounded by `limits`. `PtypBoolean` is P22's strict form.
 
-`python -m pypst.debug pc <file> <nid-hex>` prints the goldens' shape —
+`python -m pypstreader.debug pc <file> <nid-hex>` prints the goldens' shape —
 ` Property ID: 0x%04X, Type: %s`, `  Record: %s`, `  Value: %s` — through
 `debug.property_lines(prop_id, record, value)` and
 `debug.format_property_value(prop_type, value)` (upstream's `Debug for
@@ -667,9 +667,9 @@ The dumper decodes String8 with `debug.DUMP_CODEPAGE` (`"latin-1"`), which
 is upstream's code-page-less reading, so its output is byte-comparable with
 `read_store_props`'s golden.
 
-## `pypst.ltp.table_context` — landed (P06)
+## `pypstreader.ltp.table_context` — landed (P06)
 
-**Built** (`src/pypst/ltp/table_context.py`, 2026-09-16). Ported from
+**Built** (`src/pypstreader/ltp/table_context.py`, 2026-09-16). Ported from
 `ltp/table_context.rs` (the Unicode arm of `TableContextInfo`,
 `TableColumnDescriptor`, `TableRowData` and `TableContextInner::read` /
 `read_column`; the value decoders are P22's).
@@ -743,7 +743,7 @@ HNID of 0 is `None` rather than upstream's refusal of heap index 0;
 id is refused; a row index entry past the matrix is `PstFormatError` where
 upstream panics; rows and the matrix's size are bounded by `limits`.
 
-`python -m pypst.debug tc <file> <nid-hex>` prints `read_root_folder` /
+`python -m pypstreader.debug tc <file> <nid-hex>` prints `read_root_folder` /
 `read_ipm_subtree`'s shape through `debug.cell_lines(column, record, value)`
 and `debug.format_cell_record(prop_type, record, value)` (upstream's `Debug`
 for `TableRowColumnValue`: `Small(<the value>)`, `Heap(<HeapId>)`,
@@ -756,14 +756,14 @@ for `TableRowColumnValue`: `Small(<the value>)`, `Heap(<HeapId>)`,
 folder's hierarchy table, resealed); the corruption harness walks that table
 on every mutation (`tc.root_hierarchy`).
 
-## `pypst.messaging` — P07, P08, P09 (landed)
+## `pypstreader.messaging` — P07, P08, P09 (landed)
 
-**`pypst.messaging.store` and `pypst.messaging.named_prop` are built**
+**`pypstreader.messaging.store` and `pypstreader.messaging.named_prop` are built**
 (2026-09-16). Ported from `messaging/store.rs` and `messaging/named_prop.rs`
 (the read halves; the ANSI arms are not ported — ADR-0003).
 
 ```python
-# pypst.messaging.store
+# pypstreader.messaging.store
 ENTRY_ID_FORMAT = "<I16sI"; ENTRY_ID_SIZE = 24; RECORD_KEY_SIZE = 16
 PID_TAG_RECORD_KEY = 0x0FF9; PID_TAG_DISPLAY_NAME = 0x3001
 PID_TAG_IPM_SUB_TREE_ENTRY_ID = 0x35E0; PID_TAG_IPM_WASTEBASKET_ENTRY_ID = 0x35E3
@@ -793,9 +793,9 @@ class Store:                          # P07 — the object `open()` returns
     named_properties → NamedPropertyMap             # read on first use and kept
     root_folder → Folder; open_folder(entry) → Folder; open_message(entry, *, parent=None) → Message  # P08/P09
 
-def open_store(path, *, limits=DEFAULT_LIMITS, codepage="cp1252") → Store   # exported as `pypst.open`
+def open_store(path, *, limits=DEFAULT_LIMITS, codepage="cp1252") → Store   # exported as `pypstreader.open`
 
-# pypst.messaging.named_prop
+# pypstreader.messaging.named_prop
 PS_MAPI = UUID("00020328-…"); PS_PUBLIC_STRINGS = UUID("00020329-…")     # [MS-OXPROPS] 1.3.2
 NAME_ID_FORMAT = "<IHH"; NAME_ID_SIZE = 8; GUID_SIZE = 16
 PID_TAG_NAMEID_BUCKET_COUNT = 0x0001; …_STREAM_GUID = 0x0002; …_STREAM_ENTRY = 0x0003
@@ -851,19 +851,19 @@ string-named property lands in a bucket that does not hold it (9/35 on
 `Empty.pst`, 34/56 on `tika-variousBodyTypes`); with it kept, all 964
 entries of all 8 Unicode stores land in the right one.
 
-`python -m pypst.debug store <file>` prints `read_store_props`'s output —
+`python -m pypstreader.debug store <file>` prints `read_store_props`'s output —
 the four header lines and then the store PC without its `Record:` lines —
 and refuses an absent wastebasket or finder exactly where the example does,
 so its stdout AND its exit status match the golden on `pstd-inline-cid`
-too. `python -m pypst.debug named_props <file>` prints `read_named_props`'s.
+too. `python -m pypstreader.debug named_props <file>` prints `read_named_props`'s.
 
-**`pypst.messaging.folder` is built** (2026-09-16). Ported from
+**`pypstreader.messaging.folder` is built** (2026-09-16). Ported from
 `messaging/folder.rs` (`FolderProperties` and the read half of
 `FolderInner`/`UnicodeFolder`; the write half and the ANSI arm are not
 ported — ADR-0003). `Store` gained the two accessors its comment promised.
 
 ```python
-# pypst.messaging.folder
+# pypstreader.messaging.folder
 PID_TAG_DISPLAY_NAME = 0x3001; PID_TAG_CONTENT_COUNT = 0x3602
 PID_TAG_CONTENT_UNREAD_COUNT = 0x3603; PID_TAG_SUBFOLDERS = 0x360A
 FOLDER_NODE_TYPES = (NodeIdType.NORMAL_FOLDER, NodeIdType.SEARCH_FOLDER)
@@ -893,7 +893,7 @@ class Folder:                         # P08 — one folder: its PC, and the thre
         # ceiling, a folder reached twice (a cycle), or more than limits.max_folders children in one table.
     __str__ → "Folder { NodeId { NormalFolder: 0x401 } }"
 
-# pypst.messaging.store, added by P08
+# pypstreader.messaging.store, added by P08
 class Store:
     root_folder → Folder                              # NID_ROOT_FOLDER (0x122), NOT ipm_subtree
     open_folder(self, entry: EntryId | NodeId) → Folder
@@ -918,7 +918,7 @@ InvalidFolderDisplayName(Null)` there. `display_name` raises
 writes it into a path or a report as the empty string. The lenient reading
 is still one call away (`folder.properties.get(0x3001)`).
 
-`python -m pypst.debug folders <file>` prints exactly the folder blocks of
+`python -m pypstreader.debug folders <file>` prints exactly the folder blocks of
 `dump_messages.txt` — a pre-order walk from `NID_ROOT_FOLDER`, no `Message:`
 blocks, no `Errors:` trailer — through `debug.folder_lines(folder)`,
 `debug.folder_accessor(folder, prop_id, render)` (the example's
@@ -936,14 +936,14 @@ hierarchy table's first row id pointed at a node that is not there, at the
 folder itself, at the message store and at an unassigned NID type); the
 corruption harness gained `folder.walk` and `folder.tables`.
 
-**`pypst.messaging.message` and `pypst.messaging.attachment` are built**
+**`pypstreader.messaging.message` and `pypstreader.messaging.attachment` are built**
 (2026-09-16). Ported from `messaging/message.rs` and `messaging/attachment.rs`
 (the read halves; the write halves and the ANSI arms are not ported —
 ADR-0003). `Store` gained `open_message` and `Folder` gained `messages()` /
 `associated()`.
 
 ```python
-# pypst.messaging.message
+# pypstreader.messaging.message
 PID_TAG_MESSAGE_CLASS = 0x001A; PID_TAG_SUBJECT = 0x0037; PID_TAG_CLIENT_SUBMIT_TIME = 0x0039
 PID_TAG_TRANSPORT_MESSAGE_HEADERS = 0x007D; PID_TAG_RECIPIENT_TYPE = 0x0C15; PID_TAG_SENDER_NAME = 0x0C1A
 PID_TAG_SENDER_EMAIL_ADDRESS = 0x0C1F; PID_TAG_MESSAGE_DELIVERY_TIME = 0x0E06; PID_TAG_MESSAGE_FLAGS = 0x0E07
@@ -987,7 +987,7 @@ class Message:                        # P09 — one message: its PC, its recipie
     message_flags / message_size / message_status → int; search_key → bytes   # upstream's other accessors
     body_html → bytes | None          # PtypBinary verbatim; a string value is UTF-8 encoded
     body_rtf → bytes | None           # PidTagRtfCompressed AS STORED (LZFu), not RTF yet
-    body_rtf_decompressed() → bytes | None    # pypst.rtf over it, trimmed at the first NUL (as upstream)
+    body_rtf_decompressed() → bytes | None    # pypstreader.rtf over it, trimmed at the first NUL (as upstream)
     sub_node_table(node_type) → TableContext | None    # upstream's scan by NID TYPE; two of a type is a refusal
     recipient_table / attachment_table → TableContext | None      # None ONLY when there is no such sub-node
     recipients() → Iterator[Recipient]        # matrix order; !PstLimitError past limits.max_recipients
@@ -997,7 +997,7 @@ class Message:                        # P09 — one message: its PC, its recipie
     check_embedded_depth() → None             # !PstLimitError past limits.max_embedded_message_depth
     __str__ → "Message { NodeId { NormalMessage: 0x10001 } }"
 
-# pypst.messaging.attachment
+# pypstreader.messaging.attachment
 PID_TAG_ATTACH_SIZE = 0x0E20; PID_TAG_ATTACH_DATA_BINARY = 0x3701; PID_TAG_ATTACH_FILENAME = 0x3704
 PID_TAG_ATTACH_METHOD = 0x3705; PID_TAG_ATTACH_LONG_FILENAME = 0x3707; PID_TAG_RENDERING_POSITION = 0x370B
 PID_TAG_ATTACH_MIME_TAG = 0x370E; PID_TAG_ATTACH_LONG_PATHNAME = 0x3710; PID_TAG_ATTACH_CONTENT_ID = 0x3712
@@ -1023,7 +1023,7 @@ class Attachment:                     # P09 — one sub-node of a message, with 
     embedded_message() → Message | None   # EMBEDDED_MESSAGE; !PstLimitError past limits.max_embedded_message_depth
     __str__ → "Attachment { NodeId { Attachment: 0x401 } }"
 
-# pypst.messaging.store / folder, added by P09
+# pypstreader.messaging.store / folder, added by P09
 class Store:
     def open_message(self, entry: EntryId | NodeId, *, parent: Folder | None = None) → Message
 class Folder:
@@ -1052,7 +1052,7 @@ has a sensible class, subject, body and recipient, asserted in
 `tests/test_message.py`). **A second upstream bug found the same way:**
 `AttachmentInner::read` resolves the embedded message's NID in the owning
 MESSAGE's sub-node tree, and the node is in the ATTACHMENT's own tree — so
-`Attachment.sub_nodes` is the attachment's. `pypst.debug`'s `messages`
+`Attachment.sub_nodes` is the attachment's. `pypstreader.debug`'s `messages`
 dumper re-creates upstream's truncation (`upstream_records`) so the golden
 still matches byte for byte, and `test_the_golden_still_shows_upstreams_refusal`
 fails if a moved pin fixes upstream.
@@ -1073,7 +1073,7 @@ method** is `PstUnsupportedError`; `AttachMethod` names 3
 (`afByReferenceResolve`), which the specification defines and upstream's
 `TryFrom<i32>` rejects.
 
-`python -m pypst.debug messages <file>` prints the whole of
+`python -m pypstreader.debug messages <file>` prints the whole of
 `oracle/examples/dump_messages.rs` — the folder blocks `debug folders`
 prints, plus every message block, its recipient and attachment rows, each
 attachment's own property context, and the `Errors: <n>` trailer — and exits
@@ -1087,7 +1087,7 @@ corruption harness gained `message.open` and `message.attachments`;
 `messages`/`message_nids`/`attachments`/`subjects` section on its fixture
 object and 24 adapters.
 
-## `pypst.rtf` — P21 (landed)
+## `pypstreader.rtf` — P21 (landed)
 
 ```python
 class CompressionType(IntEnum):   COMPRESSED = 0x75465A4C ("LZFu"); UNCOMPRESSED = 0x414C454D ("MELA")
@@ -1115,12 +1115,12 @@ HEADER_SIZE = 16; DICTIONARY_SIZE = 4096
 Once `limits.py` lands (P11), `max_output` should default to `limits.MAX_ALLOCATION`;
 the literal is the same value.
 
-## `pypst.eml` — P10 (landed; not a port)
+## `pypstreader.eml` — P10 (landed; not a port)
 
 ```python
 POLICY = email.policy.SMTP.clone(cte_type="7bit")   # CRLF, RFC 2047 headers, 7-bit-clean output
-SYNTHESIZED_HEADER = "X-Pypst-Synthesized"; BODY_HEADER = "X-Pypst-Body"
-SKIPPED_HEADER = "X-Pypst-Attachment-Skipped"; SYNTHETIC_ID_DOMAIN = "pypst.invalid"
+SYNTHESIZED_HEADER = "X-Pypstreader-Synthesized"; BODY_HEADER = "X-Pypstreader-Body"
+SKIPPED_HEADER = "X-Pypstreader-Attachment-Skipped"; SYNTHETIC_ID_DOMAIN = "pypstreader.invalid"
 PID_TAG_INTERNET_MESSAGE_ID = 0x1035; PID_TAG_INTERNET_CODEPAGE = 0x3FDE
 
 def to_eml(message: Message, *, synthesize_missing: bool = True, limits: Limits | None = None)
@@ -1153,19 +1153,19 @@ openable private message, and the split follows the message class):
    falling back to the X.500 address in angle brackets), `To`/`Cc`/`Bcc` by
    `RecipientType`, `Subject`, `Date` (`client_submit_time` else
    `delivery_time`, RFC 5322, UTC), `Message-ID`.
-3. **Every header added is named in `X-Pypst-Synthesized`** (absent when
+3. **Every header added is named in `X-Pypstreader-Synthesized`** (absent when
    nothing was). A `Message-ID` comes from `PidTagInternetMessageId` when the
    store kept one — a real id under an added header — else it is invented
    deterministically from the store record key and the node id under
-   `@pypst.invalid`, so an invented id is recognisable by inspection as well
+   `@pypstreader.invalid`, so an invented id is recognisable by inspection as well
    as by the marker. `synthesize_missing=False` writes only what the file
    holds.
 
 **Bodies**: `multipart/alternative` in increasing fidelity — `text/plain`,
 `application/rtf` (`body_rtf_decompressed()`), `text/html` — a single
 representation as a single part. RTF alone is `application/rtf` plus
-`X-Pypst-Body: rtf-only` and **no invented text body**; no body at all is an
-empty `text/plain` plus `X-Pypst-Body: none`. HTML is decoded with
+`X-Pypstreader-Body: rtf-only` and **no invented text body**; no body at all is an
+empty `text/plain` plus `X-Pypstreader-Body: none`. HTML is decoded with
 `PidTagInternetCodepage`, else the store's code page, else UTF-8, always
 `errors="replace"`, and re-encoded as UTF-8 (a part's charset must match its
 bytes, and re-encoding to the original can fail where decoding replaced).
@@ -1178,18 +1178,18 @@ bytes, and re-encoding to the original can fail where decoding replaced).
 URL, else `attachment`. `EMBEDDED_MESSAGE` → a `message/rfc822` part holding
 the recursion (whose synthetic ids are prefixed with the carrier's, since
 sub-node ids are unique only inside their tree). Every other method → an
-`X-Pypst-Attachment-Skipped: <METHOD> <filename>` header, never an exception.
+`X-Pypstreader-Attachment-Skipped: <METHOD> <filename>` header, never an exception.
 
 **Divergences from the rest of the package, all deliberate and all in the
 module docstring**: every value that reaches a header is stripped of control
 characters first (this is the layer where attacker-controlled text becomes
 header text); `ValueError`/`LookupError` from the `email` package is re-raised
 as `PstFormatError`; MIME boundaries are deterministic
-(`----=_pypst.<nid>.<n>`) because `email` draws them from `random`; and file
+(`----=_pypstreader.<nid>.<n>`) because `email` draws them from `random`; and file
 names on disk are node ids, never `PidTagSubject` or
 `PidTagAttachLongFilename`, both of which may say `../`.
 
-## `pypst.mbox` — P10 (landed; not a port)
+## `pypstreader.mbox` — P10 (landed; not a port)
 
 ```python
 MBOX_POLICY = POLICY.clone(linesep="\n")     # records are LF; an .eml on disk is CRLF
@@ -1213,11 +1213,11 @@ everybody has is worth more than being reversible and read wrongly by default.
 What is guaranteed is that no body line can be mistaken for a record
 separator, so the message count survives.
 
-## `pypst.debug` — P29 (built), then every layer registers
+## `pypstreader.debug` — P29 (built), then every layer registers
 
 ```python
-python -m pypst.debug <layer> <file>      # exit 0; a PstError → "Error: …" on stderr, exit 1
-python -m pypst.debug --list              # registered layer names, one per line
+python -m pypstreader.debug <layer> <file>      # exit 0; a PstError → "Error: …" on stderr, exit 1
+python -m pypstreader.debug --list              # registered layer names, one per line
                                           # unknown/missing layer → argparse usage error, exit 2
 
 DUMPERS: dict[str, Callable[[Path], None]]   # EMPTY today; a layer row adds one entry:
@@ -1264,13 +1264,61 @@ parse_block_ref(s) → {"block": <block_id>, "index": int};  parse_page_ref(s) �
 the golden is missing. `tests/test_golden_drift.py` (`oracle`, `slow`) runs
 `scripts/capture_oracle.py --check` and fails on drift.
 
-## `pypst` — the top level
+## `pypstreader.pypstreader` — P16 (landed; not a port)
+
+The command, and the only entry point in this package a person types.
+`pypstreader.debug` stays what it is — one dumper per upstream example, for
+reading the FORMAT; this is for getting the MAIL out.
+
+```bash
+pypstreader IN.pst                        # -> ./IN.mbox, every folder, every message; exit 0
+pypstreader IN.pst -o mail.mbox           # the file to write (a DIRECTORY for the two modes below)
+pypstreader --per-folder IN.pst -o out/   # one <nid>.mbox per folder + folders.txt (via export_mbox)
+pypstreader --format eml IN.pst -o out/   # one <nid>.eml per message (via export_folder)
+pypstreader --list IN.pst                 # "<count>  <display path>" per folder, on stdout; writes nothing
+pypstreader --folder PATH IN.pst          # that folder and its subtree; repeatable
+pypstreader --strict IN.pst               # stop at the first refusal instead of skipping it
+pypstreader --max-depth N --max-attachment-bytes N --max-embedded-depth N
+pypstreader --codepage NAME  -q | -v  --version
+```
+
+```python
+from pypstreader import pypstreader          # `pypstreader.pypstreader`, importable under either name
+pypstreader.main(argv: list[str] | None = None) -> int
+pypstreader.FOLDER_HEADER == "X-Pypstreader-Folder"
+```
+
+**Exit codes are the contract**: `0` the run finished, `1` a `PstError` or an
+`OSError` (one line on stderr, no traceback), `2` the command line was wrong.
+`main` catches `SystemExit` as well, so calling it in-process returns a
+status rather than raising one — `tests/corruption_harness.py`'s `cli.main`
+entry point and `tests/contract.py`'s adapter both depend on that, and
+`tests/test_cli.py` sweeps every mutation of a corpus store through it.
+
+**What the flags mean.** `--max-depth` is `max_folder_depth`,
+`--max-attachment-bytes` is `max_allocation`, `--max-embedded-depth` is
+`max_embedded_message_depth`; a non-positive one is a usage error (exit 2),
+not a `Limits` `ValueError`. `--folder` takes a display path exactly as
+`--list` prints it and covers that folder AND its subtree; a path that names
+nothing is a `PstNotFoundError`, exit 1. Skipping is the default and is
+counted: the stderr summary is
+`pypstreader: <n> folders, <n> messages written, <n> skipped -> <destination>`,
+with `<n> folder(s) unreadable` appended when a contents table refused.
+
+**The single-mbox mode stamps `X-Pypstreader-Folder`** on every record, the
+same display path `--list` prints, because an mbox has no names in it and
+flattening a store must not lose its tree. That header is added by
+`pypstreader.mbox.mbox_record(message, *, limits=None, headers=())`, which
+P16 made public for it (it was `mbox._record`); control characters are
+stripped from every value, since a display name is attacker-chosen text.
+
+## `pypstreader` — the top level
 
 Today (P09), sorted and deliberately small — the exception family, the
 limits, and the readers that exist:
 
 ```python
-from pypst import (
+from pypstreader import (
     AttachMethod, Attachment, DEFAULT_LIMITS, EntryId, Folder, Header, Limits, Message,
     PstError, PstFormatError, PstLimitError, PstNotFoundError, PstUnsupportedError,
     Recipient, RecipientType, Store, __version__, eml_bytes, export_folder, export_mbox,
@@ -1279,18 +1327,27 @@ from pypst import (
 __all__ == sorted(__all__)           # tests/test_contract.py asserts it, and that every name resolves
 ```
 
-`pypst.open` is `pypst.messaging.store.open_store` under another name; it
-shadows the builtin inside `pypst` deliberately (`pypst.open(path)` reads
+`pypstreader.open` is `pypstreader.messaging.store.open_store` under another name; it
+shadows the builtin inside `pypstreader` deliberately (`pypstreader.open(path)` reads
 like `gzip.open`), and `tests/test_contract.py` pins that it is not the
 builtin. `EntryId` is exported with it, because it is what `ipm_subtree`
 and the other entry-id accessors return and a caller holds one.
 
 P10 closed the last promise on the list and joined this surface: `to_eml`,
-`eml_bytes` and `write_eml` from `pypst.eml`, `export_folder` from the same
-module and `export_mbox` from `pypst.mbox`. They are exported here, and not
+`eml_bytes` and `write_eml` from `pypstreader.eml`, `export_folder` from the same
+module and `export_mbox` from `pypstreader.mbox`. They are exported here, and not
 only from their modules, because they are what the reader is FOR — a caller
 who has a store and wants the mail out of it should not have to know which
 module assembles it.
+
+P16 renamed the package from `pypst` (taken on PyPI) to `pypstreader`, which
+is also the distribution name, the GitHub repository and the command. The
+import surface above is unchanged apart from the prefix; the one rename that
+reaches SHIPPED BYTES is the `X-Pypst-*` header family, now `X-Pypstreader-*`
+(and the synthetic `Message-ID` domain, now `@pypstreader.invalid`), done in
+the same commit as the first release so the name is consistent from 0.1.0
+onward. `pstreader` is a second distribution, in `alias/pstreader/`, that
+installs `pypstreader==<this version>` and re-exports it; it adds no names.
 
 `__all__` is the enumerable contract, but not the whole of it: the T5
 harness (`tests/contract.py`) discovers **every** public callable under the
@@ -1302,11 +1359,23 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
 
 ## Changelog
 
-- 2026-09-16 — P10 landed `pypst.eml` and `pypst.mbox`, the first modules in
+- 2026-09-16 — P16 renamed the package to `pypstreader` throughout (import
+  package, distribution, docs, lints, workflows, the `X-Pypst-*` headers and
+  the `pypst.invalid` Message-ID domain), added `pypstreader.pypstreader` —
+  the `pypstreader` command, its section above — and the `pstreader` alias
+  distribution under `alias/pstreader/`. `pypstreader.mbox._record` became
+  public as `mbox_record`, with a `headers` argument, so the command can
+  stamp `X-Pypstreader-Folder` onto a record without a second assembler.
+  `__version__` is `0.1.0`; the PyPI 0.0.1 releases of both names are
+  placeholders. One literal was deliberately NOT renamed:
+  `scripts/make_fixture.py`'s `"pypst synthetic fixture: {name}"` seed is
+  hashed into `synth-basics.pst` and every golden captured over it.
+
+- 2026-09-16 — P10 landed `pypstreader.eml` and `pypstreader.mbox`, the first modules in
   this package with **no upstream counterpart at all** (upstream produces
   text dumps, never mail), and added `to_eml`, `eml_bytes`, `write_eml`,
-  `export_folder` and `export_mbox` to `pypst.__all__` plus the `eml` and
-  `export` dumpers to `pypst.debug.DUMPERS`. Changes from the draft above:
+  `export_folder` and `export_mbox` to `pypstreader.__all__` plus the `eml` and
+  `export` dumpers to `pypstreader.debug.DUMPERS`. Changes from the draft above:
   `to_eml` gained a `limits` argument (the caller's ceilings, not only the
   store's); `write_eml` returns the `Path` it wrote; `export_folder` gained
   `recurse`/`strict`/`limits` and the two walk helpers `folder_paths` and
@@ -1316,11 +1385,11 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   `workdir` on its fixture object, `tests/corruption_harness.py` gained the
   `eml.export` entry point (bounded by `EML_BYTES_PER_SWEEP`), and
   `debug.main` learned `--eml` and `dumper_arguments`.
-- 2026-09-16 — P09 landed `pypst.messaging.message` and
-  `pypst.messaging.attachment`, and added `Store.open_message`,
+- 2026-09-16 — P09 landed `pypstreader.messaging.message` and
+  `pypstreader.messaging.attachment`, and added `Store.open_message`,
   `Folder.messages()` / `Folder.associated()`; `Message`, `Recipient`,
-  `RecipientType`, `Attachment` and `AttachMethod` join `pypst.__all__` and
-  `pypst.messaging.__all__`. Changes from the draft: **`body_rtf` is the
+  `RecipientType`, `Attachment` and `AttachMethod` join `pypstreader.__all__` and
+  `pypstreader.messaging.__all__`. Changes from the draft: **`body_rtf` is the
   value AS STORED (compressed) and `body_rtf_decompressed()` is the
   expansion** — the draft said `body_rtf` was already decompressed, which
   hid the fact that the store holds LZFu and made the `Body RTF:` line of
@@ -1339,23 +1408,23 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   returns `None` (not bytes) for a method that carries none, as upstream's
   `Option<AttachmentData>` does. `split_subject` is public because the
   subject-prefix rule is the one piece of [MS-OXCMSG] this layer implements
-  and a caller with a raw subject needs it. `pypst.debug` gained `messages`,
+  and a caller with a raw subject needs it. `pypstreader.debug` gained `messages`,
   `message_lines`, `message_accessor`, `attachment_accessor` and
-  `upstream_records`. **Nothing in `pypst.limits` changed**: P11's
+  `upstream_records`. **Nothing in `pypstreader.limits` changed**: P11's
   `max_recipients`, `max_attachments`, `max_allocation` and
   `max_embedded_message_depth` were already the right four.
 
-- 2026-09-16 — P08 landed `pypst.messaging.folder` and added
-  `Store.root_folder` / `Store.open_folder`; `Folder` joins `pypst.__all__`
-  and `pypst.messaging.__all__` (the package's `__init__` gained one).
+- 2026-09-16 — P08 landed `pypstreader.messaging.folder` and added
+  `Store.root_folder` / `Store.open_folder`; `Folder` joins `pypstreader.__all__`
+  and `pypstreader.messaging.__all__` (the package's `__init__` gained one).
   Changes from the draft: `messages()` and `associated()` are **not** here —
   they need P09's `Message`, so this row lands `message_ids()`,
   `associated_ids()` and `contents()` (the same rows as NIDs and as
   EntryIDs); `subfolders()` yields child `Folder`s and `subfolder_ids()` the
   raw NIDs; `walk` takes `max_depth`; `open`, `table`, the three table
   accessors, `entry_id`, `folder_type`, `get`, `store` and `__str__` were
-  added. **`pypst.limits` gained `MAX_FOLDER_DEPTH` / `Limits.max_folder_depth`
-  (64, additive)**, which is what bounds the walk. `pypst.debug` gained
+  added. **`pypstreader.limits` gained `MAX_FOLDER_DEPTH` / `Limits.max_folder_depth`
+  (64, additive)**, which is what bounds the walk. `pypstreader.debug` gained
   `folders`, `folder_lines`, `folder_accessor` and `folder_table`;
   `tests/golden_parsers.py` completed `parse_dump_messages` (folder blocks
   as values, message blocks as raw lines for P09) and added
@@ -1367,12 +1436,12 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   an empty associated-contents table with `rgib[TCI_4b] = 4`. P06 used to
   refuse it at TCINFO parse time, where upstream accepts it because it never
   reads a row of an empty table; P06b narrowed the check to a non-empty
-  matrix (`pypst.ltp.table_context`'s module docstring), so this store's six
+  matrix (`pypstreader.ltp.table_context`'s module docstring), so this store's six
   `Associated Count: 0` lines now print as themselves and `debug folders` is
   byte-identical on 8/8 Unicode corpus stores, pinned by
   `tests/test_folder.py::test_synth_basics_associated_table_is_byte_identical`.
 
-- 2026-09-16 — P06 landed `pypst.ltp.table_context`; its section now
+- 2026-09-16 — P06 landed `pypstreader.ltp.table_context`; its section now
   describes what was built. Changes from the draft: `limits` is optional and
   `codepage` was added (as P05's); `TableContextInfo`, `ColumnDescriptor`,
   `CellKind`/`CellRecord`, `from_node`, `read_cell`, `row(index)`,
@@ -1384,12 +1453,12 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   `rows()` is MATRIX order (the draft said "row-index order" — upstream's
   examples iterate `rows_matrix()`, and the row index's order is ascending
   row id, a different order); `find_row` raises `PstNotFoundError` (a
-  `PstFormatError`, so the draft's contract holds). **`pypst.ltp.heap`
+  `PstFormatError`, so the draft's contract holds). **`pypstreader.ltp.heap`
   gained `HeapNode.get_hnid_blocks`** (additive): the row matrix must be
   read block by block because rows never straddle a block boundary.
-  `pypst.debug` gained `tc`, `cell_lines` and `format_cell_record`.
-- 2026-09-16 — P07 landed `pypst.messaging.store` and
-  `pypst.messaging.named_prop`; the messaging section now describes what was
+  `pypstreader.debug` gained `tc`, `cell_lines` and `format_cell_record`.
+- 2026-09-16 — P07 landed `pypstreader.messaging.store` and
+  `pypstreader.messaging.named_prop`; the messaging section now describes what was
   built and the top-level section gained `open`, `Store` and `EntryId`.
   Changes from the draft: `Store.__init__(f: BinaryIO, …)` is the borrowing
   constructor and `Store.open` the owning one, both taking `codepage` beside
@@ -1406,7 +1475,7 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   from both sides in `tests/test_store.py`). **`hash_entry` keeps `wGuid`**
   where upstream clears it — an upstream bug found by checking all 964
   corpus entries against the hash table they actually sit in.
-  `pypst.debug` gained `store` and `named_props`; `tests/contract.py` gained
+  `pypstreader.debug` gained `store` and `named_props`; `tests/contract.py` gained
   `"PropertyContext"` in `READER_TYPES` (so the map classifies as a reader
   class), a `Store`/`named_map`/`name_ids`/`named_streams`/`entry_id_buffers`
   section on its fixture object, and 20 adapters; `tests/corrupt.py` gained
@@ -1414,7 +1483,7 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   families; the corruption harness gained `store.open` and
   `store.named_properties`.
 
-- 2026-09-16 — P05 landed `pypst.ltp.prop_context`; its section now describes
+- 2026-09-16 — P05 landed `pypstreader.ltp.prop_context`; its section now describes
   what was built. Changes from the draft: `limits` is optional (the heap's
   own by default) and `codepage` was added; `PropertyContext.from_node`,
   `read(record)`, `tree`/`heap`/`limits`/`codepage`, `__len__` and
@@ -1422,12 +1491,12 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   `hnid`, `is_null`, `value_type`, `SIZE` and upstream's `__str__`; the PC
   BTH's 2/6 widths are checked in `__init__` and the module's struct
   constants are named. **`ObjectRef.node` is now a `NodeId`** (P22's open
-  item, closed here — `pypst.ltp.prop_type` changed in one annotation), and
+  item, closed here — `pypstreader.ltp.prop_type` changed in one annotation), and
   `PropType` gained `debug_name` / `from_debug_name` for the dumper and the
   golden parsers. **MV_GUID keeps upstream's count-prefixed reading**: a
   structure-only survey of every PC in both private stores and the whole
   corpus found no `PtypMultipleGuid` property, and the survey is now a
-  standing test. `pypst.debug` gained `pc`, `property_lines`,
+  standing test. `pypstreader.debug` gained `pc`, `property_lines`,
   `format_property_value` and `DUMP_CODEPAGE`. `tests/golden_parsers.py`
   completed `parse_read_store_props`, `parse_read_named_props`,
   `parse_read_root_folder`, `parse_read_ipm_subtree`, `parse_value` and
@@ -1439,14 +1508,14 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   Unicode value, a non-boolean boolean, and a zero HNID that must NOT
   raise), and the corruption harness a `pc.store_pc` entry point.
 
-- 2026-09-16 — P24: `pypst.__all__` defined (the list above); `Header`
+- 2026-09-16 — P24: `pypstreader.__all__` defined (the list above); `Header`
   and `read_header` exported at the top level. The T5 contract harness
   discovers every public callable rather than reading this file, so a
   surface change here is also an adapter change in `tests/contract.py`.
 - 2026-09-15 — drafted from upstream's public surface (P30). Nothing above
   `errors`/`encode`/`crc` exists yet; every other section is a promise.
-- 2026-09-15 — P29: `pypst.debug` built (empty `DUMPERS` registry, `--list`, exit codes); golden parser output shapes and the optional-prefix rule recorded above.
-- 2026-09-15 — P23 landed `pypst.ndb.ids` and `pypst.block_sig`; its section
+- 2026-09-15 — P29: `pypstreader.debug` built (empty `DUMPERS` registry, `--list`, exit codes); golden parser output shapes and the optional-prefix rule recorded above.
+- 2026-09-15 — P23 landed `pypstreader.ndb.ids` and `pypstreader.block_sig`; its section
   now describes what was built. Changes from the draft: `NodeId(raw)` and
   `unpack_from` accept an unknown 5-bit type (the refusal is at `id_type`, as
   upstream; goldens print such nodes as `invalid`); `NodeIdType.debug_name` /
@@ -1454,7 +1523,7 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   `SIZE` on every type; `PageId` carries `index`/`search_key`/`is_internal`
   like upstream's trait; the struct-format constants are named; negative
   offsets are refused.
-- 2026-09-15 — P22 landed `pypst.ltp.prop_type`. Changes from the draft:
+- 2026-09-15 — P22 landed `pypstreader.ltp.prop_type`. Changes from the draft:
   `PropType.from_wire(value)` is the constructor for wire codes (the enum's
   own `ValueError` is not part of the contract); `decode` gained
   `max_items` (→ `PstLimitError`) and accepts an `int` type; `PropValue`
@@ -1465,17 +1534,17 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   and, following upstream against the spec, MV_GUID. **`ObjectRef.node` is a
   raw `int`**, not `NodeId`, because P23 is being built in parallel; P05 wraps
   it (or P23 lands first and P05 changes the annotation here in one line).
-- 2026-09-15 — P21: `pypst.rtf` built. Adds `read_header`, `CompressedRtfHeader`,
+- 2026-09-15 — P21: `pypstreader.rtf` built. Adds `read_header`, `CompressedRtfHeader`,
   `CompressionType`; `decompress_rtf` returns bytes with no NUL trimming (P09
   note above); `max_output` is a literal until P11's `limits.py` exists.
-- 2026-09-15 — P01 landed `pypst.ndb.header` and `pypst.ndb.root`; its section
+- 2026-09-15 — P01 landed `pypstreader.ndb.header` and `pypstreader.ndb.root`; its section
   now describes what was built. Changes from the draft: `wVer` 36/37 →
-  `PstUnsupportedError` (not parsed); `CryptMethod` stays in `pypst.encode`
+  `PstUnsupportedError` (not parsed); `CryptMethod` stays in `pypstreader.encode`
   with 0x10 refused as the constant `CRYPT_METHOD_EDPCRYPTED`; `AmapStatus`
   gains `from_byte` / `from_byte_lenient` and `debug_name`; `Version` gains
   `is_ansi` / `debug_name`; the module constants and the exact check order
-  are recorded. `python -m pypst.debug header` registered.
-- 2026-09-15 — P02 landed `pypst.ndb.page` and `pypst.ndb.btree`; its section
+  are recorded. `python -m pypstreader.debug header` registered.
+- 2026-09-15 — P02 landed `pypstreader.ndb.page` and `pypstreader.ndb.btree`; its section
   now describes what was built. Changes from the draft: `NodeBTreeEntry.parent`
   is `NodeId | None` (upstream's `Option`, goldens print `None`); `verify` takes
   `(page_bytes, index)` and checks the CRC only — the signature is carried and
@@ -1486,9 +1555,9 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   `PstNotFoundError` (a `PstFormatError`) and accepts a raw `int`; `limits`
   defaults to `DEFAULT_LIMITS`; `read_page`, `read_density_list`,
   `DensityListPage`/`DensityListEntry` and the module constants added; the
-  density list IS ported. `python -m pypst.debug btrees` and `density_list`
+  density list IS ported. `python -m pypstreader.debug btrees` and `density_list`
   registered; `parse_read_btrees`/`parse_read_density_list` complete.
-- 2026-09-15 — P11 landed `pypst.limits`; its section now describes what was
+- 2026-09-15 — P11 landed `pypstreader.limits`; its section now describes what was
   built. Changes from the draft: `MAX_ITEMS` is `1 << 27` (the nidIndex
   space), not 1_000_000 — a 50 GiB store's BBT alone has millions of entries
   and the draft value would have refused a legitimate large file; `MAX_FILE_SIZE`,
@@ -1500,7 +1569,7 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   non-int with `TypeError` (ruff's default TRY004; the draft said ValueError
   for both). `prop_type.DEFAULT_MAX_ITEMS` is now `limits.MAX_MV_ITEMS`,
   value unchanged.
-- 2026-09-16 — P03 landed `pypst.ndb.block`; its section now describes what
+- 2026-09-16 — P03 landed `pypstreader.ndb.block`; its section now describes what
   was built. Changes from the draft: `SubNodeEntry` → `SubNodeLeafEntry` plus
   `SubNodeIntermediateEntry`; `DataBlock`/`XBlock`/`SubNodeLeafBlock`/
   `SubNodeIntermediateBlock` and the per-block `read_data_tree` /
@@ -1509,7 +1578,7 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   `limits` defaults; the module constants named. `debug btrees` prints the
   full `read_btrees` output; `debug node` registered; `debug.main` passes
   extra positional arguments through.
-- 2026-09-16 — P04 landed `pypst.ltp.heap` and `pypst.ltp.tree`; its section
+- 2026-09-16 — P04 landed `pypstreader.ltp.heap` and `pypstreader.ltp.tree`; its section
   now describes what was built. Changes from the draft: `HeapNode` takes the
   node's blocks (not one `bytes`) plus `from_node`; **`BlockReader` gained
   `read_data_blocks` / `node_data_blocks`** (additive; `read_data` is their

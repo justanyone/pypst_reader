@@ -7,7 +7,7 @@ are the first thing to port because every struct above them holds one, and
 because four of upstream's fifteen tests live here.
 
 ### P23-IDS
-status: ✅ 2026-09-15 — `src/pypst/ndb/ids.py` + `src/pypst/block_sig.py`. 103 tests in
+status: ✅ 2026-09-15 — `src/pypstreader/ndb/ids.py` + `src/pypstreader/block_sig.py`. 103 tests in
         tests/test_ids.py, tests/test_block_sig.py, tests/parity/test_ids_parity.py
         (99 pass, 4 skip = the 2 ANSI stores × 2 differentials). Header ids unpacked
         from the fixtures' own bytes at the [MS-PST] 2.2.2.6/2.2.2.7 offsets reproduce

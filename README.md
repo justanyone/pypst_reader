@@ -1,43 +1,103 @@
-# pypst — a pure-Python reader for Outlook PST stores
+# pypstreader — a pure-Python reader for Outlook PST stores
 
 A port of the **read path** of [microsoft/outlook-pst-rs](https://github.com/microsoft/outlook-pst-rs)
-(MIT) into Python, with no dependencies outside the standard library.
+(MIT) into Python, with no dependencies outside the standard library — and a
+command that turns a PST into mail your tools already read.
 
 > **Status:** the read path is fully ported and verified against the Rust
-> oracle: `pypst.open()` opens a Unicode PST and walks folders, messages,
-> recipients and attachments — and exports them as `.eml` files or as one
-> **mbox per folder**, which is what the reader is for. See `MasterToDo.md`.
+> oracle: `pypstreader.open()` opens a Unicode PST and walks folders, messages,
+> recipients and attachments — and exports them as `.eml` files or as
+> **mbox**, which is what the reader is for. Unicode (Outlook 2003 and later)
+> stores only; an ANSI store is refused, never guessed at.
 
-## Reading a store, and getting the mail out
+## Install
+
+```bash
+pip install pypstreader          # the library and the command
+uv tool install pypstreader      # just the command, in its own environment
+```
+
+Nothing comes with it: the package imports the standard library and nothing
+else, on any platform, with no compiler and no network.
+
+`pip install pstreader` installs the same thing under
+[an alias name](alias/pstreader/README.md), for people who reach for the
+shorter one.
+
+## The command
+
+```bash
+pypstreader store.pst                      # -> store.mbox, every folder, every message
+pypstreader store.pst -o mail.mbox         # somewhere else
+pypstreader --list store.pst               # the folder tree, with message counts
+pypstreader --per-folder store.pst -o out/ # one <nid>.mbox per folder, plus folders.txt
+pypstreader --format eml store.pst -o out/ # one <nid>.eml per message
+pypstreader --folder 'Top of Personal Folders/Inbox' store.pst
+```
+
+The default writes **one mbox** — the format `mutt`, Thunderbird, `formail`,
+`readpst`, Python's own `mailbox` and every e-discovery loader read as-is
+(RFC 4155) — with every message stamped `X-Pypstreader-Folder: <display
+path>`, so flattening the store does not lose the tree. `--folder` takes
+exactly the path `--list` prints, and covers that folder and everything under
+it.
+
+A message that will not open is **skipped and counted**, not fatal: the
+summary line on stderr says how many were written and how many were skipped,
+and `--strict` turns the first refusal into the end of the run instead.
+Limits are on the command line too — `--max-depth`, `--max-attachment-bytes`,
+`--max-embedded-depth` — because the file being read is not trusted.
+
+Exit status is **0** when the run finished, **1** when the store or the
+filesystem refused (one line on stderr, never a traceback), **2** when the
+command line was wrong.
+
+```
+$ pypstreader --list mail.pst
+      0  Top of Personal Folders
+      4  Top of Personal Folders/Inbox
+      1  Top of Personal Folders/Sent
+$ pypstreader mail.pst
+pypstreader: 3 folders, 5 messages written, 0 skipped -> mail.mbox
+```
+
+## The library
 
 ```python
-import pypst
+import pypstreader
 
-with pypst.open("store.pst") as store:
+with pypstreader.open("store.pst") as store:
     for folder in store.root_folder.walk():
         print(folder.display_name, folder.content_count)
         for message in folder.messages():
             print("  ", message.subject, "from", message.sender_name)
 
-    # One mbox per folder (`<nid>.mbox`, plus `folders.txt` naming them),
-    # which mutt, Thunderbird, formail and `mailbox` all read as-is:
-    pypst.export_mbox(store.root_folder, "out/")
+    # One mbox per folder (`<nid>.mbox`, plus `folders.txt` naming them):
+    pypstreader.export_mbox(store.root_folder, "out/")
 
     # ...or one RFC 5322 `.eml` per message, named by node id:
-    pypst.export_folder(store.root_folder, "out-eml/")
+    pypstreader.export_folder(store.root_folder, "out-eml/")
 
     # ...or one message at a time, as an `email.message.EmailMessage`:
     message = next(iter(store.root_folder.messages()))
-    eml = pypst.to_eml(message)           # headers, bodies, attachments
-    pypst.write_eml(message, "one.eml")   # or pypst.eml_bytes(message)
+    eml = pypstreader.to_eml(message)           # headers, bodies, attachments
+    pypstreader.write_eml(message, "one.eml")   # or pypstreader.eml_bytes(message)
 ```
 
-From the command line:
+Everything that can fail raises a `PstError` — `PstFormatError`,
+`PstUnsupportedError`, `PstLimitError`, `PstNotFoundError` — and nothing
+else: a `struct.error` or an `IndexError` out of this package is a bug, and
+the test suite sweeps every public entry point over thousands of deliberately
+corrupted stores to keep that true.
+
+There is a second command for reading the *format* rather than the mail,
+which prints one layer of a store in the upstream Rust example's own
+wording:
 
 ```bash
-python -m pypst.debug export store.pst out/          # one mbox per folder
-python -m pypst.debug export store.pst out/ --eml    # one .eml per message
-python -m pypst.debug eml store.pst 10001            # one message, on stdout
+python -m pypstreader.debug messages store.pst   # what the oracle prints
+python -m pypstreader.debug eml store.pst 10001  # one message, on stdout
+python -m pypstreader.debug --list               # every layer it can dump
 ```
 
 **Where the headers come from.** A message that arrived over SMTP keeps its
@@ -45,8 +105,8 @@ internet headers in a MAPI property, and those are passed through verbatim —
 `Message-ID`, `Date`, the `Received` chain, `In-Reply-To`, `References`.
 A message composed locally has none, so `From`, `To`/`Cc`/`Bcc`, `Subject`,
 `Date` and `Message-ID` are rebuilt from MAPI properties, and **every header
-that was rebuilt is listed in `X-Pypst-Synthesized:`**. An invented
-`Message-ID` lives under `@pypst.invalid` and is deterministic, so a
+that was rebuilt is listed in `X-Pypstreader-Synthesized:`**. An invented
+`Message-ID` lives under `@pypstreader.invalid` and is deterministic, so a
 reconstructed thread is never mistaken for a delivered one. (In the test
 corpus the split is 6 messages of 12 either way, and it follows the message
 class: delivered `IPM.Note`s have headers, appointments and locally-composed
@@ -68,18 +128,10 @@ There is no pure-Python PST reader. This is an attempt at one:
 - **Auditable** — a few thousand lines of Python you can actually read, each
   module naming the upstream file it came from.
 
-## Install
-
-Nothing to install yet. When there is:
-
-```bash
-pip install pypst
-```
-
 ## Develop
 
 ```bash
-git clone <this repo> && cd pypst_reader
+git clone <this repo> && cd pypstreader
 scripts/setup.sh          # venv, git hooks, Rust oracle, test run
 ```
 

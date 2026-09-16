@@ -46,7 +46,7 @@ bytes, diff.** The protocol, including the ways it can fool you, is in
 
 ```bash
 scripts/oracle.sh read_header tests/fixtures/Empty.pst > /tmp/rust.txt
-python -m pypst.debug header tests/fixtures/Empty.pst > /tmp/py.txt   # you write this
+python -m pypstreader.debug header tests/fixtures/Empty.pst > /tmp/py.txt   # you write this
 diff /tmp/rust.txt /tmp/py.txt
 ```
 
@@ -61,7 +61,7 @@ Four places, each for a reason that does not apply to Rust:
    panic survivable; an unbounded Python loop is a hang.
 4. **No ANSI support** (ADR-0003). Upstream carries a whole generic axis
    for pre-2003 stores; this package refuses them and a sibling
-   `pypst_reader_nu` (P27) would carry that axis instead.
+   `pypstreader_nu` (P27) would carry that axis instead.
 
 Every divergence is recorded in the diverging module's docstring. An
 unexplained one reads as a porting bug to the next person.

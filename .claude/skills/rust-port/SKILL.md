@@ -1,6 +1,6 @@
 ---
 name: rust-port
-description: Port a module from the upstream Rust PST implementation to Python — the differential-oracle method, the Rust→Python idiom table, when to diverge deliberately, and the ways this method can fool you. Load FIRST before touching any module in src/pypst/.
+description: Port a module from the upstream Rust PST implementation to Python — the differential-oracle method, the Rust→Python idiom table, when to diverge deliberately, and the ways this method can fool you. Load FIRST before touching any module in src/pypstreader/.
 ---
 
 # Porting a module from Rust
@@ -26,7 +26,7 @@ B-tree walk is off by one page.
    scripts/oracle.sh read_header tests/fixtures/private/throwaway.pst > /tmp/rust-header-throw.txt
    ```
 4. **Decide what your Python will print** so the two are diffable. A small
-   `pypst.debug` entry point per layer, mirroring the oracle's format, is worth
+   `pypstreader.debug` entry point per layer, mirroring the oracle's format, is worth
    the half hour every single time.
 
 ## The three ways this method fools you
@@ -53,7 +53,7 @@ Read these before you trust a green diff.
 |---|---|---|
 | `byteorder::ReadBytesExt` | `struct.unpack_from` | one format string per structure, module-level constant |
 | `#[derive(Debug)] struct` | `@dataclass(frozen=True, slots=True)` | frozen: parsed structures are facts, not scratch space |
-| `thiserror` enum | a `PstError` subclass | see `src/pypst/errors.py`; never let `struct.error` escape |
+| `thiserror` enum | a `PstError` subclass | see `src/pypstreader/errors.py`; never let `struct.error` escape |
 | `Result<T, E>` | raise | Rust makes the compiler enforce handling; here the discipline is "one exception family, always" |
 | `impl PstFile for {Unicode,Ansi}` | a struct-format table, or drop ANSI | see row P13 — do NOT reproduce the trait-generic axis literally |
 | `&[u8]` slices | `memoryview` | avoids copying on every block read; slice it, do not `bytes()` it until you must |

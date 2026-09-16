@@ -1,4 +1,4 @@
-# pypst CI — every push. Fast on purpose: the unit suite must stay under a
+# pypstreader CI — every push. Fast on purpose: the unit suite must stay under a
 # minute so it is run, not skipped.
 #
 # The differential (oracle) suite is NOT here. It needs a Rust build of

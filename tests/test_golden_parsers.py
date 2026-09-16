@@ -111,8 +111,8 @@ def test_read_header_ansi_prefix_is_stripped(golden) -> None:
     assert header["node_btree"] == {"page": 0xFE, "index": 0x4E00}
 
 
-def test_read_header_accepts_pypst_form_without_prefix() -> None:
-    """The same parser must read what pypst.debug prints (INTERFACES § ids: no prefix)."""
+def test_read_header_accepts_pypstreader_form_without_prefix() -> None:
+    """The same parser must read what pypstreader.debug prints (INTERFACES § ids: no prefix)."""
     text = (
         "File Version: Unicode\n"
         "Next Block: BlockId { leaf: 0x4C }\n"
@@ -407,8 +407,8 @@ def _data_values(page: dict) -> list[dict]:
     return out
 
 
-def test_read_btrees_accepts_pypst_form_without_trees() -> None:
-    """What pypst.debug prints: no prefix, and a sub-node block with no tree after it."""
+def test_read_btrees_accepts_pypstreader_form_without_trees() -> None:
+    """What pypstreader.debug prints: no prefix, and a sub-node block with no tree after it."""
     text = (
         "Block Page Entries: 1\n"
         " Block: BlockRef { block: BlockId { leaf: 0x1 }, index: ByteIndex { 0x4C00 } }\n"
@@ -514,7 +514,7 @@ def test_read_density_list_empty_pst_spot_values(empty_pst: Path, golden) -> Non
     }
 
 
-def test_read_density_list_parses_entries_and_pypst_form() -> None:
+def test_read_density_list_parses_entries_and_pypstreader_form() -> None:
     text = (
         "Backfill Complete: true\n"
         "Current Page: 3\n"

@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import random
 
-from pypst.crc import compute_crc
+from pypstreader.crc import compute_crc
 
 # The first four entries of `CRC_TABLE_OFFSET32` in crates/pst/src/crc.rs.
 UPSTREAM_TABLE_HEAD = (0x00000000, 0x77073096, 0xEE0E612C, 0x990951BA)

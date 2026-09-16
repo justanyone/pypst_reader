@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate src/pypst/_tables.py from the upstream Rust source.
+"""Regenerate src/pypstreader/_tables.py from the upstream Rust source.
 
 The 768-byte MS-PST key table is the one piece of this port where a
 transcription slip would be both silent and devastating: a wrong byte
@@ -23,7 +23,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 UPSTREAM = REPO / "reference" / "outlook-pst-rs" / "crates" / "pst" / "src" / "encode" / "mod.rs"
-TARGET = REPO / "src" / "pypst" / "_tables.py"
+TARGET = REPO / "src" / "pypstreader" / "_tables.py"
 
 
 def _pin() -> str:

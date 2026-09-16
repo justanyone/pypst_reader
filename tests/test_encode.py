@@ -15,7 +15,7 @@ import os
 
 import pytest
 
-from pypst.encode import (
+from pypstreader.encode import (
     CryptMethod,
     decode_block,
     decode_permute,

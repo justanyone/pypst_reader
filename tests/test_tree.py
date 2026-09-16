@@ -11,7 +11,7 @@ that name each other (cycles, `PstLimitError`), a record count over
 three-level trees at every key width give back their pairs in order, and
 `find` agrees with the walk on every present key and answers None for
 every absent one; on every Unicode store the three fixed PCs' trees are
-sorted, `find` matches `entries`, and `python -m pypst.debug bth` prints
+sorted, `find` matches `entries`, and `python -m pypstreader.debug bth` prints
 the records.
 """
 
@@ -22,21 +22,21 @@ from pathlib import Path
 
 import pytest
 
-from pypst import debug
-from pypst.errors import PstError, PstFormatError, PstLimitError
-from pypst.limits import MAX_HEAP_TREE_DEPTH, Limits
-from pypst.ltp.heap import HeapId, HeapNode
-from pypst.ltp.tree import (
+from pypstreader import debug
+from pypstreader.errors import PstError, PstFormatError, PstLimitError
+from pypstreader.limits import MAX_HEAP_TREE_DEPTH, Limits
+from pypstreader.ltp.heap import HeapId, HeapNode
+from pypstreader.ltp.tree import (
     BTH_HEADER_SIZE,
     KEY_SIZES,
     MAX_ENTRY_SIZE,
     HeapTree,
     HeapTreeHeader,
 )
-from pypst.ndb.block import BlockReader
-from pypst.ndb.btree import BlockBTree, NodeBTree
-from pypst.ndb.header import read_header
-from pypst.ndb.ids import NID_MESSAGE_STORE, NID_NAME_TO_ID_MAP, NID_ROOT_FOLDER
+from pypstreader.ndb.block import BlockReader
+from pypstreader.ndb.btree import BlockBTree, NodeBTree
+from pypstreader.ndb.header import read_header
+from pypstreader.ndb.ids import NID_MESSAGE_STORE, NID_NAME_TO_ID_MAP, NID_ROOT_FOLDER
 from tests import corrupt
 from tests.conftest import FIXTURES, public_fixture_paths
 

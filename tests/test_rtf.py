@@ -21,10 +21,10 @@ import sys
 
 import pytest
 
-from pypst._rtf_dictionary import INITIAL_DICTIONARY
-from pypst.crc import compute_crc
-from pypst.errors import PstError, PstFormatError, PstLimitError
-from pypst.rtf import (
+from pypstreader._rtf_dictionary import INITIAL_DICTIONARY
+from pypstreader.crc import compute_crc
+from pypstreader.errors import PstError, PstFormatError, PstLimitError
+from pypstreader.rtf import (
     DICTIONARY_SIZE,
     HEADER_SIZE,
     CompressedRtfHeader,
@@ -531,7 +531,7 @@ def test_public_fixture_rtf_bodies_decompress_to_rtf() -> None:
     and `body_rtf_decompressed()` is this module over it, so both halves of
     the contract are asserted here.
     """
-    from pypst.messaging import Store
+    from pypstreader.messaging import Store
 
     with Store.open(PUBLIC / "tika-variousBodyTypes.pst") as store:
         messages = [m for folder in store.root_folder.walk() for m in folder.messages() if m.body_rtf is not None]

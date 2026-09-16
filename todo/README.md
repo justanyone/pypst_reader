@@ -6,7 +6,7 @@ from the block alone, with no further context than the repo provides.
 ## Rules
 
 - **Check the tree before you believe a status.** `git log --oneline --grep "<ID>"`
-  and `ls src/pypst/`. A block whose work has landed is done whatever its
+  and `ls src/pypstreader/`. A block whose work has landed is done whatever its
   `status:` says; "landed" means **committed on a ref**, never a decision line.
 - **Status changes ONLY with verification recorded on the block** — a test
   count, an oracle diff that came out empty, a sha. Never from another document.

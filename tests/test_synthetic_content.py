@@ -9,18 +9,18 @@ sources are the expectation; the store is the thing under test.
 
 Three tiers, in order of how much of the port they need:
 
-1. **Goldens** (no pypst code): folder names and message counts from the
+1. **Goldens** (no pypstreader code): folder names and message counts from the
    oracle's `read_ipm_subtree` / `read_root_folder`, the store's display name
    and derived record key from `read_store_props`, and the admission fact
    itself — the oracle exits 0 on every example that matters.
-2. **Bytes** (no pypst code): EMLtoPST writes an UNENCRYPTED store
+2. **Bytes** (no pypstreader code): EMLtoPST writes an UNENCRYPTED store
    (`bCryptMethod` = 0, asserted first), so a PT_UNICODE value sits in the
    file as plain UTF-16LE and an attachment as its raw bytes. Searching the
    file for the authored subject is crude, but it is a real content assertion
    available today, and it pins the generator: if the tool ever encodes,
    compresses or mangles a value, this tier says so before P09 exists.
 3. **The reader** (P07–P09, live): the same expectations read back through
-   `pypst.Store` / `Folder` / `Message` / `Attachment`. One folder's
+   `pypstreader.Store` / `Folder` / `Message` / `Attachment`. One folder's
    contents table is unreadable by this port and by upstream alike — see
    `UNREADABLE_CONTENTS` — so its six messages are `xfail(strict=True)`
    and its refusal is pinned instead.
@@ -279,7 +279,7 @@ def test_oracle_refuses_search_updates_as_documented(golden_exit) -> None:
 def test_store_props_show_the_recipe(golden) -> None:
     text = golden(STORE, "read_store_props")
     assert "Display Name: synth-basics\n" in text
-    key = hashlib.sha256(b"pypst synthetic fixture: basics").digest()[:16]
+    key = hashlib.sha256(b"pypst synthetic fixture: basics").digest()[:16]  # the seed in make_fixture.py, deliberately not renamed
     key_text = "-".join(f"{b:02X}" for b in key)
     entry_ids = dict(re.findall(r"^(IPM Subtree|Deleted Items|Finder): EntryId \{ record_key: ([0-9A-F-]+), node_id: NodeId \{ NormalFolder: 0x[0-9A-F]+ \} \}$", text, re.MULTILINE))
     assert set(entry_ids) == {"IPM Subtree", "Deleted Items", "Finder"}
@@ -369,14 +369,14 @@ def test_empty_subject_is_empty_not_a_placeholder(store_bytes: bytes) -> None:
 
 @pytest.fixture(scope="module")
 def reader():
-    """`pypst` with its messaging surface, or skip. Written to
+    """`pypstreader` with its messaging surface, or skip. Written to
     docs/INTERFACES.md § messaging; nothing here should need editing when
     P07–P09 land, only un-skipping."""
-    pypst = pytest.importorskip("pypst")
-    missing = [name for name in ("Store", "Folder", "Message", "Attachment") if not hasattr(pypst, name)]
+    pypstreader = pytest.importorskip("pypstreader")
+    missing = [name for name in ("Store", "Folder", "Message", "Attachment") if not hasattr(pypstreader, name)]
     if missing:
-        pytest.skip(f"pypst messaging surface not landed yet: {missing}")
-    return pypst
+        pytest.skip(f"pypstreader messaging surface not landed yet: {missing}")
+    return pypstreader
 
 
 @pytest.fixture(scope="module")
@@ -416,7 +416,7 @@ def test_reader_display_name_and_folders(opened) -> None:
 
 def test_the_inbox_contents_table_is_refused_by_this_reader_and_by_upstream(opened, golden) -> None:
     """The one folder of this store whose messages neither reader can reach, pinned on both sides."""
-    from pypst.errors import PstFormatError
+    from pypstreader.errors import PstFormatError
 
     inbox = _folders_by_name(opened)["Inbox"]
     assert inbox.content_count == expected_folder_counts()["Inbox"] == 6
@@ -437,7 +437,7 @@ def _read_messages(opened) -> dict[str, list[object]]:
     swallowing it here is what makes the six `xfail`s say "the message is
     not there" rather than raising a `KeyError` about a folder.
     """
-    from pypst.errors import PstFormatError
+    from pypstreader.errors import PstFormatError
 
     out: dict[str, list[object]] = {}
     for name, folder in _folders_by_name(opened).items():

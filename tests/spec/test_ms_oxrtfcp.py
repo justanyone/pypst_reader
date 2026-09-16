@@ -1,9 +1,9 @@
 """[MS-OXRTFCP] — the compressed-RTF header, initial dictionary, CRC, and the
 section 3 worked examples, typed from the specification pages.
 
-`pypst.rtf` is row P21 and may not exist yet. Everything that can be checked
+`pypstreader.rtf` is row P21 and may not exist yet. Everything that can be checked
 without it (header constants, the dictionary text, the CRC on the examples'
-CONTENTS via `pypst.crc`) runs unconditionally; the decompression vectors
+CONTENTS via `pypstreader.crc`) runs unconditionally; the decompression vectors
 `importorskip` the module and start biting the moment it lands.
 """
 
@@ -13,8 +13,8 @@ import struct
 
 import pytest
 
-from pypst.crc import compute_crc
-from pypst.errors import PstFormatError
+from pypstreader.crc import compute_crc
+from pypstreader.errors import PstFormatError
 
 # --- 2.1.3.1.1 header ----------------------------------------------------------
 #
@@ -114,7 +114,7 @@ def test_example_headers_parse_as_the_spec_says(section: str, data: bytes, comps
 
 @pytest.mark.parametrize(("section", "data", "compsize", "rawsize", "crc", "output"), EXAMPLES, ids=EXAMPLE_IDS)
 def test_example_crc_is_the_pst_crc_of_the_contents(section: str, data: bytes, compsize: int, rawsize: int, crc: int, output: bytes) -> None:
-    """[MS-OXRTFCP] 2.1.3.2 CRC over CONTENTS, seed 0, checked with pypst.crc. Verbatim expected value.
+    """[MS-OXRTFCP] 2.1.3.2 CRC over CONTENTS, seed 0, checked with pypstreader.crc. Verbatim expected value.
 
     The RTF CRC table (2.1.2.2.1) is the same 0xEDB88320 table as [MS-PST]
     5.3 — its first entries 0x00000000, 0x77073096, 0xee0e612c, 0x990951ba
@@ -132,12 +132,12 @@ def test_crc_worked_example_first_two_bytes() -> None:
     assert compute_crc(0, EXAMPLE_1[16:]) == 0xA7C7C5F1
 
 
-# --- decompression: needs pypst.rtf (row P21) ----------------------------------
+# --- decompression: needs pypstreader.rtf (row P21) ----------------------------------
 
 
 @pytest.fixture
 def decompress_rtf():
-    rtf = pytest.importorskip("pypst.rtf", reason="pypst.rtf is row P21; these vectors bite when it lands")
+    rtf = pytest.importorskip("pypstreader.rtf", reason="pypstreader.rtf is row P21; these vectors bite when it lands")
     return rtf.decompress_rtf
 
 

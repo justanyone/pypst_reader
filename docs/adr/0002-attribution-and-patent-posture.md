@@ -17,7 +17,7 @@ discover late and then over-react to.
 
 **1. Attribution is enforced by a lint, not by good intentions.**
 
-Every module in `src/pypst/` carries, in its docstring:
+Every module in `src/pypstreader/` carries, in its docstring:
 
 ```
 Ported from: crates/pst/src/<file>.rs
@@ -31,7 +31,7 @@ against `docs/UPSTREAM.txt`. A module that is genuinely ours writes
 NOTICE and LICENSE carry Microsoft's copyright line. Neither may be removed,
 and the per-module headers are how a reader verifies they are honest.
 
-**2. The name is `pypst`, and nothing implies Microsoft endorsement.**
+**2. The name is `pypstreader`, and nothing implies Microsoft endorsement.**
 
 Upstream's README reserves Microsoft's trademarks. Any user-visible string
 suggesting Microsoft authorship or sponsorship is a bug.

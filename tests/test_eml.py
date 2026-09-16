@@ -1,4 +1,4 @@
-"""`pypst.eml` — the `.eml` assembler, its header policy, and the ways it must refuse.
+"""`pypstreader.eml` — the `.eml` assembler, its header policy, and the ways it must refuse.
 
 This row has no oracle: upstream ships no export format at all (ten example
 binaries that dump layers as text, and nothing that produces mail), so the
@@ -39,8 +39,8 @@ from unittest import mock
 
 import pytest
 
-from pypst import debug
-from pypst.eml import (
+from pypstreader import debug
+from pypstreader.eml import (
     BODY_HEADER,
     POLICY,
     SKIPPED_HEADER,
@@ -53,13 +53,13 @@ from pypst.eml import (
     to_eml,
     write_eml,
 )
-from pypst.errors import PstError, PstFormatError, PstLimitError
-from pypst.limits import DEFAULT_LIMITS
-from pypst.messaging.attachment import AttachMethod
-from pypst.messaging.folder import Folder
-from pypst.messaging.message import Message
-from pypst.messaging.store import Store
-from pypst.ndb.ids import NodeId, NodeIdType
+from pypstreader.errors import PstError, PstFormatError, PstLimitError
+from pypstreader.limits import DEFAULT_LIMITS
+from pypstreader.messaging.attachment import AttachMethod
+from pypstreader.messaging.folder import Folder
+from pypstreader.messaging.message import Message
+from pypstreader.messaging.store import Store
+from pypstreader.ndb.ids import NodeId, NodeIdType
 from tests import corrupt, corruption_harness
 from tests.conftest import FIXTURES, REPO, public_fixture_paths
 
@@ -199,7 +199,7 @@ def test_the_round_trip_says_which_headers_it_rebuilt(sent_message: Message) -> 
     wrote neither `PidTagTransportMessageHeaders` nor
     `PidTagInternetMessageId`, so the source's
     `<synth-basics-sent-01@example.test>` is simply not in the store, and
-    what comes out is a deterministic id under `pypst.invalid` — never the
+    what comes out is a deterministic id under `pypstreader.invalid` — never the
     source's id, and never presented as original.
     """
     built = to_eml(sent_message)
@@ -207,8 +207,8 @@ def test_the_round_trip_says_which_headers_it_rebuilt(sent_message: Message) -> 
     assert synthesized(built) == ["From", "To", "Subject", "Date", "Message-ID"]
     source = email.parser.BytesParser(policy=POLICY).parsebytes(SENT_SOURCE.read_bytes())
     assert str(source["Message-ID"]) == "<synth-basics-sent-01@example.test>"
-    assert str(built["Message-ID"]).endswith("@pypst.invalid>")
-    assert str(built["Message-ID"]) == f"<pypst-{sent_message.store.record_key.hex()}-{sent_message.node.raw:08x}@pypst.invalid>"
+    assert str(built["Message-ID"]).endswith("@pypstreader.invalid>")
+    assert str(built["Message-ID"]) == f"<pypstreader-{sent_message.store.record_key.hex()}-{sent_message.node.raw:08x}@pypstreader.invalid>"
 
 
 def test_synthesize_missing_false_writes_only_what_the_file_holds(sent_message: Message) -> None:
@@ -283,10 +283,10 @@ def test_transport_headers_are_passed_through_and_the_rest_is_marked(store_path:
                 assert len(built.get_all("Content-Type", [])) == 1, where
                 assert len(built.get_all("MIME-Version", [])) == 1, where
                 if built.is_multipart():
-                    assert built.get_boundary().startswith("----=_pypst."), where
+                    assert built.get_boundary().startswith("----=_pypstreader."), where
             else:
                 assert "Message-ID" in synthesized(built), where
-                assert str(built["Message-ID"]).endswith("@pypst.invalid>"), where
+                assert str(built["Message-ID"]).endswith("@pypstreader.invalid>"), where
 
 
 BODY_HEADER_BLOB = (
@@ -349,7 +349,7 @@ def test_a_delivered_message_keeps_its_message_id_byte_for_byte() -> None:
         data = eml_bytes(store.open_message(_message_nid(0x10001)))
     assert f"Message-ID: {want}\r\n".encode("ascii") in data
     assert SYNTHESIZED_HEADER.encode() + b": Message-ID" not in data
-    assert b"pypst.invalid" not in data
+    assert b"pypstreader.invalid" not in data
 
 
 def test_a_stored_internet_message_id_is_used_instead_of_an_invented_one() -> None:
@@ -360,7 +360,7 @@ def test_a_stored_internet_message_id_is_used_instead_of_an_invented_one() -> No
             built = to_eml(message)
     assert str(built["Message-ID"]) == "<kept@example.test>"
     assert "Message-ID" in synthesized(built), "the HEADER is still ours, and says so"
-    assert "pypst.invalid" not in str(built["Message-ID"]), "the VALUE is the store's, and is not marked invalid"
+    assert "pypstreader.invalid" not in str(built["Message-ID"]), "the VALUE is the store's, and is not marked invalid"
 
 
 # --- 4. the three body kinds ------------------------------------------------------
@@ -515,8 +515,8 @@ def test_an_embedded_messages_synthetic_id_is_derived_from_its_carriers() -> Non
         embedded_nid = attachment.embedded_message().node.raw
     inner = next(p for p in built.walk() if p.get_content_type() == "message/rfc822").get_payload()[0]
     carrier_local = str(built["Message-ID"]).lstrip("<").split("@")[0]
-    assert str(built["Message-ID"]).endswith("@pypst.invalid>")
-    assert str(inner["Message-ID"]) == f"<{carrier_local}.{embedded_nid:08x}@pypst.invalid>"
+    assert str(built["Message-ID"]).endswith("@pypstreader.invalid>")
+    assert str(inner["Message-ID"]) == f"<{carrier_local}.{embedded_nid:08x}@pypstreader.invalid>"
 
 
 # --- 6. the parts a corpus store cannot witness: inline cid, and injection --------
@@ -556,7 +556,7 @@ class FakeMessage:
 def build_with(attachments: list[FakeAttachment], *, html: str | None = None) -> Any:
     from email.message import EmailMessage
 
-    from pypst import eml as eml_mod
+    from pypstreader import eml as eml_mod
 
     msg = EmailMessage(policy=POLICY)
     msg.set_content("text body")
@@ -642,7 +642,7 @@ def test_the_skipped_header_names_an_unnamed_attachment_too() -> None:
 def _with_body(html: str) -> Any:
     from email.message import EmailMessage
 
-    from pypst import eml as eml_mod
+    from pypstreader import eml as eml_mod
 
     msg = EmailMessage(policy=POLICY)
     msg.set_content("text body")
@@ -653,8 +653,8 @@ def _with_body(html: str) -> Any:
 
 def test_a_body_that_contains_the_boundary_pushes_it_aside() -> None:
     """The boundary must not occur in what it delimits, whatever the body says."""
-    built = _with_body("<p>----=_pypst.t.0 is in the body</p>")
-    assert built.get_boundary() == "----=_pypst.t.0.1"
+    built = _with_body("<p>----=_pypstreader.t.0 is in the body</p>")
+    assert built.get_boundary() == "----=_pypstreader.t.0.1"
     assert built.get_boundary().encode() not in built.get_payload()[1].get_content().encode()
 
 
@@ -665,15 +665,15 @@ def test_a_body_that_contains_every_counter_is_answered_with_a_hash() -> None:
     per attempt; after `_BOUNDARY_ATTEMPTS` the search ends with a hash of
     the payload, which the payload cannot contain without a preimage.
     """
-    from pypst import eml as eml_mod
+    from pypstreader import eml as eml_mod
 
     # Short lines, so the part stays 7-bit and the text reaches the file
     # verbatim: quoted-printable would escape the `=` and collide with
     # nothing, which is itself worth knowing.
-    collide = "\n".join(f"----=_pypst.t.0.{i}" for i in range(1, eml_mod._BOUNDARY_ATTEMPTS + 4))
-    built = _with_body(f"<p>\n----=_pypst.t.0\n{collide}\n</p>")
+    collide = "\n".join(f"----=_pypstreader.t.0.{i}" for i in range(1, eml_mod._BOUNDARY_ATTEMPTS + 4))
+    built = _with_body(f"<p>\n----=_pypstreader.t.0\n{collide}\n</p>")
     boundary = built.get_boundary()
-    assert re.fullmatch(r"----=_pypst\.t\.0\.[0-9a-f]{32}", boundary), boundary
+    assert re.fullmatch(r"----=_pypstreader\.t\.0\.[0-9a-f]{32}", boundary), boundary
     assert boundary not in built.get_payload()[1].get_content()
     assert boundary.encode() in built.as_bytes(policy=POLICY)
 

@@ -17,10 +17,15 @@ The entry points here are the ones that exist today (header, the two
 B-tree walks and lookups, the density list, the store node's heap/BTH
 and its property context, the root folder's hierarchy table as a
 table context, the message store's named accessors, the named
-property map, the folder tree from NID_ROOT_FOLDER, and every message and
-attachment the node B-tree names). Each later layer adds its
-calls to `exercise` in its own row; the contract harness (P24) is the
-generic version over `pypst.__all__`.
+property map, the folder tree from NID_ROOT_FOLDER, every message and
+attachment the node B-tree names, every message assembled into an `.eml`,
+and the `pypstreader` command itself over the store on disk). Each later
+layer adds its calls to `exercise` in its own row; the contract harness
+(P24) is the generic version over `pypstreader.__all__`.
+
+The command is the one entry point whose contract is an exit STATUS rather
+than an exception, so `run_cli` judges both: anything that escapes `main`
+is a leak, and a status that is neither 0 nor 1 is raised as one.
 
 **The watchdog leaks a thread on a genuine hang.** Python has no portable
 way to interrupt a thread that is spinning in pure Python, and
@@ -38,24 +43,27 @@ from __future__ import annotations
 import concurrent.futures
 import contextlib
 import io
+import os
 import struct
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
-from pypst.eml import eml_bytes
-from pypst.errors import PstError
-from pypst.limits import DEFAULT_LIMITS, Limits
-from pypst.ltp.heap import HeapNode, HeapNodeId
-from pypst.ltp.prop_context import PropertyContext
-from pypst.ltp.table_context import TableContext
-from pypst.ltp.tree import HeapTree
-from pypst.messaging.message import MESSAGE_NODE_TYPES
-from pypst.messaging.store import Store
-from pypst.ndb.block import BlockReader
-from pypst.ndb.btree import BlockBTree, NodeBTree, read_density_list
-from pypst.ndb.header import Header, read_header
-from pypst.ndb.ids import ByteIndex, NodeId, PageId, PageRef
+from pypstreader import pypstreader as cli
+from pypstreader.eml import eml_bytes
+from pypstreader.errors import PstError
+from pypstreader.limits import DEFAULT_LIMITS, Limits
+from pypstreader.ltp.heap import HeapNode, HeapNodeId
+from pypstreader.ltp.prop_context import PropertyContext
+from pypstreader.ltp.table_context import TableContext
+from pypstreader.ltp.tree import HeapTree
+from pypstreader.messaging.message import MESSAGE_NODE_TYPES
+from pypstreader.messaging.store import Store
+from pypstreader.ndb.block import BlockReader
+from pypstreader.ndb.btree import BlockBTree, NodeBTree, read_density_list
+from pypstreader.ndb.header import Header, read_header
+from pypstreader.ndb.ids import ByteIndex, NodeId, PageId, PageRef
 from tests import corrupt
 
 DEFAULT_TIMEOUT = 5.0
@@ -168,9 +176,44 @@ def exercise(data: bytes, shape: BaseShape, limits: Limits = DEFAULT_LIMITS) -> 
         outcomes.append(_attempt("message.open", lambda: read_messages(f, limits)))
         outcomes.append(_attempt("message.attachments", lambda: read_attachments(f, limits)))
         # P10: every message that opens, assembled into an `.eml` — the whole
-        # of `pypst.eml` over whatever the mutation made of the store.
+        # of `pypstreader.eml` over whatever the mutation made of the store.
         outcomes.append(_attempt("eml.export", lambda: export_eml(f, limits)))
+        # P16: the `pypstreader` command over the same bytes, in-process.
+        # The only entry point here that a person types, and the only one
+        # whose contract is an EXIT STATUS rather than an exception.
+        outcomes.append(_attempt("cli.main", lambda: run_cli(data)))
     return outcomes
+
+
+def run_cli(data: bytes) -> int:
+    """`pypstreader <store> --list --quiet` over `data` on disk; the exit status it returned.
+
+    `--list` rather than an export on purpose: the export's own work — every
+    message assembled, every attachment read — is `eml.export`'s outcome a
+    line above, judged there over the same mutation, and paying for it twice
+    would double the cost of every sweep for no new coverage. What this adds
+    is the one thing no other entry point has: the command's promise that
+    **nothing but an exit status comes out**. `main` catches `PstError`,
+    `OSError` and `SystemExit` itself, so anything that escapes it is a leak
+    and a status outside 0/1 is a broken promise — both are raised here so
+    that `problems` sees them.
+
+    The store has to be a file: this is the entry point a person reaches
+    through a path, and giving it a `BytesIO` would test something else.
+    """
+    handle, path = tempfile.mkstemp(prefix="pypstreader-cli-", suffix=".pst")
+    try:
+        with os.fdopen(handle, "wb") as out:
+            out.write(data)
+        sink = io.StringIO()
+        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+            status = cli.main([path, "--list", "--quiet"])
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(path)
+    if status not in (0, 1):
+        raise AssertionError(f"pypstreader --list returned {status}; the command promises 0 or 1 over any store")
+    return status
 
 
 # A corrupt store can name a great many nodes; the sweep only needs enough of
@@ -267,7 +310,7 @@ def read_attachments(f: io.BytesIO, limits: Limits) -> int:
 def export_eml(f: io.BytesIO, limits: Limits) -> int:
     """Every message that opens, assembled into an `.eml`; the count assembled.
 
-    Nothing about the assembly is suppressed: `pypst.eml` promises
+    Nothing about the assembly is suppressed: `pypstreader.eml` promises
     `PstError` or an `EmailMessage`, and a `ValueError` out of the `email`
     package over a mutated `PidTagAttachMimeTag` is exactly what this
     harness exists to catch. Opening is suppressed because `message.open`
@@ -414,7 +457,7 @@ class Watchdog:
 
     @staticmethod
     def _new_executor() -> concurrent.futures.ThreadPoolExecutor:
-        return concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="pypst-fuzz")
+        return concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="pypstreader-fuzz")
 
     def run(self, fn: Callable[[], list[Outcome]]) -> list[Outcome]:
         if self.hung:

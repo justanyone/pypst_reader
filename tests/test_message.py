@@ -13,7 +13,7 @@ property, a subject whose prefix runs past the string, an RTF body that is
 not LZFu, and every ceiling. `PstLimitError`, `PstUnsupportedError`,
 `PstNotFoundError` and `PstFormatError` stay apart throughout.
 
-**Then the differential.** `python -m pypst.debug messages` against the
+**Then the differential.** `python -m pypstreader.debug messages` against the
 committed `dump_messages` goldens — byte for byte on all eight Unicode
 corpus stores (`synth-basics` differed in six `Associated Count` lines
 until P06b landed; that fix is now pinned here as identity) — and then the same
@@ -43,22 +43,22 @@ from pathlib import Path
 
 import pytest
 
-from pypst.debug import DUMPERS, dump_messages, upstream_records
-from pypst.errors import (
+from pypstreader.debug import DUMPERS, dump_messages, upstream_records
+from pypstreader.errors import (
     PstFormatError,
     PstLimitError,
     PstNotFoundError,
     PstUnsupportedError,
 )
-from pypst.limits import DEFAULT_LIMITS, Limits
-from pypst.ltp.prop_type import ObjectRef, datetime_to_filetime
-from pypst.messaging.attachment import (
+from pypstreader.limits import DEFAULT_LIMITS, Limits
+from pypstreader.ltp.prop_type import ObjectRef, datetime_to_filetime
+from pypstreader.messaging.attachment import (
     PID_TAG_ATTACH_DATA_BINARY,
     PID_TAG_ATTACH_METHOD,
     Attachment,
     AttachMethod,
 )
-from pypst.messaging.message import (
+from pypstreader.messaging.message import (
     PID_TAG_MESSAGE_CLASS,
     PID_TAG_SUBJECT,
     Message,
@@ -66,8 +66,8 @@ from pypst.messaging.message import (
     RecipientType,
     split_subject,
 )
-from pypst.messaging.store import EntryId, Store
-from pypst.ndb.ids import NID_ROOT_FOLDER, NodeId, NodeIdType
+from pypstreader.messaging.store import EntryId, Store
+from pypstreader.ndb.ids import NID_ROOT_FOLDER, NodeId, NodeIdType
 from tests import corrupt
 from tests.conftest import FIXTURES, REPO, public_fixture_paths
 from tests.golden_parsers import parse_dump_messages
@@ -130,7 +130,7 @@ def test_a_nid_that_is_not_a_messages_is_refused(empty_pst: Path, nid: NodeId) -
 
 
 def test_the_three_node_types_upstream_accepts_are_the_three_accepted_here() -> None:
-    from pypst.messaging.message import MESSAGE_NODE_TYPES
+    from pypstreader.messaging.message import MESSAGE_NODE_TYPES
 
     assert MESSAGE_NODE_TYPES == (
         NodeIdType.NORMAL_MESSAGE,
@@ -434,7 +434,7 @@ def test_a_message_class_that_is_absent_or_retyped_is_refused(submessage_bytes: 
 
 
 def test_a_body_rtf_that_is_not_binary_is_refused() -> None:
-    """`body_rtf` hands `pypst.rtf` bytes or nothing — never an integer the decompressor would choke on."""
+    """`body_rtf` hands `pypstreader.rtf` bytes or nothing — never an integer the decompressor would choke on."""
     base = _path(DIST_LIST).read_bytes()
     mutation = corrupt.mutation(base, seed=0, name="message_lies:0x1009_type_body_rtf")
     with Store(io.BytesIO(mutation.data)) as store:
@@ -579,9 +579,9 @@ def test_the_dumper_is_registered_and_takes_no_extra_arguments() -> None:
 @pytest.mark.slow
 @pytest.mark.parametrize("store", BYTE_IDENTICAL, ids=BYTE_IDENTICAL_IDS)
 def test_debug_messages_through_the_process_boundary(store: Path, golden, golden_exit) -> None:
-    """The same comparison through `python -m pypst.debug`: the golden's stdout AND its exit status."""
+    """The same comparison through `python -m pypstreader.debug`: the golden's stdout AND its exit status."""
     proc = subprocess.run(
-        [sys.executable, "-m", "pypst.debug", "messages", str(store)],
+        [sys.executable, "-m", "pypstreader.debug", "messages", str(store)],
         capture_output=True,
         text=True,
         cwd=REPO,
@@ -1090,8 +1090,8 @@ def test_retyping_refuses_to_move_a_pages_first_key(empty_pst: Path) -> None:
 
 
 def test_the_retyped_page_still_carries_a_valid_crc(empty_pst: Path) -> None:
-    from pypst.ndb.btree import NodeBTree
-    from pypst.ndb.header import read_header
+    from pypstreader.ndb.btree import NodeBTree
+    from pypstreader.ndb.header import read_header
 
     retyped = corrupt.retype_nbt_entry(empty_pst.read_bytes(), 0x61, 0x64)
     assert retyped is not None

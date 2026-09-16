@@ -12,7 +12,7 @@ is read. The size-boundary trap from the todo: a block whose `cb` lands
 its allocation exactly on a 64-byte multiple, and one byte over, with the
 trailer read from where the specification puts it.
 
-Then the differential claim. `python -m pypst.debug btrees` byte-identical
+Then the differential claim. `python -m pypstreader.debug btrees` byte-identical
 to the committed `read_btrees` golden on every Unicode store — the data-tree
 and sub-node sections included now — and `read_data` / `read_subnode_tree`
 equal to the parsed golden's sizes and entries, so a lucky `__str__` cannot
@@ -31,18 +31,23 @@ from typing import Any
 
 import pytest
 
-from pypst import debug
-from pypst.crc import compute_crc
-from pypst.encode import CryptMethod, encode_decode_cyclic, encode_permute
-from pypst.errors import (
+from pypstreader import debug
+from pypstreader.crc import compute_crc
+from pypstreader.encode import CryptMethod, encode_decode_cyclic, encode_permute
+from pypstreader.errors import (
     PstError,
     PstFormatError,
     PstLimitError,
     PstNotFoundError,
     PstUnsupportedError,
 )
-from pypst.limits import DEFAULT_LIMITS, MAX_SUBNODE_DEPTH, MAX_XBLOCK_DEPTH, Limits
-from pypst.ndb.block import (
+from pypstreader.limits import (
+    DEFAULT_LIMITS,
+    MAX_SUBNODE_DEPTH,
+    MAX_XBLOCK_DEPTH,
+    Limits,
+)
+from pypstreader.ndb.block import (
     BLOCK_TRAILER_SIZE,
     MAX_BLOCK_DATA_SIZE,
     MAX_BLOCK_SIZE,
@@ -55,9 +60,9 @@ from pypst.ndb.block import (
     XBlock,
     block_size,
 )
-from pypst.ndb.btree import BlockBTree, NodeBTree
-from pypst.ndb.header import Header, read_header
-from pypst.ndb.ids import BlockId, BlockRef, ByteIndex, NodeId, PageId, PageRef
+from pypstreader.ndb.btree import BlockBTree, NodeBTree
+from pypstreader.ndb.header import Header, read_header
+from pypstreader.ndb.ids import BlockId, BlockRef, ByteIndex, NodeId, PageId, PageRef
 from tests import corrupt
 from tests.conftest import FIXTURES, REFERENCE, public_fixture_paths, run_oracle
 from tests.golden_parsers import parse_node_id, parse_read_btrees

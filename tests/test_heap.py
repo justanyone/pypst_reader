@@ -35,16 +35,16 @@ from pathlib import Path
 
 import pytest
 
-from pypst import debug
-from pypst.errors import (
+from pypstreader import debug
+from pypstreader.errors import (
     PstError,
     PstFormatError,
     PstLimitError,
     PstNotFoundError,
     PstUnsupportedError,
 )
-from pypst.limits import DEFAULT_LIMITS, MAX_HEAP_ITEMS, Limits
-from pypst.ltp.heap import (
+from pypstreader.limits import DEFAULT_LIMITS, MAX_HEAP_ITEMS, Limits
+from pypstreader.ltp.heap import (
     HEAP_HEADER_SIZE,
     MAX_HEAP_ITEM_INDEX,
     HeapId,
@@ -54,12 +54,12 @@ from pypst.ltp.heap import (
     HeapNodeType,
     HeapPageMap,
 )
-from pypst.ltp.prop_type import PropType, decode
-from pypst.ltp.tree import HeapTree
-from pypst.ndb.block import BlockReader, SubNodeLeafEntry
-from pypst.ndb.btree import BlockBTree, NodeBTree
-from pypst.ndb.header import read_header
-from pypst.ndb.ids import (
+from pypstreader.ltp.prop_type import PropType, decode
+from pypstreader.ltp.tree import HeapTree
+from pypstreader.ndb.block import BlockReader, SubNodeLeafEntry
+from pypstreader.ndb.btree import BlockBTree, NodeBTree
+from pypstreader.ndb.header import read_header
+from pypstreader.ndb.ids import (
     NID_MESSAGE_STORE,
     NID_NAME_TO_ID_MAP,
     NID_ROOT_FOLDER,
@@ -327,7 +327,7 @@ def test_get_hnid_with_a_sub_node_map_but_no_reader_is_not_found() -> None:
 
 
 def _bid(index: int):
-    from pypst.ndb.ids import BlockId
+    from pypstreader.ndb.ids import BlockId
 
     return BlockId.from_parts(False, index)
 

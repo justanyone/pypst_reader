@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from pypst.crc import compute_crc
+from pypstreader.crc import compute_crc
 from tests.conftest import FIXTURES, public_fixture_ids, public_fixture_paths
 
 # [MS-PST] 5.3 `CrcTableOffset32[256]`: the first eight entries and the last.

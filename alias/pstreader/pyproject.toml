@@ -1,0 +1,52 @@
+# `pstreader` — the alias distribution. It is not a second implementation and
+# has no code of its own beyond a re-export: it exists so that `pip install
+# pstreader` and `import pstreader` reach `pypstreader`, which is the package.
+#
+# The dependency is pinned with `==`, not `>=`. An alias whose floor floats
+# can be installed alongside a `pypstreader` it has never been tested with,
+# and the version it reports (`pstreader.__version__`, taken from the real
+# package) would then disagree with the version somebody asked for. Every
+# release of `pypstreader` gets a matching release of this, or none.
+#
+# Built from this directory: `uv build alias/pstreader`.
+
+[project]
+name = "pstreader"
+version = "0.1.0"
+description = "Alias for pypstreader — a pure-Python, dependency-free reader for Outlook PST stores"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Kevin J. Rice" }]
+keywords = ["pst", "outlook", "mbox", "eml", "mapi", "email", "forensics", "ediscovery"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Legal Industry",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Email",
+    "Topic :: Security",
+    "Topic :: Utilities",
+]
+dependencies = ["pypstreader==0.1.0"]
+
+[project.scripts]
+pstreader = "pypstreader.pypstreader:main"
+
+[project.urls]
+Homepage = "https://github.com/justanyone/pypstreader"
+Repository = "https://github.com/justanyone/pypstreader"
+Issues = "https://github.com/justanyone/pypstreader/issues"
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "pstreader"

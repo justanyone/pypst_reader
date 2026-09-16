@@ -10,14 +10,14 @@ child that is its own parent, a tree deeper than the ceiling, a required
 property that is absent or the wrong type. `PstLimitError` and
 `PstFormatError` stay apart throughout.
 
-**Then the differential.** `python -m pypst.debug folders` against the folder
+**Then the differential.** `python -m pypstreader.debug folders` against the folder
 blocks of the committed `dump_messages` goldens — byte for byte, and then the
 same goldens re-read as values through `tests.golden_parsers.parse_dump_messages`
 and compared against `Folder.walk()` id by id, name by name, count by count.
 All eight Unicode corpus stores match byte for byte, including `synth-basics`
 (`test_synth_basics_associated_table_is_byte_identical`), whose empty
 associated-contents table used to be this file's one documented divergence
-until P06b closed it (`pypst.ltp.table_context`'s module docstring).
+until P06b closed it (`pypstreader.ltp.table_context`'s module docstring).
 
 **Then the shape of the API**: the walk's order, the three tables, the
 computed `entry_id` and `folder_type`, and the decision about a null display
@@ -34,19 +34,19 @@ from pathlib import Path
 
 import pytest
 
-from pypst.debug import DUMPERS, dump_folders
-from pypst.errors import PstFormatError, PstLimitError, PstNotFoundError
-from pypst.limits import DEFAULT_LIMITS, Limits
-from pypst.ltp.table_context import TableContext
-from pypst.messaging.folder import (
+from pypstreader.debug import DUMPERS, dump_folders
+from pypstreader.errors import PstFormatError, PstLimitError, PstNotFoundError
+from pypstreader.limits import DEFAULT_LIMITS, Limits
+from pypstreader.ltp.table_context import TableContext
+from pypstreader.messaging.folder import (
     PID_TAG_CONTENT_COUNT,
     PID_TAG_CONTENT_UNREAD_COUNT,
     PID_TAG_DISPLAY_NAME,
     PID_TAG_SUBFOLDERS,
     Folder,
 )
-from pypst.messaging.store import EntryId, Store
-from pypst.ndb.ids import NID_MESSAGE_STORE, NID_ROOT_FOLDER, NodeId, NodeIdType
+from pypstreader.messaging.store import EntryId, Store
+from pypstreader.ndb.ids import NID_MESSAGE_STORE, NID_ROOT_FOLDER, NodeId, NodeIdType
 from tests import corrupt
 from tests.conftest import FIXTURES, REPO, public_fixture_paths
 from tests.golden_parsers import dump_messages_folder_lines, parse_dump_messages
@@ -62,7 +62,7 @@ UNICODE_IDS = [p.stem for p in UNICODE_STORES]
 # dwRowVer in the first 8 bytes of every row, so 4 is impossible for a row
 # that exists — and the table has none. P06 used to refuse it when the
 # TCINFO was parsed, before the table's (empty) row count was even known;
-# P06b (`pypst.ltp.table_context`'s module docstring) narrowed that check to
+# P06b (`pypstreader.ltp.table_context`'s module docstring) narrowed that check to
 # a non-empty matrix, matching upstream's own `rows_matrix()`, which never
 # reads a row of an empty table and never trips. All eight Unicode corpus
 # stores are now byte identical to the golden.
@@ -357,7 +357,7 @@ def test_synth_basics_associated_table_is_byte_identical(golden, capsys: pytest.
 
     `synth-basics.pst`'s root folder's empty associated-contents table
     carries `rgib[TCI_4b] = 4` — too small for the 8-byte row header, but
-    the table has no row for it to misread (`pypst.ltp.table_context`'s
+    the table has no row for it to misread (`pypstreader.ltp.table_context`'s
     module docstring). Where this used to be refused at TCINFO parse time
     (six `Associated Table: None` lines against the golden's `Associated
     Count: 0`), the table now opens and reports zero rows, exactly as
@@ -400,9 +400,9 @@ def test_debug_folders_output_reparses_as_the_goldens_shape(store: Path, capsys:
 @pytest.mark.slow
 @pytest.mark.parametrize("store", BYTE_IDENTICAL, ids=BYTE_IDENTICAL_IDS)
 def test_debug_folders_through_the_process_boundary(store: Path, golden) -> None:
-    """The same comparison through `python -m pypst.debug`: exit 0, nothing on stderr."""
+    """The same comparison through `python -m pypstreader.debug`: exit 0, nothing on stderr."""
     proc = subprocess.run(
-        [sys.executable, "-m", "pypst.debug", "folders", str(store)],
+        [sys.executable, "-m", "pypstreader.debug", "folders", str(store)],
         capture_output=True,
         text=True,
         cwd=REPO,
@@ -461,7 +461,7 @@ def test_every_folders_name_and_counts_match_the_golden(store: Path, golden) -> 
 @pytest.mark.parametrize("store", BYTE_IDENTICAL, ids=BYTE_IDENTICAL_IDS)
 def test_every_folders_table_counts_match_the_golden(store: Path, golden) -> None:
     """`Associated Count:`, and the `… Table: None` lines, as the oracle's `.ok()?` sees them."""
-    from pypst.debug import folder_table
+    from pypstreader.debug import folder_table
 
     expected = _golden_folders(golden(store, EXAMPLE))
     with _store(store, codepage="latin-1") as opened:
@@ -587,7 +587,7 @@ def test_every_unicode_store_opens_its_root_folder(store: Path) -> None:
 @pytest.mark.parametrize("store", [p for p in ALL_STORES if p.stem in ANSI_STORES], ids=sorted(ANSI_STORES))
 def test_an_ansi_store_is_refused_before_any_folder(store: Path) -> None:
     """ADR-0003: the refusal is the header's, and the folder layer is never reached."""
-    from pypst.errors import PstUnsupportedError
+    from pypstreader.errors import PstUnsupportedError
 
     with pytest.raises(PstUnsupportedError):
         Store.open(store)

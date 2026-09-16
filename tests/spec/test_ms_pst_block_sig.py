@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from pypst.block_sig import compute_sig
+from pypstreader.block_sig import compute_sig
 
 # Derived: each row is one hand evaluation of the spec's three lines.
 #

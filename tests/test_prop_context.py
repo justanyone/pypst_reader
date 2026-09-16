@@ -13,7 +13,7 @@ decodes, PtypObject decodes, type bits on a fixed HNID are refused, a
 duplicate key is refused) are pinned by name so that "fixing" one back is a
 red test.
 
-Then the differential claim. `python -m pypst.debug pc <store> 21` is
+Then the differential claim. `python -m pypstreader.debug pc <store> 21` is
 compared to `read_store_props`'s golden line for line, byte for byte, on
 every Unicode corpus store whose golden is complete (`pstd-inline-cid`'s is
 not: the oracle exits 1 before printing any property, and the PC is only
@@ -46,26 +46,26 @@ from pathlib import Path
 
 import pytest
 
-from pypst import debug
-from pypst.errors import (
+from pypstreader import debug
+from pypstreader.errors import (
     PstFormatError,
     PstLimitError,
     PstNotFoundError,
     PstUnsupportedError,
 )
-from pypst.limits import DEFAULT_LIMITS, Limits
-from pypst.ltp.heap import HeapNode, HeapNodeId, HeapNodeType
-from pypst.ltp.prop_context import (
+from pypstreader.limits import DEFAULT_LIMITS, Limits
+from pypstreader.ltp.heap import HeapNode, HeapNodeId, HeapNodeType
+from pypstreader.ltp.prop_context import (
     PC_KEY_SIZE,
     PC_RECORD_SIZE,
     PropertyContext,
     PropertyRecord,
 )
-from pypst.ltp.prop_type import ObjectRef, PropType
-from pypst.ndb.block import BlockReader, SubNodeLeafEntry
-from pypst.ndb.btree import BlockBTree, NodeBTree
-from pypst.ndb.header import read_header
-from pypst.ndb.ids import NodeId, NodeIdType
+from pypstreader.ltp.prop_type import ObjectRef, PropType
+from pypstreader.ndb.block import BlockReader, SubNodeLeafEntry
+from pypstreader.ndb.btree import BlockBTree, NodeBTree
+from pypstreader.ndb.header import read_header
+from pypstreader.ndb.ids import NodeId, NodeIdType
 from tests import corrupt
 from tests.conftest import FIXTURES, REFERENCE, public_fixture_paths, run_oracle
 from tests.golden_parsers import parse_read_named_props, parse_read_store_props
@@ -536,7 +536,7 @@ def test_store_pc_values_equal_the_golden_values(store: Path, golden, golden_exi
 def golden_value(prop_type: PropType, parsed: object) -> object:
     """A `parse_value` payload in this port's decoded form (upstream prints a Time as its FILETIME ticks)."""
     if prop_type is PropType.SYSTIME:
-        from pypst.ltp.prop_type import filetime_to_datetime
+        from pypstreader.ltp.prop_type import filetime_to_datetime
 
         return filetime_to_datetime(int(parsed))  # type: ignore[arg-type]
     if isinstance(parsed, list):
@@ -757,7 +757,7 @@ def test_no_private_store_carries_an_mv_guid_property(private_stores: list[Path]
     Structure only: this asserts on wPropType codes, never on a value. When
     it goes red, a real store finally carries PtypMultipleGuid and
     `_decode_mv_guid` can be settled against it — see the module docstring
-    of `pypst.ltp.prop_context`.
+    of `pypstreader.ltp.prop_context`.
     """
     if not private_stores:
         pytest.skip("no private stores present (this is a normal clean checkout)")

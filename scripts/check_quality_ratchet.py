@@ -32,7 +32,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-TARGETS = ["src", "tests", "scripts"]
+TARGETS = ["src", "tests", "scripts", "alias"]  # `alias` is P16's pstreader distribution: one file, but a shipped one
 
 # Rule families that are defects, not taste. Every one scores zero today.
 TIER1_RULES = [

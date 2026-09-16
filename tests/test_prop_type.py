@@ -21,8 +21,13 @@ from pathlib import Path
 
 import pytest
 
-from pypst.errors import PstError, PstFormatError, PstLimitError, PstUnsupportedError
-from pypst.ltp.prop_type import (
+from pypstreader.errors import (
+    PstError,
+    PstFormatError,
+    PstLimitError,
+    PstUnsupportedError,
+)
+from pypstreader.ltp.prop_type import (
     ObjectRef,
     PropType,
     datetime_to_filetime,
@@ -31,7 +36,7 @@ from pypst.ltp.prop_type import (
     fixed_size,
     is_fixed_size,
 )
-from pypst.ndb.ids import NodeId
+from pypstreader.ndb.ids import NodeId
 
 GOLDEN = Path(__file__).resolve().parent / "golden"
 

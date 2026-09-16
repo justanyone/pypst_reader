@@ -9,9 +9,15 @@ from __future__ import annotations
 
 import pytest
 
-from pypst.block_sig import compute_sig
-from pypst.errors import PstFormatError
-from pypst.ndb.ids import MAX_BLOCK_INDEX, MAX_NODE_INDEX, BlockId, NodeId, NodeIdType
+from pypstreader.block_sig import compute_sig
+from pypstreader.errors import PstFormatError
+from pypstreader.ndb.ids import (
+    MAX_BLOCK_INDEX,
+    MAX_NODE_INDEX,
+    BlockId,
+    NodeId,
+    NodeIdType,
+)
 from tests.parity import upstream_test
 
 

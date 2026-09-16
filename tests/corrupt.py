@@ -37,15 +37,15 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from pypst.crc import compute_crc
-from pypst.errors import (
+from pypstreader.crc import compute_crc
+from pypstreader.errors import (
     PstError,
     PstFormatError,
     PstLimitError,
     PstNotFoundError,
     PstUnsupportedError,
 )
-from pypst.limits import DEFAULT_LIMITS
+from pypstreader.limits import DEFAULT_LIMITS
 
 # The struct formats the landed modules parse with. `field_lies` derives every
 # field's offset and width from these, so a field added to a format is a field
@@ -54,18 +54,18 @@ from pypst.limits import DEFAULT_LIMITS
 # own (underscored) names, imported deliberately for the same reason. (The
 # offsets below stay hand-typed for the reason the docstring gives: the
 # generator tests cross-check the two against each other.)
-from pypst.ndb.header import _LEAD_FORMAT, _TAIL_FORMAT, _TAIL_OFFSET
-from pypst.ndb.page import (
+from pypstreader.ndb.header import _LEAD_FORMAT, _TAIL_FORMAT, _TAIL_OFFSET
+from pypstreader.ndb.page import (
     _BTREE_HEADER_FORMAT,
     BLOCK_ENTRY_FORMAT,
     INTERMEDIATE_ENTRY_FORMAT,
     NODE_ENTRY_FORMAT,
     PAGE_TRAILER_FORMAT,
 )
-from pypst.ndb.root import ROOT_FORMAT
+from pypstreader.ndb.root import ROOT_FORMAT
 
 # [MS-PST] 2.2.2.6, Unicode layout. These duplicate the private constants
-# in pypst.ndb.header on purpose: a test that imported the module's idea of
+# in pypstreader.ndb.header on purpose: a test that imported the module's idea of
 # where the CRC lives could not catch the module being wrong about it.
 HEADER_SIZE = 564
 CRC_PARTIAL_OFFSET = 4
@@ -145,7 +145,7 @@ def reseal_header(data: bytes) -> bytes:
 # --- pages (P02) -------------------------------------------------------------
 #
 # [MS-PST] 2.2.2.7 and 2.2.2.7.7. As above, these duplicate the constants in
-# pypst.ndb.page on purpose.
+# pypstreader.ndb.page on purpose.
 
 PAGE_SIZE = 512
 PAGE_DATA_SIZE = 496
@@ -292,7 +292,7 @@ def file_with_pages(pages: dict[int, bytes], size: int | None = None) -> bytes:
 
 # --- blocks (P03) ------------------------------------------------------------
 #
-# [MS-PST] 2.2.2.8. As above, these duplicate the constants in pypst.ndb.block
+# [MS-PST] 2.2.2.8. As above, these duplicate the constants in pypstreader.ndb.block
 # on purpose. Every builder returns the WHOLE 64-byte-aligned allocation —
 # data, padding, 16-byte trailer — ready to drop into `file_with_blocks` at
 # the offset a BBT entry names. P12 (the corruption generator) imports them;
@@ -919,7 +919,7 @@ def magic_only(base: bytes, rng: random.Random) -> Iterator[Mutation]:
 # with the block builders P03 adds here (`data_block`, `xblock`, `slblock`,
 # `siblock`, `file_with_blocks`) and register the family in FAMILIES. The
 # stub tests in tests/test_corruption.py (`test_p03_*`) are the place they
-# are asserted; they skip until `pypst.ndb.block` imports.
+# are asserted; they skip until `pypstreader.ndb.block` imports.
 #
 # --- P04: heap-on-node and BTree-on-heap builders --------------------------------
 #
@@ -1149,11 +1149,11 @@ def node_data_block(base: bytes, nid: int) -> _DataBlockSite:
     families aim at (the store PC, the root folder's hierarchy table) is a
     single block in every base they are pinned for.
     """
-    from pypst.encode import decode_block
-    from pypst.ndb.block import BlockReader
-    from pypst.ndb.btree import BlockBTree, NodeBTree
-    from pypst.ndb.header import read_header
-    from pypst.ndb.ids import NodeId
+    from pypstreader.encode import decode_block
+    from pypstreader.ndb.block import BlockReader
+    from pypstreader.ndb.btree import BlockBTree, NodeBTree
+    from pypstreader.ndb.header import read_header
+    from pypstreader.ndb.ids import NodeId
 
     f = io.BytesIO(base)
     header = read_header(f)
@@ -1180,7 +1180,7 @@ node_pc_block = node_data_block  # P07's name for the same helper; both rows gen
 
 def rewrite_data_block(base: bytes, site: _DataBlockSite, data: bytes) -> bytes:
     """`base` with the block at `site` holding `data` (same length), encoded and CRC'd as the header says."""
-    from pypst.encode import CryptMethod, encode_decode_cyclic, encode_permute
+    from pypstreader.encode import CryptMethod, encode_decode_cyclic, encode_permute
 
     assert len(data) == site.size
     method = CryptMethod(site.crypt)
@@ -1287,8 +1287,8 @@ def heap_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
 # breaks what P05 reads: the client signature a PC insists on, the
 # key/record widths a PC BTH must have, and the `wPropType` /
 # `dwValueHnid` pair of one record ([MS-PST] 2.3.3.3). Every lie here is
-# invisible to `pypst.ltp.heap` and `pypst.ltp.tree` and must be refused by
-# `pypst.ltp.prop_context`.
+# invisible to `pypstreader.ltp.heap` and `pypstreader.ltp.tree` and must be refused by
+# `pypstreader.ltp.prop_context`.
 
 
 def _pc_records(data: bytes, shape: dict[str, Any]) -> list[tuple[int, int, int, int]]:
@@ -1456,12 +1456,12 @@ def _tc_opens(base: bytes) -> bool:
     still yields the same mutations, but with no `expect` and no
     `must_raise`: they prove nothing and must not be scored as if they did.
     """
-    from pypst.errors import PstError
-    from pypst.ltp.table_context import TableContext
-    from pypst.ndb.block import BlockReader
-    from pypst.ndb.btree import BlockBTree, NodeBTree
-    from pypst.ndb.header import read_header
-    from pypst.ndb.ids import NodeId
+    from pypstreader.errors import PstError
+    from pypstreader.ltp.table_context import TableContext
+    from pypstreader.ndb.block import BlockReader
+    from pypstreader.ndb.btree import BlockBTree, NodeBTree
+    from pypstreader.ndb.header import read_header
+    from pypstreader.ndb.ids import NodeId
 
     f = io.BytesIO(base)
     try:
@@ -1553,8 +1553,8 @@ def tc_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
 #
 # `pc_lies` breaks what a property context reads; these break what the
 # MESSAGE STORE reads out of one that is perfectly valid. Every lie here is
-# invisible to `pypst.ltp.prop_context` — the record decodes, the value
-# decodes — and must be refused by `pypst.messaging.store`. Two of them
+# invisible to `pypstreader.ltp.prop_context` — the record decodes, the value
+# decodes — and must be refused by `pypstreader.messaging.store`. Two of them
 # must NOT be refused: an absent `PidTagIpmWastebasketEntryId` or
 # `PidTagFinderEntryId` is tolerated on purpose (P07's decision, recorded in
 # that module's docstring and pinned here so that "fixing" it back is red).
@@ -1651,7 +1651,7 @@ NAME_ID_SIZE = 8
 
 def named_prop_shape(base: bytes) -> dict[str, Any]:
     """What the base's named property map holds, read with the landed reader — so the lies below can be honest."""
-    from pypst.messaging.store import Store
+    from pypstreader.messaging.store import Store
 
     with Store(io.BytesIO(base)) as store:
         named = store.named_properties
@@ -1742,7 +1742,7 @@ def named_prop_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
 # node that does not exist", "my child is me" (a cycle the `VisitedSet` must
 # catch) or "my child is the message store". Every one of these is a perfectly
 # valid table context and a perfectly valid property context; only
-# `pypst.messaging.folder` can refuse them.
+# `pypstreader.messaging.folder` can refuse them.
 
 NID_ROOT_FOLDER = 0x122
 PID_TAG_FOLDER_DISPLAY_NAME = 0x3001
@@ -1759,8 +1759,8 @@ def _folder_walks(base: bytes) -> bool:
     refuses, the row lies below still yield, but with no `expect` and no
     `must_raise`.
     """
-    from pypst.errors import PstError
-    from pypst.messaging.store import Store
+    from pypstreader.errors import PstError
+    from pypstreader.messaging.store import Store
 
     try:
         with Store(io.BytesIO(base)) as store:
@@ -1889,8 +1889,8 @@ def retype_nbt_entry(base: bytes, nid: int, new_nid: int) -> bytes | None:
 
 def _messages_of(base: bytes) -> list[int]:
     """Every message NID this port can open in `base`, in walk order; empty when the store will not open."""
-    from pypst.errors import PstError
-    from pypst.messaging.store import Store
+    from pypstreader.errors import PstError
+    from pypstreader.messaging.store import Store
 
     out: list[int] = []
     try:
@@ -1913,11 +1913,11 @@ def _messages_of(base: bytes) -> list[int]:
 
 def subnode_data_block(base: bytes, nid: int, sub_nid: int) -> _DataBlockSite:
     """`node_data_block` for a SUB-node: where one entry of `nid`'s sub-node tree lives, and its decoded bytes."""
-    from pypst.encode import decode_block
-    from pypst.ndb.block import BlockReader
-    from pypst.ndb.btree import BlockBTree, NodeBTree
-    from pypst.ndb.header import read_header
-    from pypst.ndb.ids import NodeId
+    from pypstreader.encode import decode_block
+    from pypstreader.ndb.block import BlockReader
+    from pypstreader.ndb.btree import BlockBTree, NodeBTree
+    from pypstreader.ndb.header import read_header
+    from pypstreader.ndb.ids import NodeId
 
     f = io.BytesIO(base)
     header = read_header(f)
@@ -1938,11 +1938,11 @@ def subnode_data_block(base: bytes, nid: int, sub_nid: int) -> _DataBlockSite:
 
 def _sub_node_of(base: bytes, nid: int, node_type: int) -> int | None:
     """The NID of the single sub-node of `nid` whose 5-bit type is `node_type`, or None."""
-    from pypst.errors import PstError
-    from pypst.ndb.block import BlockReader
-    from pypst.ndb.btree import BlockBTree, NodeBTree
-    from pypst.ndb.header import read_header
-    from pypst.ndb.ids import NodeId
+    from pypstreader.errors import PstError
+    from pypstreader.ndb.block import BlockReader
+    from pypstreader.ndb.btree import BlockBTree, NodeBTree
+    from pypstreader.ndb.header import read_header
+    from pypstreader.ndb.ids import NodeId
 
     try:
         f = io.BytesIO(base)
@@ -2026,7 +2026,7 @@ def message_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
             yield lie("0x0E06_type_delivery_time", site, set_u16(data, record[0] + 2, 0x0003))
 
         # The compressed-RTF body retyped to a 4-byte scalar: `body_rtf` must
-        # refuse an integer rather than hand `pypst.rtf` something that is
+        # refuse an integer rather than hand `pypstreader.rtf` something that is
         # not bytes. Only some messages have an RTF body at all, which is why
         # every message's PC is looked at rather than only the first.
         record = _record_by_id(records, PID_TAG_RTF_COMPRESSED)

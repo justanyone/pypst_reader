@@ -30,7 +30,7 @@ could be a lint already is one.
 | `MasterToDo.md` | edit **only your row's line**; never reorder or renumber; new rows go at the end with the next free id. **When an orchestrator is landing rows** (it says so in your brief), do not touch this file at all — put the evidence in your `todo/` block and the orchestrator moves the row when it lands your branch |
 | `todo/T*.md` | edit only your block; add a new block at the end of the cluster file |
 | `docs/INTERFACES.md` | the contract between layers. Changing a signature another row depends on is a message to that row's agent *before* the change, and a note in the file's changelog |
-| `src/pypst/errors.py`, `limits.py` | additive only — add an exception or a constant; never rename one |
+| `src/pypstreader/errors.py`, `limits.py` | additive only — add an exception or a constant; never rename one |
 | `tests/conftest.py` | additive only |
 | `tests/golden/` | written only by `scripts/capture_oracle.py`; never hand-edited; regenerated only when the pin moves (and then in its own row) |
 | `tests/fixtures/public/` | only via the procedure in its README; the hook and CI enforce the manifest |

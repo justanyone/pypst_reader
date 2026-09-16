@@ -1,5 +1,5 @@
 """[MS-OXCDATA] 2.11.1 property data types, [MS-DTYP] 2.3.4.2 GUIDs, and the
-[MS-PST] 2.3.3.4 multi-value layouts, against `pypst.ltp.prop_type`.
+[MS-PST] 2.3.3.4 multi-value layouts, against `pypstreader.ltp.prop_type`.
 """
 
 from __future__ import annotations
@@ -10,8 +10,8 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
-from pypst.errors import PstFormatError, PstUnsupportedError
-from pypst.ltp.prop_type import (
+from pypstreader.errors import PstFormatError, PstUnsupportedError
+from pypstreader.ltp.prop_type import (
     PropType,
     decode,
     filetime_to_datetime,

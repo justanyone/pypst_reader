@@ -1,18 +1,27 @@
 [project]
-name = "pypst"
-version = "0.0.1"
-description = "A pure-Python reader for Outlook PST stores — ported from microsoft/outlook-pst-rs (MIT)"
+name = "pypstreader"
+version = "0.1.0"
+description = "A pure-Python, dependency-free reader for Outlook PST stores: walk folders and messages, export mbox and .eml"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { file = "LICENSE" }
+license = { file = "LICENSE" }  # MIT, in full, as the file says
 authors = [{ name = "Kevin J. Rice" }]
-keywords = ["pst", "outlook", "mapi", "email", "forensics"]
+keywords = ["pst", "outlook", "mbox", "eml", "mapi", "email", "forensics", "ediscovery"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
     "Intended Audience :: Developers",
+    "Intended Audience :: Legal Industry",
+    "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Communications :: Email",
+    "Topic :: Security",
+    "Topic :: Utilities",
+    "Typing :: Typed",
 ]
 
 # DELIBERATELY EMPTY, and it should stay that way.
@@ -25,8 +34,15 @@ classifiers = [
 # needs something the original did not; make that claim in an ADR first.
 dependencies = []
 
+[project.scripts]
+# The one command this package installs. `pypstreader store.pst` writes
+# `store.mbox`; everything else it does is an option on that.
+pypstreader = "pypstreader.pypstreader:main"
+
 [project.urls]
-Homepage = "https://github.com/justanyone/pypst_reader"
+Homepage = "https://github.com/justanyone/pypstreader"
+Repository = "https://github.com/justanyone/pypstreader"
+Issues = "https://github.com/justanyone/pypstreader/issues"
 Upstream = "https://github.com/microsoft/outlook-pst-rs"
 Specification = "https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-pst/141923d5-15ab-4ef1-a524-6dce75aae546"
 
@@ -47,7 +63,38 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/pypst"]
+packages = ["src/pypstreader"]
+
+# The sdist is an EXPLICIT list, not "everything hatchling does not recognise
+# as ignored". Two reasons, both learned the hard way. In a git WORKTREE the
+# repository's `.git` is a file rather than a directory, so a backend that
+# infers its file set from VCS state can fail to infer anything and start
+# walking `reference/` — a 1.2 GB pinned clone of the upstream Rust, symlinked
+# in, which is the oracle and emphatically not the product. And an sdist is a
+# publication: what goes in it should be a decision somebody made, not a
+# by-product of what happened to be in the directory. What is here is the
+# package, its licence and attribution, and everything needed to RUN the
+# suite against it — the fixtures, the captured oracle goldens, the lints and
+# the alias distribution's own source.
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/pypstreader",
+    "tests",
+    "scripts",
+    "docs",
+    "todo",
+    "alias",
+    "oracle",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "CLAUDE.md",
+    "MasterToDo.md",
+    "pyproject.toml",
+    "uv.lock",
+    ".python-version",
+]
+exclude = ["**/__pycache__", "**/*.pyc", "tests/fixtures/private"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

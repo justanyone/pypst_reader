@@ -9,15 +9,15 @@ from __future__ import annotations
 
 import pytest
 
-from pypst._tables import KEY_DATA, KEY_DATA_I, KEY_DATA_R, KEY_DATA_S
-from pypst.encode import (
+from pypstreader._tables import KEY_DATA, KEY_DATA_I, KEY_DATA_R, KEY_DATA_S
+from pypstreader.encode import (
     CryptMethod,
     decode_block,
     decode_permute,
     encode_decode_cyclic,
     encode_permute,
 )
-from pypst.errors import PstError
+from pypstreader.errors import PstError
 
 # --- 5.1: the mpbbCrypt[] table ------------------------------------------------
 #

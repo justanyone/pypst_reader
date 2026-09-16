@@ -1,6 +1,6 @@
 """The ceilings, denial first: each helper refuses one over and passes at the ceiling.
 
-`pypst.limits` is the one module whose whole job is to say no, so every test
+`pypstreader.limits` is the one module whose whole job is to say no, so every test
 here is a boundary: the ceiling passes (inclusive, as the module docstring
 says), one over raises `PstLimitError` naming the walk, and that error is
 never a `PstFormatError` — "too big" and "corrupt" must stay distinguishable
@@ -13,9 +13,9 @@ import dataclasses
 
 import pytest
 
-from pypst import limits
-from pypst.errors import PstError, PstFormatError, PstLimitError
-from pypst.limits import (
+from pypstreader import limits
+from pypstreader.errors import PstError, PstFormatError, PstLimitError
+from pypstreader.limits import (
     DEFAULT_LIMITS,
     MAX_ITEMS,
     MAX_MV_ITEMS,
@@ -25,8 +25,8 @@ from pypst.limits import (
     check_count,
     check_depth,
 )
-from pypst.ltp import prop_type
-from pypst.ndb.ids import MAX_NODE_INDEX
+from pypstreader.ltp import prop_type
+from pypstreader.ndb.ids import MAX_NODE_INDEX
 
 CHECKS = [check_depth, check_count, check_allocation]
 CHECK_IDS = [fn.__name__ for fn in CHECKS]

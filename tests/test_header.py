@@ -4,7 +4,7 @@ Denial first: every field upstream validates, mutated in memory on a real
 corpus store (tests/corrupt.py), must be a `PstFormatError` — or a
 `PstUnsupportedError` where the file is recognised and deliberately not
 read — and never anything else. Then the differential check that gives the
-parse its claim to correctness: `python -m pypst.debug header` over every
+parse its claim to correctness: `python -m pypstreader.debug header` over every
 Unicode store in the corpus, parsed by the same parser as the committed
 oracle golden, compared as values; and the same values read straight off
 the `Header` object, so a type slip behind a lucky `__str__` cannot hide.
@@ -18,18 +18,18 @@ from typing import Any
 
 import pytest
 
-from pypst import debug
-from pypst.encode import CryptMethod
-from pypst.errors import PstError, PstFormatError, PstUnsupportedError
-from pypst.ndb.header import (
+from pypstreader import debug
+from pypstreader.encode import CryptMethod
+from pypstreader.errors import PstError, PstFormatError, PstUnsupportedError
+from pypstreader.ndb.header import (
     HEADER_MAGIC,
     HEADER_MAGIC_CLIENT,
     Header,
     Version,
     read_header,
 )
-from pypst.ndb.ids import BlockId, ByteIndex, PageId, PageRef
-from pypst.ndb.root import AmapStatus, Root
+from pypstreader.ndb.ids import BlockId, ByteIndex, PageId, PageRef
+from pypstreader.ndb.root import AmapStatus, Root
 from tests import corrupt
 from tests.conftest import (
     FIXTURES,
@@ -143,7 +143,7 @@ def test_ansi_version_on_a_unicode_body_is_unsupported(version: int) -> None:
     bad = corrupt.reseal_header(corrupt.set_u16(GOOD, corrupt.VERSION_OFFSET, version))
     with pytest.raises(PstUnsupportedError) as info:
         Header.parse(bad)
-    assert "pypst_reader_nu" in str(info.value)
+    assert "pypstreader_nu" in str(info.value)
 
 
 def test_ansi_version_is_refused_before_the_crc_is_checked() -> None:
@@ -300,7 +300,7 @@ def test_ansi_store_is_refused(store: Path) -> None:
     with store.open("rb") as f, pytest.raises(PstUnsupportedError) as info:
         read_header(f)
     message = str(info.value)
-    assert "pypst_reader_nu" in message
+    assert "pypstreader_nu" in message
     assert "wVer=14" in message or "wVer=15" in message
 
 
@@ -310,7 +310,7 @@ def test_debug_header_exits_one_on_ansi(store: Path, capsys: pytest.CaptureFixtu
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err.startswith("Error: ANSI")
-    assert "pypst_reader_nu" in captured.err
+    assert "pypstreader_nu" in captured.err
 
 
 # --- differential: the goldens ---------------------------------------------

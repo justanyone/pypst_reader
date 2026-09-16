@@ -24,9 +24,9 @@ from __future__ import annotations
 
 import struct
 
-from pypst._rtf_dictionary import INITIAL_DICTIONARY
-from pypst.crc import compute_crc
-from pypst.rtf import DICTIONARY_SIZE, HEADER_SIZE, CompressionType
+from pypstreader._rtf_dictionary import INITIAL_DICTIONARY
+from pypstreader.crc import compute_crc
+from pypstreader.rtf import DICTIONARY_SIZE, HEADER_SIZE, CompressionType
 
 _MASK = DICTIONARY_SIZE - 1
 _MAX_MATCH = 17  # a 4-bit length field plus 2

@@ -11,7 +11,7 @@ stream, a string offset past the string stream, a string of odd length, and
 a stream longer than `limits.max_items` — each the right `PstError`
 subclass, with `PstLimitError` kept apart from `PstFormatError`.
 
-Then the differential claim. `python -m pypst.debug named_props <fixture>`
+Then the differential claim. `python -m pypstreader.debug named_props <fixture>`
 is compared with `read_named_props`'s golden byte for byte on every Unicode
 corpus store, and the same goldens are compared again as values through
 `tests/golden_parsers.parse_read_named_props`: 964 named properties over 8
@@ -36,10 +36,10 @@ from pathlib import Path
 
 import pytest
 
-from pypst import debug
-from pypst.errors import PstError, PstFormatError, PstLimitError, PstNotFoundError
-from pypst.limits import DEFAULT_LIMITS, Limits
-from pypst.messaging.named_prop import (
+from pypstreader import debug
+from pypstreader.errors import PstError, PstFormatError, PstLimitError, PstNotFoundError
+from pypstreader.limits import DEFAULT_LIMITS, Limits
+from pypstreader.messaging.named_prop import (
     GUID_SIZE,
     NAME_ID_SIZE,
     PID_TAG_NAMEID_BUCKET_BASE,
@@ -50,7 +50,7 @@ from pypst.messaging.named_prop import (
     NamedPropertyMap,
     NameIdEntry,
 )
-from pypst.messaging.store import Store
+from pypstreader.messaging.store import Store
 from tests.conftest import FIXTURES, REPO, public_fixture_paths
 from tests.golden_parsers import parse_read_named_props
 from tests.test_prop_context import (
@@ -472,7 +472,7 @@ def test_named_properties_equal_the_golden_values(store: Path, golden) -> None:
 @pytest.mark.parametrize("store", UNICODE_STORES, ids=UNICODE_IDS)
 def test_the_module_agrees_with_p05_s_hand_rolled_reconstruction(store: Path) -> None:
     """Two independent readings of the same three streams must agree; P05's is the control."""
-    with store_pc(store, __import__("pypst.ndb.ids", fromlist=["NodeId"]).NodeId(NID_NAME_TO_ID_MAP)) as pc:
+    with store_pc(store, __import__("pypstreader.ndb.ids", fromlist=["NodeId"]).NodeId(NID_NAME_TO_ID_MAP)) as pc:
         control = named_properties_from_pc(pc)
         named = NamedPropertyMap(pc)
         ours = [

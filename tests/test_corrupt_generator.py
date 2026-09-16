@@ -18,13 +18,13 @@ from pathlib import Path
 
 import pytest
 
-from pypst.crc import compute_crc
-from pypst.errors import PstError, PstFormatError, PstLimitError
-from pypst.limits import DEFAULT_LIMITS
-from pypst.ndb.btree import BlockBTree, NodeBTree
-from pypst.ndb.header import HEADER_SIZE, Header
-from pypst.ndb.ids import ByteIndex, PageId, PageRef
-from pypst.ndb.page import BTreePage, PageType
+from pypstreader.crc import compute_crc
+from pypstreader.errors import PstError, PstFormatError, PstLimitError
+from pypstreader.limits import DEFAULT_LIMITS
+from pypstreader.ndb.btree import BlockBTree, NodeBTree
+from pypstreader.ndb.header import HEADER_SIZE, Header
+from pypstreader.ndb.ids import ByteIndex, PageId, PageRef
+from pypstreader.ndb.page import BTreePage, PageType
 from tests import corrupt
 from tests.conftest import FIXTURES, PUBLIC
 

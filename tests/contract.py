@@ -8,11 +8,11 @@ explicit tables here — with a reason.
 
 Three parts.
 
-**Discovery** — `entry_points()` walks the `pypst` package with `pkgutil`,
+**Discovery** — `entry_points()` walks the `pypstreader` package with `pkgutil`,
 imports every public module, and collects every public callable: the names
 in a module's `__all__` when it has one, else every public top-level function
 or class defined in it. For a class it also collects every public classmethod
-and public method (`__iter__` included) along the class's `pypst` MRO. Each
+and public method (`__iter__` included) along the class's `pypstreader` MRO. Each
 is classified by its parameters into a `Kind` — `bytes` (a buffer),
 `file` (a `BinaryIO`), `reader` (a file plus something a parsed header
 yields: a `Header`, `PageRef`, `BlockBTree`…), `path` (a store on disk),
@@ -51,7 +51,7 @@ contract: `LEAK` and `HANG`, nothing else. What a call *should* return or
 raise is the layer's own tests' business; this harness says only what must
 never come out.
 
-**Dumpers.** Every function registered in `pypst.debug.DUMPERS` gets its
+**Dumpers.** Every function registered in `pypstreader.debug.DUMPERS` gets its
 adapter automatically (the store on disk, stdout and stderr to a sink), so
 a dumper registered by a later row is covered on landing; a dumper with an
 extra positional parameter names it, and `EXTRA_ARGS` must know that name
@@ -84,28 +84,33 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-import pypst
-from pypst import block_sig, crc, debug, eml, encode, limits, mbox, rtf
-from pypst.errors import PstError, PstFormatError
-from pypst.limits import DEFAULT_LIMITS, Limits
-from pypst.ltp import heap, prop_context, prop_type, table_context, tree
-from pypst.ltp.heap import HeapId, HeapNode, HeapNodeId
-from pypst.ltp.prop_context import PropertyContext, PropertyRecord
-from pypst.ltp.prop_type import PropType
-from pypst.ltp.table_context import CellKind, CellRecord, TableContext, TableRow
-from pypst.messaging import attachment as attachment_mod
-from pypst.messaging import folder as folder_mod
-from pypst.messaging import message as message_mod
-from pypst.messaging import named_prop
-from pypst.messaging import store as messaging
-from pypst.messaging.attachment import Attachment, AttachMethod
-from pypst.messaging.folder import Folder
-from pypst.messaging.message import Message
-from pypst.messaging.named_prop import NamedPropertyGuid, NamedPropertyMap, NameIdEntry
-from pypst.messaging.store import EntryId
-from pypst.ndb import block, btree, header, ids, page, root
-from pypst.ndb.block import SubNodeLeafEntry
-from pypst.ndb.ids import NID_ROOT_FOLDER, BlockId, ByteIndex, NodeId, NodeIdType
+import pypstreader
+from pypstreader import block_sig, crc, debug, eml, encode, limits, mbox, rtf
+from pypstreader import pypstreader as cli
+from pypstreader.errors import PstError, PstFormatError
+from pypstreader.limits import DEFAULT_LIMITS, Limits
+from pypstreader.ltp import heap, prop_context, prop_type, table_context, tree
+from pypstreader.ltp.heap import HeapId, HeapNode, HeapNodeId
+from pypstreader.ltp.prop_context import PropertyContext, PropertyRecord
+from pypstreader.ltp.prop_type import PropType
+from pypstreader.ltp.table_context import CellKind, CellRecord, TableContext, TableRow
+from pypstreader.messaging import attachment as attachment_mod
+from pypstreader.messaging import folder as folder_mod
+from pypstreader.messaging import message as message_mod
+from pypstreader.messaging import named_prop
+from pypstreader.messaging import store as messaging
+from pypstreader.messaging.attachment import Attachment, AttachMethod
+from pypstreader.messaging.folder import Folder
+from pypstreader.messaging.message import Message
+from pypstreader.messaging.named_prop import (
+    NamedPropertyGuid,
+    NamedPropertyMap,
+    NameIdEntry,
+)
+from pypstreader.messaging.store import EntryId
+from pypstreader.ndb import block, btree, header, ids, page, root
+from pypstreader.ndb.block import SubNodeLeafEntry
+from pypstreader.ndb.ids import NID_ROOT_FOLDER, BlockId, ByteIndex, NodeId, NodeIdType
 from tests.corruption_harness import DEFAULT_TIMEOUT, Hang, Watchdog
 
 # --- discovery ---------------------------------------------------------------------
@@ -128,9 +133,9 @@ READER_TYPES = (
     "HeapNode",
     "PropertyContext",  # P07: NamedPropertyMap is built over one, so it is a reader class
     "Store",  # P08: a Folder is built over an open Store, so it is a reader class
-    "Folder",  # P08: `pypst.debug`'s folder helpers take one, so they need one too
+    "Folder",  # P08: `pypstreader.debug`'s folder helpers take one, so they need one too
     "Message",  # P09: an Attachment is built over an open Message, as a Folder is over a Store
-    "Attachment",  # P09: `pypst.debug`'s attachment helpers take one
+    "Attachment",  # P09: `pypstreader.debug`'s attachment helpers take one
 )
 WIRE_TYPES = ("PropType", "int")
 
@@ -146,9 +151,9 @@ class EntryPoint:
 
 
 def public_modules() -> list[ModuleType]:
-    """Every importable module under `pypst` whose name has no private segment, the package first."""
-    found = [pypst]
-    for info in pkgutil.walk_packages(pypst.__path__, prefix="pypst."):
+    """Every importable module under `pypstreader` whose name has no private segment, the package first."""
+    found = [pypstreader]
+    for info in pkgutil.walk_packages(pypstreader.__path__, prefix="pypstreader."):
         if any(part.startswith("_") for part in info.name.split(".")):
             continue
         found.append(importlib.import_module(info.name))
@@ -200,10 +205,10 @@ def _class_kind(cls: type) -> Kind:
 
 
 def _members(cls: type) -> Iterator[tuple[str, Callable[..., object], bool]]:
-    """(name, callable-as-accessed-on-the-class, is-instance-method) for every public member on the pypst MRO."""
+    """(name, callable-as-accessed-on-the-class, is-instance-method) for every public member on the pypstreader MRO."""
     seen: set[str] = set()
     for klass in cls.__mro__:
-        if not klass.__module__.startswith("pypst"):
+        if not klass.__module__.startswith("pypstreader"):
             continue
         for attr, raw in vars(klass).items():
             if attr in seen or (attr.startswith("_") and attr != "__iter__"):
@@ -224,7 +229,7 @@ def _key(obj: object) -> object:
 
 
 def entry_points() -> list[EntryPoint]:
-    """Every public callable under `pypst`, once each, in module walk order."""
+    """Every public callable under `pypstreader`, once each, in module walk order."""
     found: dict[object, EntryPoint] = {}
 
     def add(ep: EntryPoint) -> None:
@@ -748,7 +753,7 @@ class Store:
         """The store on disk, for the dumpers: written once, into `workdir` (a temp dir if none was given)."""
         if "path" not in self._cache:
             if self._workdir is None:
-                tmp = tempfile.TemporaryDirectory(prefix="pypst-contract-")
+                tmp = tempfile.TemporaryDirectory(prefix="pypstreader-contract-")
                 self._cache["tmpdir"] = tmp
                 self._workdir = Path(tmp.name)
             p = self._workdir / "store.pst"
@@ -1163,7 +1168,7 @@ def _store_ctor_calls(s: Store) -> Iterator[Call]:
 
 
 def _store_open_calls(s: Store) -> Iterator[Call]:
-    """`Store.open` over the store on disk — the entry point `pypst.open` is."""
+    """`Store.open` over the store on disk — the entry point `pypstreader.open` is."""
     yield call(s.path, limits=s.limits, label="default")
     if s.thorough:
         yield call(s.path, limits=s.limits, codepage=BAD_CODEPAGE, label="bad codepage")
@@ -1580,6 +1585,32 @@ def _main_calls(s: Store) -> list[Call]:
     return [call([name, str(s.path)], label=name)]
 
 
+def _cli_calls(s: Store) -> list[Call]:
+    """The `pypstreader` command, in-process, over the store on disk.
+
+    `--list` on every store (the folder walk and the counts, nothing
+    written) and, on the fixture lanes only, the default whole-store mbox
+    into the workdir: the export itself is judged by `export_mbox` and
+    `to_eml` per folder and per message, so the corruption lane pays for the
+    walk and the argument handling rather than for a second copy of the
+    mail. `--quiet` because a summary on stderr is not what is under test
+    here; `main` must return a status and never raise, whatever the store
+    does.
+    """
+    calls = [call([str(s.path), "--list", "--quiet"], label="--list")]
+    if s.thorough:
+        calls.append(call([str(s.path), "--quiet", "-o", str(s.workdir / "cli.mbox")], label="mbox"))
+    return calls
+
+
+def _mbox_record_calls(s: Store) -> Iterator[Call]:
+    """One mbox record per message, with and without the folder header the command stamps on."""
+    for m in _messages(s):
+        yield call(m, label=str(m.node))
+        if s.thorough:
+            yield call(m, headers=[(cli.FOLDER_HEADER, "a/folder\r\nInjected: no")], label=f"{m.node} +folder")
+
+
 EXTRA_ARGS: dict[str, Callable[[Store], list[str]]] = {
     "nid": lambda s: [f"{s.nids[0]:x}", "0x21", "zz", "0"],
     "dest": lambda s: [str(s.workdir / "dump-export")],
@@ -1772,7 +1803,10 @@ ADAPTERS: dict[object, Builder] = {
     eml.export_folder: _export_calls,
     mbox.export_mbox: _export_calls,
     mbox.mbox_name: _folder_paths_calls,
-    # the CLI's dispatch, and every registered dumper, in-process
+    mbox.mbox_record: _mbox_record_calls,
+    # the `pypstreader` command itself (P16), in-process
+    cli.main: _cli_calls,
+    # the debug CLI's dispatch, and every registered dumper, in-process
     debug.main: _main_calls,
     **{dumper: _dumper_calls(dumper) for dumper in debug.DUMPERS.values()},
 }

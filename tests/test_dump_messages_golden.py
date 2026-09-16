@@ -170,7 +170,7 @@ def test_empty_pst_has_no_messages(golden) -> None:
 
 @pytest.mark.parametrize("stem", sorted(ANSI_STORES))
 def test_ansi_fixtures_are_read_by_the_oracle(stem: str, golden, golden_exit) -> None:
-    # Upstream reads ANSI stores; pypst refuses them (ADR-0003). These goldens
+    # Upstream reads ANSI stores; pypstreader refuses them (ADR-0003). These goldens
     # exist for completeness and are not diffed against.
     lines = _lines(golden(_store(stem), EXAMPLE))
     assert golden_exit(_store(stem), EXAMPLE) == 0

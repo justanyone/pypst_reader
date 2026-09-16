@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate src/pypst/_rtf_dictionary.py from the upstream Rust source.
+"""Regenerate src/pypstreader/_rtf_dictionary.py from the upstream Rust source.
 
 [MS-OXRTFCP] 2.1.2.1 pre-loads the LZFu dictionary with a 207-byte ASCII
 string, and every compressed RTF body in every PST refers back into it. A
@@ -28,7 +28,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 UPSTREAM = REPO / "reference" / "outlook-pst-rs" / "crates" / "compressed-rtf" / "src" / "dictionary.rs"
-TARGET = REPO / "src" / "pypst" / "_rtf_dictionary.py"
+TARGET = REPO / "src" / "pypstreader" / "_rtf_dictionary.py"
 
 # [MS-OXRTFCP] 2.1.2.1 "Dictionary", as the specification page prints it,
 # with its own <SP>/<CR>/<LF> placeholders. Transcribed from

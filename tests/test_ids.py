@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from pypst.errors import PstError, PstFormatError
-from pypst.ndb.ids import (
+from pypstreader.errors import PstError, PstFormatError
+from pypstreader.ndb.ids import (
     MAX_BLOCK_INDEX,
     MAX_NODE_INDEX,
     NID_MESSAGE_STORE,

@@ -4,7 +4,7 @@ Offsets are DERIVED by summing the field widths the spec lists, in the order
 it lists them — the arithmetic is the `_offsets()` helper, so a reader can
 check any one offset against the page. Then the real bytes of Empty.pst and
 the public corpus are read at those offsets and the fields the spec marks
-MUST are asserted. No pypst header module is imported: this file must stay
+MUST are asserted. No pypstreader header module is imported: this file must stay
 valid whatever shape P01 takes, because it is what P01 gets checked against.
 """
 
@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from pypst.errors import PstFormatError
-from pypst.ndb.ids import (
+from pypstreader.errors import PstFormatError
+from pypstreader.ndb.ids import (
     BLOCK_ID_FORMAT,
     BLOCK_REF_FORMAT,
     BYTE_INDEX_FORMAT,

@@ -7,7 +7,7 @@ the ceiling, a reference past EOF); and the limits, each shown to trip as
 `PstLimitError` — distinguishable from `PstFormatError` — before any walk
 could hang.
 
-Then the differential claim. `python -m pypst.debug btrees` over every
+Then the differential claim. `python -m pypstreader.debug btrees` over every
 Unicode store in the corpus, parsed by the same parser as the committed
 `read_btrees` golden: the block B-tree section equal as text and as values;
 the node B-tree section equal on everything a page holds (the data-tree
@@ -25,19 +25,19 @@ from typing import Any
 
 import pytest
 
-from pypst import debug
-from pypst.errors import (
+from pypstreader import debug
+from pypstreader.errors import (
     PstError,
     PstFormatError,
     PstLimitError,
     PstNotFoundError,
     PstUnsupportedError,
 )
-from pypst.limits import DEFAULT_LIMITS, MAX_BTREE_DEPTH, Limits
-from pypst.ndb.btree import BlockBTree, NodeBTree, read_density_list, read_page
-from pypst.ndb.header import read_header
-from pypst.ndb.ids import BlockId, ByteIndex, NodeId, PageId, PageRef
-from pypst.ndb.page import (
+from pypstreader.limits import DEFAULT_LIMITS, MAX_BTREE_DEPTH, Limits
+from pypstreader.ndb.btree import BlockBTree, NodeBTree, read_density_list, read_page
+from pypstreader.ndb.header import read_header
+from pypstreader.ndb.ids import BlockId, ByteIndex, NodeId, PageId, PageRef
+from pypstreader.ndb.page import (
     BTreePage,
     DensityListPage,
     IntermediateEntry,
@@ -558,7 +558,7 @@ def test_debug_density_list_matches_golden(store: Path, golden, golden_exit, cap
     code = debug.main(["density_list", str(store)])
     captured = capsys.readouterr()
     if expected is None:
-        # Upstream prints its error on stdout with exit 0; pypst refuses (stderr, exit 1).
+        # Upstream prints its error on stdout with exit 0; pypstreader refuses (stderr, exit 1).
         assert code == 1 and captured.out == "" and captured.err.startswith("Error:"), store.stem
         with store.open("rb") as f, pytest.raises(PstFormatError):
             read_density_list(f)

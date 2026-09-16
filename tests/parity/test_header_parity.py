@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pypst.ndb.header import HEADER_MAGIC, HEADER_MAGIC_CLIENT
+from pypstreader.ndb.header import HEADER_MAGIC, HEADER_MAGIC_CLIENT
 from tests.parity import upstream_test
 
 

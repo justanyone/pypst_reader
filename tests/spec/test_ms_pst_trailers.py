@@ -2,7 +2,7 @@
 
 The strongest vector available: Outlook (and two other writers) laid these
 structures down by the specification, and never saw this code. The walk here
-uses NO pypst parsing above `compute_crc` / `compute_sig` — every offset is
+uses NO pypstreader parsing above `compute_crc` / `compute_sig` — every offset is
 summed from the field widths the spec lists, so a bug in a future B-tree
 module cannot hide a bug in the primitives.
 
@@ -32,8 +32,8 @@ from pathlib import Path
 
 import pytest
 
-from pypst.block_sig import compute_sig
-from pypst.crc import compute_crc
+from pypstreader.block_sig import compute_sig
+from pypstreader.crc import compute_crc
 from tests.conftest import FIXTURES, public_fixture_ids, public_fixture_paths
 
 PTYPE_BBT = 0x80

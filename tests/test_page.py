@@ -16,10 +16,10 @@ import struct
 
 import pytest
 
-from pypst.block_sig import compute_sig
-from pypst.errors import PstError, PstFormatError
-from pypst.ndb.ids import BlockId, BlockRef, ByteIndex, NodeId, PageId, PageRef
-from pypst.ndb.page import (
+from pypstreader.block_sig import compute_sig
+from pypstreader.errors import PstError, PstFormatError
+from pypstreader.ndb.ids import BlockId, BlockRef, ByteIndex, NodeId, PageId, PageRef
+from pypstreader.ndb.page import (
     BTREE_ENTRIES_SIZE,
     DENSITY_LIST_MAX_ENTRIES,
     DENSITY_LIST_OFFSET,

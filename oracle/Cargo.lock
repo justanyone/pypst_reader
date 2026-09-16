@@ -39,7 +39,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pypst-oracle"
+name = "pypstreader-oracle"
 version = "0.1.0"
 dependencies = [
  "outlook-pst",

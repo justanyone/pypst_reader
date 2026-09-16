@@ -1,4 +1,4 @@
-"""`pypst.mbox` — one mbox per folder, and the round trip back through `mailbox`.
+"""`pypstreader.mbox` — one mbox per folder, and the round trip back through `mailbox`.
 
 The export format the row asked for, and the one every mail tool already
 reads. There is no oracle here either (upstream produces no mail at all), so
@@ -24,12 +24,18 @@ from unittest import mock
 
 import pytest
 
-from pypst.eml import POLICY, folder_paths, readable_messages
-from pypst.errors import PstError, PstFormatError
-from pypst.mbox import INDEX_NAME, MAILER_DAEMON, MBOX_POLICY, export_mbox, mbox_name
-from pypst.messaging.folder import Folder
-from pypst.messaging.message import Message
-from pypst.messaging.store import Store
+from pypstreader.eml import POLICY, folder_paths, readable_messages
+from pypstreader.errors import PstError, PstFormatError
+from pypstreader.mbox import (
+    INDEX_NAME,
+    MAILER_DAEMON,
+    MBOX_POLICY,
+    export_mbox,
+    mbox_name,
+)
+from pypstreader.messaging.folder import Folder
+from pypstreader.messaging.message import Message
+from pypstreader.messaging.store import Store
 from tests.test_eml import (
     OPENABLE,
     SENT_SOURCE,
@@ -213,7 +219,7 @@ def test_a_body_line_that_begins_with_from_survives_the_round_trip(tmp_path: Pat
     # What the stdlib implements is mboxo, not mboxrd: a line that was
     # ALREADY quoted is left alone, so `>From ` on the way in and `>From `
     # on the way out are indistinguishable. That ambiguity is the format's,
-    # it is recorded in `pypst.mbox`'s docstring, and it is pinned here so
+    # it is recorded in `pypstreader.mbox`'s docstring, and it is pinned here so
     # that a stdlib change is noticed rather than discovered downstream.
     assert got.splitlines() == [
         "Tuesday at ten works.",

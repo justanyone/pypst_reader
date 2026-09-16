@@ -12,7 +12,7 @@ and a directory raise `FileNotFoundError` and `IsADirectoryError`, which is
 the one thing in this package that is not a `PstError` and is tested as
 such.
 
-Then the differential claim: `python -m pypst.debug store <fixture>` is
+Then the differential claim: `python -m pypstreader.debug store <fixture>` is
 compared with `read_store_props`'s golden line for line, byte for byte, on
 every Unicode corpus store, and the same goldens are compared again as
 values through `tests/golden_parsers.parse_read_store_props` so that a
@@ -41,18 +41,18 @@ from pathlib import Path
 
 import pytest
 
-import pypst
-from pypst import debug
-from pypst.errors import (
+import pypstreader
+from pypstreader import debug
+from pypstreader.errors import (
     PstError,
     PstFormatError,
     PstLimitError,
     PstNotFoundError,
     PstUnsupportedError,
 )
-from pypst.limits import DEFAULT_LIMITS, Limits
-from pypst.ltp.prop_context import PropertyContext
-from pypst.messaging.store import (
+from pypstreader.limits import DEFAULT_LIMITS, Limits
+from pypstreader.ltp.prop_context import PropertyContext
+from pypstreader.messaging.store import (
     ENTRY_ID_SIZE,
     PID_TAG_DISPLAY_NAME,
     PID_TAG_FINDER_ENTRY_ID,
@@ -64,7 +64,7 @@ from pypst.messaging.store import (
     Store,
     open_store,
 )
-from pypst.ndb.ids import NodeId, NodeIdType
+from pypstreader.ndb.ids import NodeId, NodeIdType
 from tests import corrupt
 from tests.conftest import FIXTURES, REPO, public_fixture_paths
 from tests.golden_parsers import parse_read_store_props
@@ -174,7 +174,7 @@ def test_ansi_store_is_refused_at_open(store: Path) -> None:
     with pytest.raises(PstUnsupportedError):
         Store.open(store)
     with pytest.raises(PstUnsupportedError):
-        pypst.open(store)
+        pypstreader.open(store)
 
 
 def test_empty_file_is_a_format_error(tmp_path: Path) -> None:
@@ -206,14 +206,14 @@ def test_a_path_that_is_not_a_file_raises_oserror(tmp_path: Path) -> None:
     A caller handling paths catches `OSError` by name and expects
     `FileNotFoundError` to survive. Everything about the BYTES of a file
     that did open is a `PstError` — see the module docstring of
-    `pypst.messaging.store`.
+    `pypstreader.messaging.store`.
     """
     with pytest.raises(FileNotFoundError):
         Store.open(tmp_path / "no-such-file.pst")
     with pytest.raises(IsADirectoryError):
         Store.open(tmp_path)
     with pytest.raises(FileNotFoundError):
-        pypst.open(tmp_path / "no-such-file.pst")
+        pypstreader.open(tmp_path / "no-such-file.pst")
 
 
 def rename_node(data: bytes, nid: int, new_nid: int) -> bytes:
@@ -464,12 +464,12 @@ def test_the_store_exposes_the_layers_underneath(store: Path) -> None:
         assert opened.get(0xFFFF) is None
 
 
-def test_open_store_and_pypst_open_are_the_same_reader() -> None:
-    """`pypst.open` is the module-level function, not a second implementation."""
-    assert pypst.open is open_store
-    assert pypst.Store is Store
-    assert pypst.EntryId is EntryId
-    with pypst.open(FIXTURES / "Empty.pst") as store:
+def test_open_store_and_pypstreader_open_are_the_same_reader() -> None:
+    """`pypstreader.open` is the module-level function, not a second implementation."""
+    assert pypstreader.open is open_store
+    assert pypstreader.Store is Store
+    assert pypstreader.EntryId is EntryId
+    with pypstreader.open(FIXTURES / "Empty.pst") as store:
         assert store.display_name == "Empty"
 
 

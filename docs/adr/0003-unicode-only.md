@@ -24,12 +24,12 @@ pstsdk `test_ansi.pst` and `sample2.pst`).
 
 ## Decision
 
-**`pypst` reads Unicode stores only.** A header with `wVer` 14 or 15 raises
+**`pypstreader` reads Unicode stores only.** A header with `wVer` 14 or 15 raises
 `PstUnsupportedError` naming the version and pointing at the sibling library.
 It is never parsed further, never guessed at, and never silently read with
 the wrong field widths.
 
-**ANSI support, if wanted, is a separate package — `pypst_reader_nu`** ("nu",
+**ANSI support, if wanted, is a separate package — `pypstreader_nu`** ("nu",
 non-Unicode) — ported from the ANSI arms of the same upstream, against the two
 ANSI corpus stores as its oracle fixtures. It is recorded as backlog row
 **P27-NU** and is not started until this reader reads Unicode stores end to
@@ -55,7 +55,7 @@ refusal path here, and to be the fixtures there.
   warned about. That is why it is a sibling, not a flag: the sibling can copy
   freely from here and swap the format table, and neither package pays for
   the other's axis.
-- Interface consequence: nothing in `pypst`'s public API mentions a variant.
+- Interface consequence: nothing in `pypstreader`'s public API mentions a variant.
   `open(path)` either returns a Unicode store or raises.
 
 ## Rejected

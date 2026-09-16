@@ -19,7 +19,7 @@ the schema whose existence bit is CLEAR is absent from the row, not `None`:
 bytes still in the row are never decoded, and that the examples print
 `Value: None` for it.
 
-Then the differential claim. `python -m pypst.debug tc <store> <nid>` is
+Then the differential claim. `python -m pypstreader.debug tc <store> <nid>` is
 compared to `read_root_folder`'s and `read_ipm_subtree`'s goldens line for
 line, byte for byte, on every Unicode corpus store — sixteen tables over
 eight stores, including the two where the ORACLE ITSELF exits 1
@@ -48,17 +48,17 @@ from pathlib import Path
 
 import pytest
 
-from pypst import debug
-from pypst.errors import (
+from pypstreader import debug
+from pypstreader.errors import (
     PstFormatError,
     PstLimitError,
     PstNotFoundError,
     PstUnsupportedError,
 )
-from pypst.limits import DEFAULT_LIMITS, Limits
-from pypst.ltp.heap import HeapId, HeapNode, HeapNodeId, HeapNodeType
-from pypst.ltp.prop_type import PropType
-from pypst.ltp.table_context import (
+from pypstreader.limits import DEFAULT_LIMITS, Limits
+from pypstreader.ltp.heap import HeapId, HeapNode, HeapNodeId, HeapNodeType
+from pypstreader.ltp.prop_type import PropType
+from pypstreader.ltp.table_context import (
     LTP_ROW_ID_PROP_ID,
     LTP_ROW_VERSION_PROP_ID,
     ROW_INDEX_ENTRY_SIZE,
@@ -73,10 +73,10 @@ from pypst.ltp.table_context import (
     check_existence_bitmap,
     existence_bitmap_size,
 )
-from pypst.ndb.block import BlockReader, SubNodeLeafEntry
-from pypst.ndb.btree import BlockBTree, NodeBTree
-from pypst.ndb.header import read_header
-from pypst.ndb.ids import BlockId, NodeId, NodeIdType
+from pypstreader.ndb.block import BlockReader, SubNodeLeafEntry
+from pypstreader.ndb.btree import BlockBTree, NodeBTree
+from pypstreader.ndb.header import read_header
+from pypstreader.ndb.ids import BlockId, NodeId, NodeIdType
 from tests import corrupt
 from tests.conftest import FIXTURES, REFERENCE, public_fixture_paths
 from tests.golden_parsers import (
@@ -891,7 +891,7 @@ def _record_kind(record: dict[str, object]) -> CellKind:
 def _golden_value(prop_type: PropType, parsed: object) -> object:
     """A `parse_value` payload in this port's decoded form (upstream prints a Time as its FILETIME ticks)."""
     if prop_type is PropType.SYSTIME:
-        from pypst.ltp.prop_type import filetime_to_datetime
+        from pypstreader.ltp.prop_type import filetime_to_datetime
 
         assert isinstance(parsed, int)
         return filetime_to_datetime(parsed)
@@ -1025,7 +1025,7 @@ def test_private_store_table_structure_matches_the_live_oracle(private_stores: l
             continue
         expected = parse_read_ipm_subtree(result.stdout)
         text = subprocess.run(
-            [sys.executable, "-m", "pypst.debug", "pc", str(store), "21"],
+            [sys.executable, "-m", "pypstreader.debug", "pc", str(store), "21"],
             capture_output=True,
             text=True,
             timeout=300,

@@ -6,7 +6,7 @@ microsoft/outlook-pst-rs, MIT, at a named revision. That claim is only
 checkable if each module records which upstream file it came from. This lint
 is what keeps the claim true as the tree grows.
 
-A module in `src/pypst/` must carry, inside its opening docstring:
+A module in `src/pypstreader/` must carry, inside its opening docstring:
 
     Ported from: <upstream path>          (or the literal: not a port)
     Upstream:    microsoft/outlook-pst-rs @ <40-char sha>
@@ -25,7 +25,7 @@ import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-PACKAGE = REPO / "src" / "pypst"
+PACKAGE = REPO / "src" / "pypstreader"
 PIN_FILE = REPO / "docs" / "UPSTREAM.txt"
 
 PORTED_FROM = re.compile(r"^Ported from:\s*(\S.*)$", re.MULTILINE)

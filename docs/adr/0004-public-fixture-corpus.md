@@ -57,7 +57,7 @@ safe. `Empty.pst` keeps its original place and its md5 check unchanged.
 requires that redistribution carry the licence text and attribution; MIT
 requires the attribution already. The text lives at
 `tests/fixtures/public/LICENSES/Apache-2.0.txt` and NOTICE names each source.
-This does not change the licence of `pypst` — test data is not the package —
+This does not change the licence of `pypstreader` — test data is not the package —
 and no Apache-2.0 file is included in the wheel.
 
 **4. Tests may print corpus content.** The content-silence rule exists to
@@ -77,7 +77,7 @@ present and fail on drift.
   rewritten.
 - The corpus includes two ANSI stores that this package will refuse
   (ADR-0003). They are there to test the refusal and to seed
-  `pypst_reader_nu`.
+  `pypstreader_nu`.
 - Adding a fixture is a documented five-step procedure in the corpus README
   and cannot be done by `git add -f` alone.
 - The wheel excludes `tests/`; nothing here ships to PyPI.

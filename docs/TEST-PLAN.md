@@ -44,7 +44,7 @@ For every fixture in `tests/fixtures/public/` (plus `Empty.pst`) and every
 non-interactive upstream example, the oracle's exact output is committed under
 `tests/golden/<fixture>/<example>.txt` (row P17, `scripts/capture_oracle.py`).
 
-Each ported layer ships a `pypst.debug <layer>` dumper whose output is
+Each ported layer ships a `pypstreader.debug <layer>` dumper whose output is
 *parsed*, as the golden is parsed, into values — and the values are compared.
 Not strings: upstream's `Debug` formatting is theirs to change. A parser per
 example lives in `tests/golden_parsers.py`, written once, used by every layer.
@@ -100,7 +100,7 @@ and `tests/test_contract.py` runs them over every fixture (default limits;
 every ceiling at 1, which must trip only `PstLimitError`/`PstFormatError`;
 every ceiling at `sys.maxsize`, which must reproduce the default outcomes
 reader for reader) and over P12's mutation corpus (one seed, one base in the
-suite; three seeds over every Unicode base, and the `python -m pypst.debug`
+suite; three seeds over every Unicode base, and the `python -m pypstreader.debug`
 process boundary, under `slow`). **How a new layer joins:** it does not
 opt in — its public callables are discovered the moment the module exists,
 and `test_every_public_callable_has_an_adapter_or_a_reason` fails, naming
@@ -111,7 +111,7 @@ node, the BTH over that heap and the property or table context over it,
 a nid…) or a
 `NOT_STORE_INPUT` entry with the reason it takes no store-derived input.
 Exception types, enums and dataclass constructors are excluded by rule;
-a dumper registered in `pypst.debug.DUMPERS` is adapted automatically
+a dumper registered in `pypstreader.debug.DUMPERS` is adapted automatically
 (an extra positional parameter must be named in `EXTRA_ARGS`). A leak the
 harness finds is pinned `xfail(strict=True, reason="<module>: <exception>
 on <mutation>")` by the row that finds it and fixed by the row that owns
@@ -180,7 +180,7 @@ with its tests forgotten. Row P26.
 
 ### T11 — the export round trip, where there is no oracle at all
 
-P10 (`pypst.eml`, `pypst.mbox`) is the one layer with **nothing upstream to
+P10 (`pypstreader.eml`, `pypstreader.mbox`) is the one layer with **nothing upstream to
 diff against**: outlook-pst-rs produces no mail, only text dumps, so T2's
 method does not apply and no golden can. Three substitutes, all in
 `tests/test_eml.py` and `tests/test_mbox.py`:
@@ -202,6 +202,35 @@ method does not apply and no golden can. Three substitutes, all in
   `PidTagAttachMimeTag` with a CRLF in it, a filename of `../../etc/passwd`,
   a folder whose display name is `../..`. Those cases have no corpus witness
   and are built in the test file rather than left untested.
+
+### T12 — the command, as a process
+
+P16's `pypstreader` command (`src/pypstreader/pypstreader.py`) is the only
+entry point a person types, and the only one whose contract is an **exit
+status** rather than an exception. So `tests/test_cli.py` reaches it the way
+a person does — through `subprocess`, as `python -m pypstreader.pypstreader`
+and as the installed console script — and compares the status and the two
+streams, never a return value. What it pins:
+
+- **The counts are the library's counts.** The records in the mbox equal
+  T11's `OPENABLE` table, which is the oracle's `dump_messages` golden, and
+  the stderr summary's `written + skipped` equals what `--list` says the
+  store names. The command may not invent or lose a message.
+- **Skipping is counted and `--strict` refuses.** `javalibpst-dist-list.pst`
+  (a message node with no sub-node tree) and `synth-basics.pst` (a contents
+  table that will not parse) are the two witnesses, each tested both ways.
+- **Every refusal is one line and a status.** An ANSI store, a missing file,
+  a directory, an empty file, an unknown option, a non-positive ceiling, an
+  unknown code page, a `--folder` that names nothing — each asserted for its
+  status (1 or 2) and for the absence of `Traceback` on stderr.
+- **T4's sweep, through the command.** Every mutation of a corpus store goes
+  through `main()` in-process and must return 0 or 1; the same entry point
+  lives in `tests/corruption_harness.py` as `cli.main`, so the standing
+  corruption lane covers it too.
+- **The version, in the three places that must agree** — `__version__`, the
+  distribution's `pyproject.toml`, and the alias's `pypstreader==` pin.
+
+Private stores get a status and a record count and nothing else.
 
 ### The discipline that makes any of this mean something
 

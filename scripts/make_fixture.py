@@ -23,7 +23,7 @@ scripts/get_fixture_tools.sh into reference/EMLtoPST (gitignored, never
 vendored) at the revision in docs/FIXTURE-TOOLS.txt, with
 scripts/patches/emltopst-oracle-conformance.patch applied — unpatched, the
 upstream Rust oracle refuses its output. It must never be imported by
-src/pypst, listed as a dependency, or needed to run the test suite: a fresh
+src/pypstreader, listed as a dependency, or needed to run the test suite: a fresh
 clone without it still runs green (the tests that need it skip).
 
 The generated store is the store layout the oracle expects of Outlook:
@@ -66,6 +66,11 @@ EXIT_TOOL_MISSING = 3
 def record_key_for(name: str) -> bytes:
     """The store's 16-byte PR_RECORD_KEY: derived, so two runs agree and two
     fixtures differ. tests/test_synthetic_content.py checks the golden shows it."""
+    # NOT renamed with the package (P16). This literal is hashed into the
+    # committed store's bytes and into every golden captured over it, so
+    # changing it would mean `synth-basics.pst` no longer regenerates from
+    # its sources — the one property `--check` exists to prove. It is a
+    # seed, not a name the world sees.
     return hashlib.sha256(f"pypst synthetic fixture: {name}".encode()).digest()[:16]
 
 

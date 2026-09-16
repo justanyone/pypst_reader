@@ -20,7 +20,7 @@ tests/test_header.py and tests/test_btree.py and are not repeated; the
 families here reach the same refusals systematically and pin the exact
 type through `Mutation.expect`.
 
-The `test_p03_*` stubs skip until `pypst.ndb.block` import; when they do,
+The `test_p03_*` stubs skip until `pypstreader.ndb.block` import; when they do,
 the skip inside each names the mutation to build (the `P03 landed?` note in
 tests/corrupt.py lists the builders that row adds). The `test_p04_*` cases
 are live: P04 added the heap builders and the `heap_lies` family, P05 the
@@ -37,10 +37,10 @@ from pathlib import Path
 
 import pytest
 
-from pypst.errors import PstFormatError, PstLimitError
-from pypst.limits import DEFAULT_LIMITS
-from pypst.ndb.btree import BlockBTree, NodeBTree
-from pypst.ndb.header import Header, read_header
+from pypstreader.errors import PstFormatError, PstLimitError
+from pypstreader.limits import DEFAULT_LIMITS
+from pypstreader.ndb.btree import BlockBTree, NodeBTree
+from pypstreader.ndb.header import Header, read_header
 from tests import corrupt
 from tests.conftest import FIXTURES, PUBLIC, REPO
 from tests.corruption_harness import BaseShape, Verdict, Watchdog, exercise, judge
@@ -180,7 +180,7 @@ def test_fuzz_sweep_script_three_seeds() -> None:
 
 
 def _p03() -> None:
-    pytest.importorskip("pypst.ndb.block")
+    pytest.importorskip("pypstreader.ndb.block")
 
 
 def test_p03_leaf_entry_data_block_past_eof() -> None:
@@ -210,8 +210,8 @@ def test_p03_subnode_tree_cycle() -> None:
 
 def test_p04_bth_cycle() -> None:
     """A BTH with one index level whose only record names the root page itself: iteration is a cycle, not a hang."""
-    from pypst.ltp.heap import HeapNode
-    from pypst.ltp.tree import HeapTree
+    from pypstreader.ltp.heap import HeapNode
+    from pypstreader.ltp.tree import HeapTree
 
     root = corrupt.hid(2)
     heap = HeapNode([corrupt.heap_node([corrupt.bth_header(2, 6, levels=1, root=root), corrupt.bth_index([(b"\x01\x00", root)])])])
@@ -226,7 +226,7 @@ def test_p04_bth_cycle() -> None:
 
 def test_p04_heap_index_past_the_block() -> None:
     """An HID whose item index exceeds the block's cAlloc, and one whose block index exceeds the block count."""
-    from pypst.ltp.heap import HeapId, HeapNode
+    from pypstreader.ltp.heap import HeapId, HeapNode
 
     heap = HeapNode([corrupt.heap_node([b"first", b"second"])])
     assert bytes(heap.get(HeapId(corrupt.hid(2)))) == b"second"
