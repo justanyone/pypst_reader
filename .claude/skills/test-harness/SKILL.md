@@ -146,7 +146,9 @@ flip can make a cycle as easily as a bad field — and `must_raise` only where
 a refusal is certain. Build the bytes with the existing builders
 (`btree_page`, `btree_chain`, `append_pages`, `replace_page`, the `Field`
 writers) rather than hand-typed offsets. When a layer lands, add its entry
-points to `exercise()` in the harness in the same row.
+points to `exercise()` in the harness in the same row — and give each new
+public callable an adapter (or a reason) in `tests/contract.py`, the
+discovered-entry-point contract (T5), which fails naming any it does not know.
 
 Stubs waiting for their layer, each `pytest.importorskip`-guarded in
 `test_corruption.py`: P03 (`pypst.ndb.block`) — a leaf BBTENTRY `cb`

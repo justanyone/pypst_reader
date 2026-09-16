@@ -816,10 +816,30 @@ the golden is missing. `tests/test_golden_drift.py` (`oracle`, `slow`) runs
 
 ## `pypst` — the top level
 
+Today (P24), sorted and deliberately small — the exception family, the
+limits, and the one reader that exists:
+
 ```python
-from pypst import open, Store, Folder, Message, Attachment, PstError, PstFormatError, PstLimitError, PstUnsupportedError, Limits
-__all__ = [...]                      # the P24 contract harness iterates this
+from pypst import (
+    DEFAULT_LIMITS, Header, Limits,
+    PstError, PstFormatError, PstLimitError, PstNotFoundError, PstUnsupportedError,
+    __version__, read_header,
+)
+__all__ == sorted(__all__)           # tests/test_contract.py asserts it, and that every name resolves
 ```
+
+The promise, when P07–P09 land (added to `__all__` by the row that lands
+each; never stubbed early):
+
+```python
+from pypst import open, Store, Folder, Message, Attachment
+```
+
+`__all__` is the enumerable contract, but not the whole of it: the T5
+harness (`tests/contract.py`) discovers **every** public callable under the
+package — each module's `__all__`, else its public top-level callables, plus
+every public classmethod and method — and a new one must be given an adapter
+or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
 
 ---
 
@@ -850,6 +870,10 @@ __all__ = [...]                      # the P24 contract harness iterates this
   Unicode value, a non-boolean boolean, and a zero HNID that must NOT
   raise), and the corruption harness a `pc.store_pc` entry point.
 
+- 2026-09-16 — P24: `pypst.__all__` defined (the list above); `Header`
+  and `read_header` exported at the top level. The T5 contract harness
+  discovers every public callable rather than reading this file, so a
+  surface change here is also an adapter change in `tests/contract.py`.
 - 2026-09-15 — drafted from upstream's public surface (P30). Nothing above
   `errors`/`encode`/`crc` exists yet; every other section is a promise.
 - 2026-09-15 — P29: `pypst.debug` built (empty `DUMPERS` registry, `--list`, exit codes); golden parser output shapes and the optional-prefix rule recorded above.

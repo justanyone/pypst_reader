@@ -93,6 +93,28 @@ whatever comes out is either a result or a `PstError` subclass. `struct.error`,
 escaping is a failure regardless of which layer leaked it. This is the test
 that catches the bug nobody wrote a specific test for.
 
+Built (P24): `tests/contract.py` **discovers** the entry points — `pkgutil`
+over the package, each module's `__all__` (else its public top-level
+callables), every public classmethod and method along the class's MRO —
+and `tests/test_contract.py` runs them over every fixture (default limits;
+every ceiling at 1, which must trip only `PstLimitError`/`PstFormatError`;
+every ceiling at `sys.maxsize`, which must reproduce the default outcomes
+reader for reader) and over P12's mutation corpus (one seed, one base in the
+suite; three seeds over every Unicode base, and the `python -m pypst.debug`
+process boundary, under `slow`). **How a new layer joins:** it does not
+opt in — its public callables are discovered the moment the module exists,
+and `test_every_public_callable_has_an_adapter_or_a_reason` fails, naming
+each one, until the row that lands it adds either an `ADAPTERS` entry (a
+builder that, given a `Store`, yields the argument tuples: the bytes, the
+file, the parsed header/B-tree/reader, the NBT entries, a nid…) or a
+`NOT_STORE_INPUT` entry with the reason it takes no store-derived input.
+Exception types, enums and dataclass constructors are excluded by rule;
+a dumper registered in `pypst.debug.DUMPERS` is adapted automatically
+(an extra positional parameter must be named in `EXTRA_ARGS`). A leak the
+harness finds is pinned `xfail(strict=True, reason="<module>: <exception>
+on <mutation>")` by the row that finds it and fixed by the row that owns
+the module.
+
 ### T6 — limits
 
 For each ceiling in `limits.py` (row P11): a test that a structure one under
