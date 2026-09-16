@@ -120,6 +120,42 @@ fails the moment the twin appears with the line still present, so the row
 that writes the twin deletes the line in the same commit. The lint skips
 when `reference/` is absent (CI's lint job) and bites in the nightly job.
 
+## Corruption suite
+
+`tests/corrupt.py` is the only source of corrupt input: no bad binary is
+ever committed. `mutations(store_bytes, seed=…)` yields a `Mutation` —
+`name` (`family:detail`, unique), `data`, `expect` (the `PstError` kind any
+refusal must be, or `None` for "any"), `must_raise` (at least one entry
+point must refuse it) — from every family in `FAMILIES`, each family drawing
+from its own seeded `random.Random` so that adding a mutation to one never
+moves another. `tests/corruption_harness.py` runs the landed entry points
+over a mutation under a thread watchdog and classifies the result as clean,
+`LEAK` (a non-`PstError` escaped), `TYPE` (the wrong `PstError`), `SILENT`
+(`must_raise` and nothing refused) or `HANG`; `tests/test_corruption.py`
+sweeps one seed over `pstd-inline-cid.pst` and `Empty.pst`, and
+`scripts/fuzz_sweep.py --seeds N` is the slow path over every Unicode
+fixture. Reproduce a finding with `corrupt.mutation(base, seed=S, name=N)`.
+
+To add a family: write `def my_family(base: bytes, rng: random.Random) ->
+Iterator[Mutation]` in `corrupt.py` yielding names prefixed `my_family:`,
+append it to `FAMILIES`, add its name to `EXPECTED_FAMILIES` in
+`test_corruption.py` and its counts to `PINNED` in
+`test_corrupt_generator.py` (both are deliberate pins: a family that
+vanishes must be red). Set `expect` only as tight as is honest — a resealed
+flip can make a cycle as easily as a bad field — and `must_raise` only where
+a refusal is certain. Build the bytes with the existing builders
+(`btree_page`, `btree_chain`, `append_pages`, `replace_page`, the `Field`
+writers) rather than hand-typed offsets. When a layer lands, add its entry
+points to `exercise()` in the harness in the same row.
+
+Stubs waiting for their layer, each `pytest.importorskip`-guarded in
+`test_corruption.py`: P03 (`pypst.ndb.block`) — a leaf BBTENTRY `cb`
+larger than the file, a leaf data block past EOF, an XXBLOCK chain 10 000
+deep, an XBLOCK `lcbTotal` of 4 GB, a subnode tree cycle; P04
+(`pypst.ltp.heap`) — a BTH cycle, an HID past the block. The
+`P03 landed? add:` note in `corrupt.py` names the family (`block_lies`,
+`heap_lies`) and the builders each row is expected to add.
+
 ## What "done" means for a test
 
 Not that it passes. That it would **fail** if the code were wrong. When you
