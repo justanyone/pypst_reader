@@ -1830,6 +1830,283 @@ def folder_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
             yield row_lie(name, set_u32(tc_data, matrix, nid), expect)
 
 
+# --- message_lies, attachment_lies: the message layer's own structures (P09) --------
+#
+# Two shapes of lie, because two shapes of base. Every store has nodes whose
+# NID can be RETYPED into a message's or an attachment's without disturbing
+# the node B-tree's order, which makes a node that claims to be something it
+# is not — the lie `Store.open_message` and `Attachment` exist to refuse.
+# A store that actually holds a message gets the richer lies as well: its
+# message class, its subject's prefix byte, its delivery time, its
+# attachment table's row ids and its attachment's own method and data
+# properties. `Empty.pst` and `pstd-inline-cid.pst`, the two pinned bases,
+# hold no message at all, so only the retyping lies are generated there.
+
+PID_TAG_MESSAGE_CLASS = 0x001A
+PID_TAG_SUBJECT = 0x0037
+PID_TAG_MESSAGE_DELIVERY_TIME = 0x0E06
+PID_TAG_RTF_COMPRESSED = 0x1009
+PID_TAG_ATTACH_SIZE = 0x0E20
+PID_TAG_ATTACH_DATA = 0x3701
+PID_TAG_ATTACH_METHOD = 0x3705
+
+# The 5-bit NID types of [MS-PST] 2.2.2.1 this layer cares about.
+NID_TYPE_NORMAL_MESSAGE = 0x04
+NID_TYPE_ATTACHMENT = 0x05
+NID_TYPE_ASSOC_MESSAGE = 0x08
+
+NBT_ENTRY_SIZE = NBTENTRY_SIZE
+
+
+def retype_nbt_entry(base: bytes, nid: int, new_nid: int) -> bytes | None:
+    """`base` with the node B-tree's leaf entry for `nid` renamed `new_nid`, or None when that would unsort the tree.
+
+    The NBT is keyed by the NID itself, so a rename is only a rename while
+    the key stays between its neighbours *and* the page's first key does not
+    move (an intermediate page carries the first key of each child, and this
+    edits one leaf page). Both bases keep 0x61 second in its page, between
+    0x21 and 0x122, so every retyping this module asks for is legal there.
+    The page's CRC is recomputed; nothing else changes.
+    """
+    (_, nbt_root), _ = root_refs(base)
+    for offset in tree_pages(base, nbt_root):
+        count, _max, entry_size, level, _padding = _btree_header(base, offset)
+        if level != 0 or entry_size < NBT_ENTRY_SIZE:
+            continue
+        keys = [struct.unpack_from("<Q", base, offset + i * entry_size)[0] for i in range(count)]
+        if nid not in keys:
+            continue
+        index = keys.index(nid)
+        if index == 0:  # renaming the page's first key would strand the parent's btkey
+            return None
+        if not keys[index - 1] < new_nid < (keys[index + 1] if index + 1 < count else 1 << 63):
+            return None
+        edited = bytearray(base)
+        struct.pack_into("<Q", edited, offset + index * entry_size, new_nid)
+        return reseal_page(bytes(edited), offset)
+    return None
+
+
+def _messages_of(base: bytes) -> list[int]:
+    """Every message NID this port can open in `base`, in walk order; empty when the store will not open."""
+    from pypst.errors import PstError
+    from pypst.messaging.store import Store
+
+    out: list[int] = []
+    try:
+        with Store(io.BytesIO(base)) as store:
+            for folder in store.root_folder.walk():
+                try:
+                    ids = folder.message_ids()
+                except PstError:
+                    continue
+                for nid in ids:
+                    try:
+                        store.open_message(nid)
+                    except PstError:
+                        continue
+                    out.append(nid.raw)
+    except PstError:
+        return []
+    return out
+
+
+def subnode_data_block(base: bytes, nid: int, sub_nid: int) -> _DataBlockSite:
+    """`node_data_block` for a SUB-node: where one entry of `nid`'s sub-node tree lives, and its decoded bytes."""
+    from pypst.encode import decode_block
+    from pypst.ndb.block import BlockReader
+    from pypst.ndb.btree import BlockBTree, NodeBTree
+    from pypst.ndb.header import read_header
+    from pypst.ndb.ids import NodeId
+
+    f = io.BytesIO(base)
+    header = read_header(f)
+    bbt = BlockBTree(f, header.root.block_btree)
+    entry = NodeBTree(f, header.root.node_btree).find(NodeId(nid))
+    if entry.sub_node is None:
+        raise ValueError(f"node 0x{nid:X} has no sub-node tree")
+    reader = BlockReader(f, header, bbt)
+    sub = reader.read_subnode_tree(entry.sub_node)[NodeId(sub_nid)]
+    block = bbt.find(sub.data)
+    if block.block.block.is_internal:
+        raise ValueError(f"sub-node 0x{sub_nid:X} is not a single data block; the lie families need one")
+    offset, size = block.block.index.value, block.size
+    key = block.block.block.search_key & 0xFFFFFFFF
+    raw = base[offset : offset + size]
+    return _DataBlockSite(offset, size, key, int(header.crypt_method), decode_block(raw, header.crypt_method, key))
+
+
+def _sub_node_of(base: bytes, nid: int, node_type: int) -> int | None:
+    """The NID of the single sub-node of `nid` whose 5-bit type is `node_type`, or None."""
+    from pypst.errors import PstError
+    from pypst.ndb.block import BlockReader
+    from pypst.ndb.btree import BlockBTree, NodeBTree
+    from pypst.ndb.header import read_header
+    from pypst.ndb.ids import NodeId
+
+    try:
+        f = io.BytesIO(base)
+        header = read_header(f)
+        bbt = BlockBTree(f, header.root.block_btree)
+        entry = NodeBTree(f, header.root.node_btree).find(NodeId(nid))
+        if entry.sub_node is None:
+            return None
+        found = [n.raw for n in BlockReader(f, header, bbt).read_subnode_tree(entry.sub_node) if n.raw & 0x1F == node_type]
+    except PstError:
+        return None
+    return found[0] if len(found) == 1 else None
+
+
+def _free_prop_id(records: Sequence[tuple[int, int, int, int]], prop_id: int) -> int | None:
+    held = {r[1] for r in records}
+    return next((i for i in range(prop_id + 1, 0x10000) if i not in held), None)
+
+
+def message_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
+    """A node that claims to be a message, and — where the base has one — a real message's own properties."""
+    # Every store: 0x61 (the name-to-id map) renamed into the two NID types
+    # `Store.open_message` accepts. The node B-tree still finds it, its data
+    # is still a property context, and it is still not a message: no message
+    # class, and (in both pinned bases) no sub-node tree, which upstream
+    # refuses with `MessageSubNodeTreeNotFound`. The named-property map is
+    # gone with it, so a refusal somewhere is certain.
+    for name, node_type in (("normal_message", NID_TYPE_NORMAL_MESSAGE), ("assoc_message", NID_TYPE_ASSOC_MESSAGE)):
+        edited = retype_nbt_entry(base, NID_NAME_TO_ID_MAP, (NID_NAME_TO_ID_MAP >> 5 << 5) | node_type)
+        if edited is not None:
+            yield Mutation(f"message_lies:name_to_id_map_retyped_{name}", edited, None)
+
+    messages = _messages_of(base)
+    if not messages:
+        return
+
+    def sites() -> Iterator[tuple[_DataBlockSite, bytes, dict[str, Any], list[tuple[int, int, int, int]]]]:
+        """Each message's PC block, its heap shape and its records — the ones that are a single block."""
+        for nid in messages:
+            try:
+                site = node_data_block(base, nid)
+            except (ValueError, KeyError):  # a multi-block PC: the lie families need one block
+                continue
+            data = site.data
+            shape = _heap_shape(data)
+            yield site, data, shape, _pc_records(data, shape)
+
+    def lie(name: str, site: _DataBlockSite, edited: bytes) -> Mutation:
+        # `must_raise` is False for the same reason `folder_lies` leaves it
+        # False: the harness reads named accessors under `suppress(PstError)`,
+        # because an absent or wrongly typed one is a fact about the file.
+        return Mutation(f"message_lies:{name}", rewrite_data_block(base, site, edited), None, must_raise=False)
+
+    emitted: set[str] = set()
+    for site, data, shape, records in sites():
+        # The message class, absent and retyped: upstream's
+        # `MessageClassNotFound` and `InvalidMessageClass`.
+        record = _record_by_id(records, PID_TAG_MESSAGE_CLASS)
+        if record is not None and "class" not in emitted:
+            emitted.add("class")
+            free = _free_prop_id(records, PID_TAG_MESSAGE_CLASS)
+            if free is not None:
+                yield lie("0x001A_absent_message_class", site, set_u16(data, record[0], free))
+            yield lie("0x001A_type_message_class", site, set_u16(data, record[0] + 2, 0x0003))
+
+        # The subject's control prefix ([MS-OXCMSG] 2.2.1.46) claiming a
+        # prefix longer than the subject: `Message.subject` must refuse
+        # rather than slice past the end.
+        record = _record_by_id(records, PID_TAG_SUBJECT)
+        if record is not None and "subject" not in emitted:
+            item = _heap_item(shape, record[3])
+            if item is not None and item[1] >= 4:
+                emitted.add("subject")
+                yield lie("0x0037_subject_prefix_past_the_string", site, set_bytes(data, item[0], b"\x01\x00\xff\x00"))
+
+        # The delivery time retyped: a PtypTime accessor handed something
+        # that is not one.
+        record = _record_by_id(records, PID_TAG_MESSAGE_DELIVERY_TIME)
+        if record is not None and "time" not in emitted:
+            emitted.add("time")
+            yield lie("0x0E06_type_delivery_time", site, set_u16(data, record[0] + 2, 0x0003))
+
+        # The compressed-RTF body retyped to a 4-byte scalar: `body_rtf` must
+        # refuse an integer rather than hand `pypst.rtf` something that is
+        # not bytes. Only some messages have an RTF body at all, which is why
+        # every message's PC is looked at rather than only the first.
+        record = _record_by_id(records, PID_TAG_RTF_COMPRESSED)
+        if record is not None and "rtf" not in emitted:
+            emitted.add("rtf")
+            yield lie("0x1009_type_body_rtf", site, set_u16(data, record[0] + 2, 0x0003))
+
+
+def attachment_lies(base: bytes, rng: random.Random) -> Iterator[Mutation]:
+    """A node that claims to be an attachment, and — where the base has one — a real attachment's own properties."""
+    # Every store: 0x61 renamed into an Attachment NID. `Store.open_message`
+    # accepts that type (upstream's `MessageInner::read` does), so the lie is
+    # reachable, and the node is not an attachment.
+    edited = retype_nbt_entry(base, NID_NAME_TO_ID_MAP, (NID_NAME_TO_ID_MAP >> 5 << 5) | NID_TYPE_ATTACHMENT)
+    if edited is not None:
+        yield Mutation("attachment_lies:name_to_id_map_retyped_attachment", edited, None)
+
+    messages = _messages_of(base)
+    carrier = next((nid for nid in messages if _sub_node_of(base, nid, 0x11) is not None), None)
+    if carrier is None:
+        return
+    table_nid = _sub_node_of(base, carrier, 0x11)
+    assert table_nid is not None
+
+    # The attachment table's first row id pointed at a sub-node the message's
+    # tree does not hold: upstream's `AttachmentSubNodeNotFound`, and the one
+    # refusal here that is certain.
+    try:
+        tc_site = subnode_data_block(base, carrier, table_nid)
+    except (ValueError, KeyError):
+        tc_site = None
+    if tc_site is not None:
+        tc_shape = _tc_shape(tc_site.data)
+        matrix = tc_shape["matrix"]
+        if matrix is not None and tc_shape["rgib"][3] <= tc_shape["matrix_size"]:
+            yield Mutation(
+                "attachment_lies:row0.sub_node_absent",
+                rewrite_data_block(base, tc_site, set_u32(tc_site.data, matrix, 0xFFFF_FFE5)),
+                PstNotFoundError,
+                must_raise=True,
+            )
+
+    attachment_nid = _sub_node_of(base, carrier, NID_TYPE_ATTACHMENT)
+    if attachment_nid is None:
+        return
+    try:
+        site = subnode_data_block(base, carrier, attachment_nid)
+    except (ValueError, KeyError):
+        return
+    data = site.data
+    shape = _heap_shape(data)
+    records = _pc_records(data, shape)
+
+    def lie(name: str, edited: bytes, expect: type[PstError] | None, *, must_raise: bool = False) -> Mutation:
+        return Mutation(f"attachment_lies:{name}", rewrite_data_block(base, site, edited), expect, must_raise=must_raise)
+
+    record = _record_by_id(records, PID_TAG_ATTACH_METHOD)
+    if record is not None:
+        free = _free_prop_id(records, PID_TAG_ATTACH_METHOD)
+        if free is not None:
+            yield lie("0x3705_absent_method", set_u16(data, record[0], free), None)
+        # An `AttachmentMethod` no specification defines: `PstUnsupportedError`,
+        # and never a guess at what the attachment might hold.
+        yield lie("0x3705_unknown_method", set_u32(data, record[0] + 4, 0x7FFF_FFFF), None)
+    record = _record_by_id(records, PID_TAG_ATTACH_DATA)
+    if record is not None:
+        free = _free_prop_id(records, PID_TAG_ATTACH_DATA)
+        if free is not None:
+            yield lie("0x3701_absent_data", set_u16(data, record[0], free), None)
+        # PtypBinary where the method says PtypObject, and the other way round.
+        wrong = 0x0102 if record[2] == 0x000D else 0x000D
+        yield lie("0x3701_type_data", set_u16(data, record[0] + 2, wrong), None)
+        # ...and a 4-byte scalar, which decodes cleanly to something that is
+        # neither: the arm where `data()`'s own type check is what refuses.
+        yield lie("0x3701_int_data", set_u16(data, record[0] + 2, 0x0003), None)
+    record = _record_by_id(records, PID_TAG_ATTACH_SIZE)
+    if record is not None:
+        yield lie("0x0E20_type_size", set_u16(data, record[0] + 2, 0x001F), None)
+
+
 FAMILIES: tuple[Family, ...] = (
     truncations,
     bit_flips,
@@ -1845,6 +2122,8 @@ FAMILIES: tuple[Family, ...] = (
     store_lies,
     named_prop_lies,
     folder_lies,
+    message_lies,
+    attachment_lies,
 )
 
 

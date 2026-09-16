@@ -100,7 +100,12 @@ def test_python_half_runs_green_with_rust_skipped() -> None:
         check=False,
         cwd=REPO,
         env={**os.environ, "SKIP_RUST": "1"},
-        timeout=900,
+        # The script's `tests` step is the whole Rust-free slow lane, which
+        # grows with the package: at P09 it is ~16 minutes on this box, and
+        # the parity/goldens/fixture steps run before it. The timeout is a
+        # hang guard, not a performance budget — it is raised when a layer
+        # lands, and the row that raises it says so.
+        timeout=1800,
     )
     # The script's output is lint summaries, the fixture byte count, and a
     # pytest tail: nothing from a private store is ever printed by any step.

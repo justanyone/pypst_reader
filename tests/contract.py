@@ -93,10 +93,14 @@ from pypst.ltp.heap import HeapId, HeapNode, HeapNodeId
 from pypst.ltp.prop_context import PropertyContext, PropertyRecord
 from pypst.ltp.prop_type import PropType
 from pypst.ltp.table_context import CellKind, CellRecord, TableContext, TableRow
+from pypst.messaging import attachment as attachment_mod
 from pypst.messaging import folder as folder_mod
+from pypst.messaging import message as message_mod
 from pypst.messaging import named_prop
 from pypst.messaging import store as messaging
+from pypst.messaging.attachment import Attachment, AttachMethod
 from pypst.messaging.folder import Folder
+from pypst.messaging.message import Message
 from pypst.messaging.named_prop import NamedPropertyGuid, NamedPropertyMap, NameIdEntry
 from pypst.messaging.store import EntryId
 from pypst.ndb import block, btree, header, ids, page, root
@@ -125,6 +129,8 @@ READER_TYPES = (
     "PropertyContext",  # P07: NamedPropertyMap is built over one, so it is a reader class
     "Store",  # P08: a Folder is built over an open Store, so it is a reader class
     "Folder",  # P08: `pypst.debug`'s folder helpers take one, so they need one too
+    "Message",  # P09: an Attachment is built over an open Message, as a Folder is over a Store
+    "Attachment",  # P09: `pypst.debug`'s attachment helpers take one
 )
 WIRE_TYPES = ("PropType", "int")
 
@@ -668,6 +674,74 @@ class Store:
             pass
         keep = list(dict.fromkeys(held))
         return [*(keep if self.thorough else keep[:2]), *forged]
+
+    # --- the messages and attachments over the same bytes (P09) --------------------
+
+    @property
+    def messages(self) -> list[Message]:
+        """Every message of every folder that opens, in walk order; `Unreachable` when the root folder does not.
+
+        As `folders`, a refusal partway through is kept rather than
+        discarded: `javalibpst-dist-list.pst` holds a message with no
+        sub-node tree, and the entry points must still be reached on the
+        messages either side of it.
+        """
+
+        def build() -> list[Message]:
+            out: list[Message] = []
+            for f in self.folders:
+                with contextlib.suppress(PstError):
+                    for message in f.messages():
+                        out.append(message)
+                        if not self.thorough and len(out) >= 1:
+                            return out
+            return out
+
+        return self._lazy("messages", build)
+
+    @property
+    def message_nids(self) -> list[NodeId]:
+        """Every NID a message adapter aims at: the ones the store holds, and four no store can open.
+
+        The forged four are a message NID the NBT does not hold, a NID whose
+        5-bit type is not a message's, a NID whose type is not a type at all
+        (0x09 is unassigned in [MS-PST] 2.2.2.1), and 0.
+        """
+        forged = [NodeId(0xFFFF_FFE4), NID_ROOT_FOLDER, NodeId(0x9), NodeId(0)]
+        held: list[NodeId] = []
+        with contextlib.suppress(Unreachable, PstError):
+            held = [m.node for m in self.messages]
+        keep = list(dict.fromkeys(held))
+        if self.thorough:
+            return [*keep, *forged]
+        # The exhaustive mutation lane builds a Message per call, so it takes
+        # one real NID and the two forged ones that reach different branches.
+        return [*keep[:1], *forged[:2]]
+
+    @property
+    def attachments(self) -> list[Attachment]:
+        """Every attachment of every message that opens; empty when nothing in the store has one."""
+
+        def build() -> list[Attachment]:
+            out: list[Attachment] = []
+            for m in self.messages:
+                with contextlib.suppress(PstError):
+                    for attachment in m.attachments():
+                        out.append(attachment)
+                        if not self.thorough and len(out) >= 1:
+                            return out
+            return out
+
+        return self._lazy("attachments", build)
+
+    @property
+    def subjects(self) -> list[str]:
+        """Real `PidTagSubject` values from the store, plus the prefixes no writer should produce."""
+        held: list[str] = []
+        with contextlib.suppress(Unreachable, PstError):
+            held = [m.subject_raw for m in self.messages if m.subject_raw is not None]
+        forged = ["", "\x01", "\x01\x01", "\x01\x00x", "\x01\xffshort", "plain subject"]
+        return [*(held if self.thorough else held[:1]), *forged]
 
     @property
     def path(self) -> Path:
@@ -1268,6 +1342,189 @@ def _debug_folder_accessor_calls(s: Store) -> Iterator[Call]:
             yield call(f, prop_id, refuse, label=f"{f.node} 0x{prop_id:04X} refused")
 
 
+def _messages(s: Store) -> list[Message]:
+    """The messages an adapter calls a method on: all of them when thorough, else the first."""
+    return s.messages if s.thorough else s.messages[:1]
+
+
+def _message_ctor_calls(s: Store) -> Iterator[Call]:
+    """Every message NID the store holds, plus the four no store can open (`Store.message_nids`)."""
+    for nid in s.message_nids:
+        yield call(s.store, nid, label=str(nid))
+
+
+def _message_open_calls(s: Store) -> Iterator[Call]:
+    """The same NIDs, plus this store's own EntryID for one and another store's."""
+    store = s.store
+    for nid in s.message_nids:
+        yield call(store, nid, label=str(nid))
+    with contextlib.suppress(PstError, Unreachable):
+        yield call(store, store.entry_id(s.message_nids[0]), label="own entry id")
+    yield call(store, EntryId(bytes(RECORD_KEY_SIZE), NodeId(0xFFFF_FFE4)), label="foreign entry id")
+
+
+def _open_message_calls(s: Store) -> Iterator[Call]:
+    """`Store.open_message` over the same set, through the store rather than the class."""
+    store = s.store
+    for nid in s.message_nids:
+        yield call(store, nid, label=str(nid))
+    yield call(store, EntryId(bytes(RECORD_KEY_SIZE), NodeId(0xFFFF_FFE4)), label="foreign entry id")
+
+
+def _message_calls(s: Store) -> Iterator[Call]:
+    """One call per message, no arguments — the recipients, the attachment ids and the RTF body."""
+    for m in _messages(s):
+        yield call(m, label=str(m.node))
+
+
+def _message_get_calls(s: Store) -> Iterator[Call]:
+    """The properties this layer reads by name, one no message holds, and 0."""
+    ids = (
+        message_mod.PID_TAG_MESSAGE_CLASS,
+        message_mod.PID_TAG_SUBJECT,
+        message_mod.PID_TAG_MESSAGE_DELIVERY_TIME,
+        message_mod.PID_TAG_RTF_COMPRESSED,
+        0xFFFF,
+        0,
+    )
+    for m in _messages(s):
+        for prop_id in ids if s.thorough else ids[:1]:
+            yield call(m, prop_id, label=f"{m.node} 0x{prop_id:04X}")
+
+
+def _message_table_calls(s: Store) -> Iterator[Call]:
+    """Every message against every node type: the two tables it has, and types that are not tables at all."""
+    types = tuple(NodeIdType) if s.thorough else (NodeIdType.RECIPIENT_TABLE, NodeIdType.ATTACHMENT_TABLE)
+    for m in _messages(s):
+        for node_type in types:
+            yield call(m, node_type, label=f"{m.node} {node_type.debug_name}")
+
+
+def _message_sub_node_calls(s: Store) -> Iterator[Call]:
+    """Every sub-node NID a message holds, and two it does not."""
+    for m in _messages(s):
+        held = list(m.sub_nodes)
+        for node in (held + [NodeId(0xFFFF_FFE5), NodeId(0)]) if s.thorough else (held[:1] + [NodeId(0)]):
+            yield call(m, node, label=f"{m.node} {node}")
+
+
+def _attachment_ctor_calls(s: Store) -> Iterator[Call]:
+    """Every attachment NID every message names, plus NIDs no message can hold."""
+    forged = [NodeId(0xFFFF_FFE5), NodeId(0x21), NodeId(0x9), NodeId(0)]
+    for m in _messages(s):
+        held: list[NodeId] = []
+        with contextlib.suppress(PstError):
+            held = list(m.attachment_ids())
+        for node in (held + forged) if s.thorough else (held[:1] + forged[:2]):
+            yield call(m, node, label=f"{m.node} {node}")
+
+
+def _attachments(s: Store) -> list[Attachment]:
+    return s.attachments if s.thorough else s.attachments[:1]
+
+
+def _attachment_calls(s: Store) -> Iterator[Call]:
+    """One call per attachment, no arguments — `data()` and `embedded_message()`."""
+    for a in _attachments(s):
+        yield call(a, label=str(a.node))
+
+
+def _attachment_get_calls(s: Store) -> Iterator[Call]:
+    ids = (
+        attachment_mod.PID_TAG_ATTACH_METHOD,
+        attachment_mod.PID_TAG_ATTACH_DATA_BINARY,
+        attachment_mod.PID_TAG_ATTACH_LONG_FILENAME,
+        0xFFFF,
+        0,
+    )
+    for a in _attachments(s):
+        for prop_id in ids if s.thorough else ids[:1]:
+            yield call(a, prop_id, label=f"{a.node} 0x{prop_id:04X}")
+
+
+def _attachment_sub_node_calls(s: Store) -> Iterator[Call]:
+    for a in _attachments(s):
+        held: list[NodeId] = []
+        with contextlib.suppress(PstError):
+            held = list(a.sub_nodes)
+        for node in (held + [NodeId(0xFFFF_FFE5), NodeId(0)]) if s.thorough else (held[:1] + [NodeId(0)]):
+            yield call(a, node, label=f"{a.node} {node}")
+
+
+def _attach_method_calls(s: Store) -> Iterator[Call]:
+    """Every method [MS-OXCMSG] 2.2.2.9 defines, the two upstream and this port disagree about, and nonsense."""
+    values = [*range(-1, 9), 0x7FFF_FFFF, -0x8000_0000] if s.thorough else [5, 99]
+    return (call(v, label=str(v)) for v in values)
+
+
+def _split_subject_calls(s: Store) -> Iterator[Call]:
+    """Real subjects out of the store, and the control prefixes a store should not have written."""
+    return (call(text, label=repr(text[:24])) for text in (s.subjects if s.thorough else s.subjects[:3]))
+
+
+def _recipient_get_calls(s: Store) -> Iterator[Call]:
+    """`Recipient.get` over every recipient of every message, at a column it has and one it does not.
+
+    A `Recipient` is a plain mapping over a row this layer already decoded,
+    so a store with no readable message still gets one — forged here rather
+    than reported `Unreachable`, because nothing about this call needs the
+    store to have opened.
+    """
+    found = False
+    with contextlib.suppress(Unreachable):
+        for m in _messages(s):
+            with contextlib.suppress(PstError):
+                for recipient in m.recipients():
+                    found = True
+                    for prop_id in (message_mod.PID_TAG_DISPLAY_NAME, 0xFFFF):
+                        yield call(recipient, prop_id, label=f"{m.node} 0x{prop_id:04X}")
+                    if not s.thorough:
+                        break
+    if not found:
+        forged = message_mod.Recipient(message_mod.RecipientType.TO, None, None, None, {})
+        yield call(forged, message_mod.PID_TAG_DISPLAY_NAME, label="forged")
+
+
+def _debug_message_lines_calls(s: Store) -> Iterator[Call]:
+    """`debug.message_lines` over every message: the twelve property lines, formatting included."""
+    for m in _messages(s):
+        yield call(m, 2, label=str(m.node))
+
+
+def _debug_upstream_records_calls(s: Store) -> Iterator[Call]:
+    """Every property context the dumper truncates: a message's, an attachment's, and the store's."""
+    seen: list[Call] = []
+    with contextlib.suppress(Unreachable, PstError):
+        seen.append(call(s.store.properties, label="store"))
+    for m in _messages(s):
+        seen.append(call(m.properties, label=str(m.node)))
+    for a in _attachments(s):
+        seen.append(call(a.properties, label=str(a.node)))
+    return iter(seen)
+
+
+def _debug_message_accessor_calls(s: Store) -> Iterator[Call]:
+    """Both arms of the example's `result_debug`: a renderer that returns, and one that refuses."""
+
+    def refuse() -> str:
+        raise PstFormatError("adapter: the accessor refused")
+
+    for m in _messages(s):
+        prop_id = message_mod.PID_TAG_MESSAGE_CLASS
+        yield call(m, prop_id, lambda m=m: str(m.message_class), label=f"{m.node} value")
+        yield call(m, prop_id, refuse, label=f"{m.node} refused")
+
+
+def _debug_attachment_accessor_calls(s: Store) -> Iterator[Call]:
+    def refuse() -> str:
+        raise PstFormatError("adapter: the accessor refused")
+
+    for a in _attachments(s):
+        for prop_id in (attachment_mod.PID_TAG_ATTACH_METHOD, attachment_mod.PID_TAG_ATTACH_SIZE):
+            yield call(a, prop_id, lambda a=a: str(a.method_value), label=f"{a.node} 0x{prop_id:04X} value")
+            yield call(a, prop_id, refuse, label=f"{a.node} 0x{prop_id:04X} refused")
+
+
 def _dumper_calls(dumper: Callable[..., None]) -> Builder:
     """A registered dumper over the store on disk, its extra positional arguments built by parameter name."""
     extras = list(inspect.signature(dumper).parameters)[1:]
@@ -1440,6 +1697,32 @@ ADAPTERS: dict[object, Builder] = {
     folder_mod.Folder.contents: _folder_calls,
     folder_mod.Folder.subfolders: _folder_calls,
     folder_mod.Folder.walk: _folder_walk_calls,
+    folder_mod.Folder.messages: _folder_calls,
+    folder_mod.Folder.associated: _folder_calls,
+    # messages, recipients and attachments (P09)
+    messaging.Store.open_message: _open_message_calls,
+    message_mod.Message: _message_ctor_calls,
+    message_mod.Message.open: _message_open_calls,
+    message_mod.Message.get: _message_get_calls,
+    message_mod.Message.sub_node_table: _message_table_calls,
+    message_mod.Message.sub_node_entry: _message_sub_node_calls,
+    message_mod.Message.recipients: _message_calls,
+    message_mod.Message.attachment_ids: _message_calls,
+    message_mod.Message.attachments: _message_calls,
+    message_mod.Message.body_rtf_decompressed: _message_calls,
+    message_mod.Message.check_embedded_depth: _message_calls,
+    message_mod.Recipient.get: _recipient_get_calls,
+    message_mod.split_subject: _split_subject_calls,
+    attachment_mod.Attachment: _attachment_ctor_calls,
+    attachment_mod.Attachment.get: _attachment_get_calls,
+    attachment_mod.Attachment.sub_node_entry: _attachment_sub_node_calls,
+    attachment_mod.Attachment.data: _attachment_calls,
+    attachment_mod.Attachment.embedded_message: _attachment_calls,
+    AttachMethod.from_wire: _attach_method_calls,
+    debug.upstream_records: _debug_upstream_records_calls,
+    debug.message_lines: _debug_message_lines_calls,
+    debug.message_accessor: _debug_message_accessor_calls,
+    debug.attachment_accessor: _debug_attachment_accessor_calls,
     debug.folder_lines: _debug_folder_calls,
     debug.folder_table: _folder_table_calls,
     debug.folder_accessor: _debug_folder_accessor_calls,

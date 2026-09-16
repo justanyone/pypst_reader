@@ -756,7 +756,7 @@ for `TableRowColumnValue`: `Small(<the value>)`, `Heap(<HeapId>)`,
 folder's hierarchy table, resealed); the corruption harness walks that table
 on every mutation (`tc.root_hierarchy`).
 
-## `pypst.messaging` — P07, P08 (landed) / P09
+## `pypst.messaging` — P07, P08, P09 (landed)
 
 **`pypst.messaging.store` and `pypst.messaging.named_prop` are built**
 (2026-09-16). Ported from `messaging/store.rs` and `messaging/named_prop.rs`
@@ -791,7 +791,7 @@ class Store:                          # P07 — the object `open()` returns
     matches_record_key(self, entry: EntryId) → bool # upstream's; P08's `EntryIdWrongStore`
     get(self, prop_id: int) → PropValue | None      # one store property, decoded
     named_properties → NamedPropertyMap             # read on first use and kept
-    root_folder → Folder; open_folder(entry) → Folder    # added by P08, below; open_message is P09's
+    root_folder → Folder; open_folder(entry) → Folder; open_message(entry, *, parent=None) → Message  # P08/P09
 
 def open_store(path, *, limits=DEFAULT_LIMITS, codepage="cp1252") → Store   # exported as `pypst.open`
 
@@ -884,7 +884,8 @@ class Folder:                         # P08 — one folder: its PC, and the thre
     hierarchy_table / contents_table / associated_table → TableContext | None   # 0x0D / 0x0E / 0x0F, read once, kept
     subfolder_ids() → tuple[NodeId, ...]             # matrix order; () when there is no hierarchy table
     message_ids() → tuple[NodeId, ...]; associated_ids() → tuple[NodeId, ...]
-    contents() → tuple[EntryId, ...]                 # message_ids() as this store's EntryIDs — P09's open_message input
+    contents() → tuple[EntryId, ...]                 # message_ids() as this store's EntryIDs — Store.open_message input
+    messages() → Iterator[Message]; associated() → Iterator[Message]    # added by P09, below
     subfolders() → Iterator[Folder]                  # each child opened, matrix order
     walk(self, *, max_depth: int | None = None) → Iterator[Folder]
         # pre-order, self first, children in matrix order — the oracle's dump_folder order. Iterative (no Python
@@ -926,8 +927,8 @@ InvalidData, error: … }` text in its place) and `debug.folder_table(folder,
 node_type)` (the example's `.ok()?`, so a corrupt table prints as absent
 there and only there). `tests.golden_parsers.dump_messages_folder_lines(text)`
 filters a golden down to exactly that, and `parse_dump_messages(text)` reads
-the whole example into values (folder blocks in full; message blocks as raw
-lines until P09).
+the whole example into values (folder blocks in full; message blocks through
+P09's `parse_message_block`, with their raw `lines` kept beside them).
 
 `tests/corrupt.py` gained the `folder_lies` family (12 on both bases: the
 root folder's four required properties absent and retyped, and the root
@@ -935,26 +936,156 @@ hierarchy table's first row id pointed at a node that is not there, at the
 folder itself, at the message store and at an unassigned NID type); the
 corruption harness gained `folder.walk` and `folder.tables`.
 
+**`pypst.messaging.message` and `pypst.messaging.attachment` are built**
+(2026-09-16). Ported from `messaging/message.rs` and `messaging/attachment.rs`
+(the read halves; the write halves and the ANSI arms are not ported —
+ADR-0003). `Store` gained `open_message` and `Folder` gained `messages()` /
+`associated()`.
+
 ```python
-class Message:                        # P09
-    node → NodeId; properties → PropertyContext
-    message_class → str; subject → str; normalized_subject → str   # prefix byte stripped (T03 trap)
-    sender_name, sender_email, delivery_time, client_submit_time, ...  # thin property accessors
-    body_text → str | None; body_html → bytes | None; body_rtf → bytes | None   # rtf DEcompressed via pypst.rtf
-    transport_headers → str | None    # PR_TRANSPORT_MESSAGE_HEADERS, the P10 decision input
-    recipients() → Iterator[Recipient]
-    attachments() → Iterator[Attachment]
+# pypst.messaging.message
+PID_TAG_MESSAGE_CLASS = 0x001A; PID_TAG_SUBJECT = 0x0037; PID_TAG_CLIENT_SUBMIT_TIME = 0x0039
+PID_TAG_TRANSPORT_MESSAGE_HEADERS = 0x007D; PID_TAG_RECIPIENT_TYPE = 0x0C15; PID_TAG_SENDER_NAME = 0x0C1A
+PID_TAG_SENDER_EMAIL_ADDRESS = 0x0C1F; PID_TAG_MESSAGE_DELIVERY_TIME = 0x0E06; PID_TAG_MESSAGE_FLAGS = 0x0E07
+PID_TAG_MESSAGE_SIZE = 0x0E08; PID_TAG_MESSAGE_STATUS = 0x0E17; PID_TAG_NORMALIZED_SUBJECT = 0x0E1D
+PID_TAG_BODY = 0x1000; PID_TAG_RTF_COMPRESSED = 0x1009; PID_TAG_HTML = 0x1013
+PID_TAG_DISPLAY_NAME = 0x3001; PID_TAG_EMAIL_ADDRESS = 0x3003; PID_TAG_CREATION_TIME = 0x3007
+PID_TAG_LAST_MODIFICATION_TIME = 0x3008; PID_TAG_SEARCH_KEY = 0x300B; PID_TAG_SMTP_ADDRESS = 0x39FE
+PID_TAG_SENDER_SMTP_ADDRESS = 0x5D01
+MESSAGE_NODE_TYPES = (NORMAL_MESSAGE, ASSOC_MESSAGE, ATTACHMENT)   # upstream accepts all three
+SUBJECT_PREFIX_MARKER = "\x01"
+
+class RecipientType(IntEnum):  ORIGINATOR=0, TO=1, CC=2, BCC=3     # [MS-OXCMSG] 2.2.3.1
+
+def split_subject(raw: str) → tuple[str, str]      # (prefix, normalized), [MS-OXCMSG] 2.2.1.46
+    # !PstFormatError a lone U+0001, a length byte of 0, or a prefix longer than the subject
 
 @dataclass(frozen=True, slots=True)
-class Recipient:  type: RecipientType; name: str | None; email: str | None; properties: Mapping[int, PropValue]
+class Recipient:  type: RecipientType | int; name: str | None; email: str | None; smtp: str | None
+                  properties: Mapping[int, PropValue]              # the WHOLE row, by property id
+    get(prop_id) → PropValue | None; __str__
 
-class Attachment:                     # P09
-    method → AttachMethod             # NONE/BY_VALUE/BY_REFERENCE/.../EMBEDDED_MESSAGE/OLE
-    filename → str | None; long_filename → str | None; mime_tag → str | None; content_id → str | None
-    size → int
-    data() → bytes                    # BY_VALUE; > limits.MAX_ALLOCATION → PstLimitError
-    embedded_message() → Message | None   # EMBEDDED_MESSAGE; depth > limits.MAX_EMBEDDED_MESSAGE_DEPTH → PstLimitError
+class Message:                        # P09 — one message: its PC, its recipient table, its attachments
+    __init__(self, store: Store, node: NodeId, *, entry: SubNodeLeafEntry | None = None,
+             parent: Folder | None = None, depth: int = 0)
+        # !TypeError non-Store/non-NodeId; !PstFormatError a NID whose type is not a message's, or a
+        #   message node with NO SUB-NODE TREE (upstream's MessageSubNodeTreeNotFound); !PstNotFoundError absent
+        # `entry`/`depth` are how an EMBEDDED message is built (its node is not in the store's NBT)
+    @classmethod open(cls, store, entry: EntryId | NodeId, *, parent=None) → Message  # !PstFormatError wrong store
+    store; node; parent → Folder | None; depth → int; entry_id → EntryId
+    properties → PropertyContext      # the FILE's PC — nothing injected
+    sub_nodes → Mapping[NodeId, SubNodeLeafEntry]
+    get(prop_id) → PropValue | None
+    message_class → str               # !PstFormatError absent or not a string
+    subject → str | None              # the control prefix REMOVED, the prefix TEXT kept ("FW: original email")
+    subject_raw → str | None          # exactly as stored ("\x01\x05FW: original email") — what the oracle prints
+    subject_prefix → str | None       # "FW: ", or ""
+    normalized_subject → str | None   # 0x0E1D when the store holds it, else the subject without its prefix
+    sender_name / sender_email / sender_smtp / transport_headers / body_text → str | None
+    delivery_time / client_submit_time / creation_time / last_modification_time → datetime | None
+    delivery_filetime / client_submit_filetime → int | None    # the raw FILETIME ticks the goldens print
+    message_flags / message_size / message_status → int; search_key → bytes   # upstream's other accessors
+    body_html → bytes | None          # PtypBinary verbatim; a string value is UTF-8 encoded
+    body_rtf → bytes | None           # PidTagRtfCompressed AS STORED (LZFu), not RTF yet
+    body_rtf_decompressed() → bytes | None    # pypst.rtf over it, trimmed at the first NUL (as upstream)
+    sub_node_table(node_type) → TableContext | None    # upstream's scan by NID TYPE; two of a type is a refusal
+    recipient_table / attachment_table → TableContext | None      # None ONLY when there is no such sub-node
+    recipients() → Iterator[Recipient]        # matrix order; !PstLimitError past limits.max_recipients
+    attachment_ids() → tuple[NodeId, ...]     # the attachment table's row ids; !PstLimitError max_attachments
+    attachments() → Iterator[Attachment]
+    sub_node_entry(node) → SubNodeLeafEntry   # !PstNotFoundError (upstream's AttachmentSubNodeNotFound)
+    check_embedded_depth() → None             # !PstLimitError past limits.max_embedded_message_depth
+    __str__ → "Message { NodeId { NormalMessage: 0x10001 } }"
+
+# pypst.messaging.attachment
+PID_TAG_ATTACH_SIZE = 0x0E20; PID_TAG_ATTACH_DATA_BINARY = 0x3701; PID_TAG_ATTACH_FILENAME = 0x3704
+PID_TAG_ATTACH_METHOD = 0x3705; PID_TAG_ATTACH_LONG_FILENAME = 0x3707; PID_TAG_RENDERING_POSITION = 0x370B
+PID_TAG_ATTACH_MIME_TAG = 0x370E; PID_TAG_ATTACH_LONG_PATHNAME = 0x3710; PID_TAG_ATTACH_CONTENT_ID = 0x3712
+
+class AttachMethod(IntEnum):          # [MS-OXCMSG] 2.2.2.9
+    NONE=0, BY_VALUE=1, BY_REFERENCE=2, BY_REF_RESOLVE=3, BY_REF_ONLY=4, EMBEDDED_MESSAGE=5, OLE=6, BY_WEB_REFERENCE=7
+    @classmethod from_wire(value: int) → AttachMethod    # !PstUnsupportedError naming any other value
+    carries_bytes → bool                                  # BY_VALUE and OLE
+
+class Attachment:                     # P09 — one sub-node of a message, with a PC of its own
+    __init__(self, message: Message, node: NodeId)
+        # !TypeError non-Message/non-NodeId; !PstFormatError a NID that is not an Attachment's;
+        # !PstNotFoundError the message's sub-node tree does not hold it
+    message → Message; node → NodeId; properties → PropertyContext; get(prop_id)
+    sub_nodes → Mapping[NodeId, SubNodeLeafEntry]   # the ATTACHMENT's own tree (divergence, below)
+    sub_node_entry(node) → SubNodeLeafEntry         # !PstNotFoundError
+    method → AttachMethod; method_value → int       # the raw i32, as upstream's accessor
+    size → int; rendering_position → int            # !PstFormatError absent or not Integer32
+    filename / long_filename / pathname / mime_tag / content_id → str | None
+    data() → bytes | None             # BY_VALUE and OLE; None for every other method.
+                                      # !PstLimitError > limits.max_allocation (from BlockReader.read_data,
+                                      #   which checks lcbTotal BEFORE any child read — no second check here)
+    embedded_message() → Message | None   # EMBEDDED_MESSAGE; !PstLimitError past limits.max_embedded_message_depth
+    __str__ → "Attachment { NodeId { Attachment: 0x401 } }"
+
+# pypst.messaging.store / folder, added by P09
+class Store:
+    def open_message(self, entry: EntryId | NodeId, *, parent: Folder | None = None) → Message
+class Folder:
+    def messages(self) → Iterator[Message]; def associated(self) → Iterator[Message]
 ```
+
+**The subject decision: `subject` is the readable form, `subject_raw` is the
+file's.** `PidTagSubject` may begin with `U+0001` and a length byte
+([MS-OXCMSG] 2.2.1.46); every Outlook-written corpus message carries it.
+`subject` strips the two control characters and keeps the prefix text
+(`"FW: original email"`), because that is what a caller writes into a
+filename, a report or an `.eml`; `subject_raw` is the value verbatim, which
+is what the oracle prints and what the differential compares;
+`subject_prefix` and `normalized_subject` are the two halves. A prefix
+length past the end of the string is `PstFormatError`, never a slice.
+
+**The divergence that matters: this port opens embedded messages, and
+upstream at pin cfb721da cannot.** `PropertyType::try_from` has no
+`PtypObject` arm and upstream's BTH walk stops at the first record it cannot
+decode, so an embedded-message attachment's property context is truncated
+before `PidTagAttachMethod` and upstream refuses it with
+`AttachmentMethodNotFound` — which the goldens carry, on
+`pstsdk-submessage.pst` and twice on `javalibpst-dist-list.pst`. Arbitrated
+by [MS-PST] 2.3.3.4 + 2.4.6.3 and by the bytes (the message that comes out
+has a sensible class, subject, body and recipient, asserted in
+`tests/test_message.py`). **A second upstream bug found the same way:**
+`AttachmentInner::read` resolves the embedded message's NID in the owning
+MESSAGE's sub-node tree, and the node is in the ATTACHMENT's own tree — so
+`Attachment.sub_nodes` is the attachment's. `pypst.debug`'s `messages`
+dumper re-creates upstream's truncation (`upstream_records`) so the golden
+still matches byte for byte, and `test_the_golden_still_shows_upstreams_refusal`
+fails if a moved pin fixes upstream.
+
+Other divergences, each a paragraph in its module docstring: properties are
+decoded on demand and the two tables are read on first use (upstream reads
+everything at open, so one bad property fails the whole message — and
+"absent", "empty" and "unreadable" stay three answers here); a table node
+that exists but will not parse is a refusal, not `None` (as `folder.py`);
+`recipients()` and `attachment_ids()` are bounded by `limits` (and
+`data()` deliberately is NOT — the layer that assembles the bytes refuses
+first, and a second ceiling here would be code no test could reach); the
+embedded recursion is bounded by `limits.max_embedded_message_depth`, which
+is what stops a message that embeds itself; `Message.parent` remembers the folder;
+an unknown **recipient** type stays an `int` ([MS-OXCMSG] 2.2.3.1 reserves
+flag bits and nothing is parsed from it) while an unknown **attachment
+method** is `PstUnsupportedError`; `AttachMethod` names 3
+(`afByReferenceResolve`), which the specification defines and upstream's
+`TryFrom<i32>` rejects.
+
+`python -m pypst.debug messages <file>` prints the whole of
+`oracle/examples/dump_messages.rs` — the folder blocks `debug folders`
+prints, plus every message block, its recipient and attachment rows, each
+attachment's own property context, and the `Errors: <n>` trailer — and exits
+1 when the trailer is not 0, as the example does. `tests/golden_parsers`
+gained `parse_message_block` and `dump_messages_value`, and
+`parse_dump_messages` now reads each message block into values (keeping its
+raw `lines` beside them). `tests/corrupt.py` gained `message_lies` and
+`attachment_lies` (and `retype_nbt_entry` / `subnode_data_block`); the
+corruption harness gained `message.open` and `message.attachments`;
+`tests/contract.py` gained `"Message"`/`"Attachment"` in `READER_TYPES`, a
+`messages`/`message_nids`/`attachments`/`subjects` section on its fixture
+object and 24 adapters.
 
 ## `pypst.rtf` — P21 (landed)
 
@@ -1038,14 +1169,14 @@ the golden is missing. `tests/test_golden_drift.py` (`oracle`, `slow`) runs
 
 ## `pypst` — the top level
 
-Today (P08), sorted and deliberately small — the exception family, the
+Today (P09), sorted and deliberately small — the exception family, the
 limits, and the readers that exist:
 
 ```python
 from pypst import (
-    DEFAULT_LIMITS, EntryId, Folder, Header, Limits,
+    AttachMethod, Attachment, DEFAULT_LIMITS, EntryId, Folder, Header, Limits, Message,
     PstError, PstFormatError, PstLimitError, PstNotFoundError, PstUnsupportedError,
-    Store, __version__, open, read_header,
+    Recipient, RecipientType, Store, __version__, open, read_header,
 )
 __all__ == sorted(__all__)           # tests/test_contract.py asserts it, and that every name resolves
 ```
@@ -1056,12 +1187,8 @@ like `gzip.open`), and `tests/test_contract.py` pins that it is not the
 builtin. `EntryId` is exported with it, because it is what `ipm_subtree`
 and the other entry-id accessors return and a caller holds one.
 
-The promise, when P09 lands (added to `__all__` by the row that lands it;
-never stubbed early):
-
-```python
-from pypst import Message, Attachment
-```
+The last promise still outstanding is P10's `pypst.eml`, which is not a
+port and is not stubbed early.
 
 `__all__` is the enumerable contract, but not the whole of it: the T5
 harness (`tests/contract.py`) discovers **every** public callable under the
@@ -1072,6 +1199,35 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
 ---
 
 ## Changelog
+
+- 2026-09-16 — P09 landed `pypst.messaging.message` and
+  `pypst.messaging.attachment`, and added `Store.open_message`,
+  `Folder.messages()` / `Folder.associated()`; `Message`, `Recipient`,
+  `RecipientType`, `Attachment` and `AttachMethod` join `pypst.__all__` and
+  `pypst.messaging.__all__`. Changes from the draft: **`body_rtf` is the
+  value AS STORED (compressed) and `body_rtf_decompressed()` is the
+  expansion** — the draft said `body_rtf` was already decompressed, which
+  hid the fact that the store holds LZFu and made the `Body RTF:` line of
+  the goldens (a length and a CRC of the *stored* bytes) uncomparable; both
+  forms are one call apart and `tests/test_rtf.py` asserts each.
+  `Recipient` gained `smtp` (the oracle prints it) and `get`; `subject_raw`,
+  `subject_prefix`, `delivery_filetime` / `client_submit_filetime` (the
+  goldens print FILETIME ticks, and a `datetime` cannot round-trip the
+  sub-microsecond digit), `sub_node_table`, `recipient_table` /
+  `attachment_table`, `attachment_ids`, `sub_node_entry`,
+  `check_embedded_depth`, `parent`, `depth`, `entry_id`, `get`, `__str__`
+  and upstream's `message_flags` / `message_size` / `message_status` /
+  `creation_time` / `last_modification_time` / `search_key` were added;
+  `Attachment` gained `method_value`, `rendering_position`, `pathname`,
+  `sub_nodes`, `sub_node_entry`, `get` and `__str__`, and its `data()`
+  returns `None` (not bytes) for a method that carries none, as upstream's
+  `Option<AttachmentData>` does. `split_subject` is public because the
+  subject-prefix rule is the one piece of [MS-OXCMSG] this layer implements
+  and a caller with a raw subject needs it. `pypst.debug` gained `messages`,
+  `message_lines`, `message_accessor`, `attachment_accessor` and
+  `upstream_records`. **Nothing in `pypst.limits` changed**: P11's
+  `max_recipients`, `max_attachments`, `max_allocation` and
+  `max_embedded_message_depth` were already the right four.
 
 - 2026-09-16 — P08 landed `pypst.messaging.folder` and added
   `Store.root_folder` / `Store.open_folder`; `Folder` joins `pypst.__all__`

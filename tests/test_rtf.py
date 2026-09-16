@@ -524,17 +524,20 @@ def test_initial_dictionary_has_crlf_at_168() -> None:
 # --- Waits on the messaging layer -----------------------------------------------------
 
 
-@pytest.mark.xfail(reason="P09: needs the messaging layer to hand over PR_RTF_COMPRESSED", raises=AttributeError, strict=True)
 def test_public_fixture_rtf_bodies_decompress_to_rtf() -> None:
-    """A licensed public store's RTF bodies begin with `{\\rtf1` once decompressed.
+    """A licensed public store's RTF bodies begin with `{\\rtf1` once decompressed (P09 landed this).
 
-    Written against the P09 surface in docs/INTERFACES.md; when that lands
-    this stops raising ImportError and the strict xfail asks for the marker
-    to be removed.
+    `body_rtf` is `PidTagRtfCompressed` exactly as stored — LZFu, not RTF —
+    and `body_rtf_decompressed()` is this module over it, so both halves of
+    the contract are asserted here.
     """
-    from pypst.messaging import Store  # the import is the thing that is not there yet
+    from pypst.messaging import Store
 
     with Store.open(PUBLIC / "tika-variousBodyTypes.pst") as store:
-        bodies = [m.body_rtf for folder in store.root_folder.walk() for m in folder.messages() if m.body_rtf is not None]
+        messages = [m for folder in store.root_folder.walk() for m in folder.messages() if m.body_rtf is not None]
+        compressed = [m.body_rtf for m in messages]
+        bodies = [m.body_rtf_decompressed() for m in messages]
     assert bodies, "the fixture is chosen because it has an RTF body"
+    assert all(not raw.startswith(b"{\\rtf1") for raw in compressed), "the stored form is compressed"
     assert all(body.startswith(b"{\\rtf1") for body in bodies)
+    assert all(len(body) > len(raw) for body, raw in zip(bodies, compressed, strict=True))

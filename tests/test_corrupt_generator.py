@@ -40,6 +40,13 @@ PC_LIES_EMPTY = 14
 # own root hierarchy table is unreadable (see `corrupt._tc_opens`), so its 25
 # carry no `expect` and no `must_raise`.
 TC_LIES = 25
+# Neither pinned base holds a message, so `message_lies` and
+# `attachment_lies` yield only their retyping mutations there — the ones that
+# rename NID 0x61 into a message's or an attachment's NID type. A base that
+# does hold a message yields four more and six more (see the families'
+# docstrings); `test_the_new_families_reach_a_store_with_messages` pins that.
+MESSAGE_LIES = 2
+ATTACHMENT_LIES = 1
 
 PINNED = {
     "pstd-inline-cid": {
@@ -57,6 +64,8 @@ PINNED = {
         "store_lies": 9,
         "named_prop_lies": 12,
         "folder_lies": 12,
+        "message_lies": MESSAGE_LIES,
+        "attachment_lies": ATTACHMENT_LIES,
     },
     "Empty": {
         "truncations": 62,
@@ -73,6 +82,8 @@ PINNED = {
         "store_lies": 11,
         "named_prop_lies": 16,
         "folder_lies": 12,
+        "message_lies": MESSAGE_LIES,
+        "attachment_lies": ATTACHMENT_LIES,
     },
 }
 
@@ -388,6 +399,8 @@ def test_families_are_named_and_ordered() -> None:
         "store_lies",
         "named_prop_lies",
         "folder_lies",
+        "message_lies",
+        "attachment_lies",
     ]
 
 

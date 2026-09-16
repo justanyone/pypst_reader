@@ -19,9 +19,11 @@ Three tiers, in order of how much of the port they need:
    file for the authored subject is crude, but it is a real content assertion
    available today, and it pins the generator: if the tool ever encodes,
    compresses or mangles a value, this tier says so before P09 exists.
-3. **The reader** (skips until P07–P09 land): the same expectations read back
-   through `pypst.Store` / `Folder` / `Message` / `Attachment`, written to
-   `docs/INTERFACES.md` § messaging so they go live without edits.
+3. **The reader** (P07–P09, live): the same expectations read back through
+   `pypst.Store` / `Folder` / `Message` / `Attachment`. One folder's
+   contents table is unreadable by this port and by upstream alike — see
+   `UNREADABLE_CONTENTS` — so its six messages are `xfail(strict=True)`
+   and its refusal is pinned instead.
 
 Plus the policy tests that keep future synthetic sources honest, and the
 regeneration check that keeps the committed store honest.
@@ -387,23 +389,79 @@ def _folders_by_name(store) -> dict[str, object]:
     return {folder.display_name: folder for folder in store.root_folder.walk()}
 
 
+# EMLtoPST writes the Inbox's contents table with an HNPAGEMAP whose `cFree`
+# says 0 while the page holds one zero-length allocation ([MS-PST] 2.3.1.5).
+# Upstream refuses it too — its `dump_messages` golden prints
+# `Contents Table: None` for that folder and not one of its six messages —
+# so the six Inbox messages are unreachable through EITHER reader, and the
+# reader tier below covers the Sent folder's message in full and pins the
+# Inbox's refusal rather than looking away. Fixing it belongs to the fixture
+# (a P20-SYNTH follow-up), not to a reader.
+UNREADABLE_CONTENTS = {"Inbox"}
+
+
 def test_reader_display_name_and_folders(opened) -> None:
     assert opened.display_name == "synth-basics"
     folders = _folders_by_name(opened)
     assert {IPM_SUBTREE_NAME, FINDER_NAME, WASTEBASKET_NAME, "Inbox", "Sent"} <= set(folders)
     for name, count in (expected_folder_counts() | {WASTEBASKET_NAME: 0}).items():
         assert folders[name].content_count == count, name
+        if name in UNREADABLE_CONTENTS:
+            continue
         assert len(list(folders[name].messages())) == count, name
     ipm = opened.open_folder(opened.ipm_subtree)
     assert ipm.display_name == IPM_SUBTREE_NAME
     assert {f.display_name for f in ipm.subfolders()} == set(expected_folder_counts()) | {WASTEBASKET_NAME}
 
 
+def test_the_inbox_contents_table_is_refused_by_this_reader_and_by_upstream(opened, golden) -> None:
+    """The one folder of this store whose messages neither reader can reach, pinned on both sides."""
+    from pypst.errors import PstFormatError
+
+    inbox = _folders_by_name(opened)["Inbox"]
+    assert inbox.content_count == expected_folder_counts()["Inbox"] == 6
+    with pytest.raises(PstFormatError, match="cFree"):
+        inbox.message_ids()
+    # ...and the oracle's own dump says the same, in its own words.
+    text = golden(STORE, "dump_messages")
+    block = text.split('Folder: NodeId { NormalFolder: 0x23 }\n', 1)[1]
+    assert "  Contents Table: None\n" in block.split("Folder: ", 1)[0]
+    assert "  Message: " not in block.split("Folder: ", 1)[0]
+
+
 def _read_messages(opened) -> dict[str, list[object]]:
-    return {name: list(folder.messages()) for name, folder in _folders_by_name(opened).items()}
+    """Every folder's messages, with an unreadable contents table reported as none.
+
+    The refusal itself is asserted by
+    `test_the_inbox_contents_table_is_refused_by_this_reader_and_by_upstream`;
+    swallowing it here is what makes the six `xfail`s say "the message is
+    not there" rather than raising a `KeyError` about a folder.
+    """
+    from pypst.errors import PstFormatError
+
+    out: dict[str, list[object]] = {}
+    for name, folder in _folders_by_name(opened).items():
+        try:
+            out[name] = list(folder.messages())
+        except PstFormatError:
+            out[name] = []
+    return out
 
 
-@pytest.mark.parametrize("expected", expected_messages(), ids=_ids(expected_messages()))
+def _reader_params() -> list:
+    """Every authored message, with the ones in the unreadable folder marked `xfail` (strict)."""
+    out = []
+    for message in expected_messages():
+        marks = (
+            [pytest.mark.xfail(strict=True, reason="synth-basics' Inbox contents table: see UNREADABLE_CONTENTS")]
+            if message.folder in UNREADABLE_CONTENTS
+            else []
+        )
+        out.append(pytest.param(message, marks=marks))
+    return out
+
+
+@pytest.mark.parametrize("expected", _reader_params(), ids=_ids(expected_messages()))
 def test_reader_message_content(opened, expected: ExpectedMessage) -> None:
     """Subject, sender, bodies, recipients and attachments, read back."""
     candidates = [

@@ -24,6 +24,10 @@ folder `SearchFolder: 0x111` has none of them — and an absent table is
 `None`, not a refusal, because a folder with no sub-folders legitimately has
 no hierarchy table.
 
+`messages()` and `associated()` (P09) open what `message_ids()` and
+`associated_ids()` name, one `Message` at a time and lazily, so a folder
+holding one message this reader refuses still yields the others.
+
 `display_name`, `content_count`, `unread_count` and `has_subfolders` are
 upstream's four accessors over `PidTagDisplayName` (0x3001),
 `PidTagContentCount` (0x3602), `PidTagContentUnreadCount` (0x3603) and
@@ -93,6 +97,7 @@ asks for it: `folder.properties.get(0x3001)`.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 from pypst.errors import PstFormatError, PstNotFoundError
 from pypst.limits import VisitedSet, check_count, check_depth
@@ -101,6 +106,9 @@ from pypst.ltp.prop_type import PropValue
 from pypst.ltp.table_context import TableContext
 from pypst.messaging.store import EntryId, Store
 from pypst.ndb.ids import NID_ROOT_FOLDER, NodeId, NodeIdType
+
+if TYPE_CHECKING:
+    from pypst.messaging.message import Message
 
 __all__ = [
     "FOLDER_NODE_TYPES",
@@ -308,8 +316,35 @@ class Folder:
         return self._row_ids(self.associated_table, self._store.limits.max_messages, "messages in one associated table")
 
     def contents(self) -> tuple[EntryId, ...]:
-        """`message_ids()` as EntryIDs — what P09's `Store.open_message` will take."""
+        """`message_ids()` as EntryIDs — what `Store.open_message` takes."""
         return tuple(self._store.entry_id(node) for node in self.message_ids())
+
+    def messages(self) -> Iterator[Message]:
+        """Each message of `message_ids()`, opened, in row-matrix order — the order the oracle prints.
+
+        Lazy, like `subfolders()`: a message the node B-tree does not hold,
+        or one whose node has no sub-node tree (`javalibpst-dist-list.pst`
+        has one), raises when the walk reaches it, and the messages before
+        it have already been yielded.
+        """
+        from pypst.messaging.message import (
+            Message,  # the import cycle, broken at the only point where it does not matter
+        )
+
+        for node in self.message_ids():
+            yield Message(self._store, node, parent=self)
+
+    def associated(self) -> Iterator[Message]:
+        """Each associated (FAI) message of `associated_ids()`, opened, in row-matrix order.
+
+        FAI messages are the folder's own furniture — views, rules, forms —
+        and are `NodeIdType.ASSOC_MESSAGE` rather than `NORMAL_MESSAGE`;
+        `Message` accepts both, as upstream does.
+        """
+        from pypst.messaging.message import Message
+
+        for node in self.associated_ids():
+            yield Message(self._store, node, parent=self)
 
     def subfolders(self) -> Iterator[Folder]:
         """Each child of `subfolder_ids()`, opened, in row-matrix order.

@@ -17,7 +17,8 @@ The entry points here are the ones that exist today (header, the two
 B-tree walks and lookups, the density list, the store node's heap/BTH
 and its property context, the root folder's hierarchy table as a
 table context, the message store's named accessors, the named
-property map and the folder tree from NID_ROOT_FOLDER). Each later layer adds its
+property map, the folder tree from NID_ROOT_FOLDER, and every message and
+attachment the node B-tree names). Each later layer adds its
 calls to `exercise` in its own row; the contract harness (P24) is the
 generic version over `pypst.__all__`.
 
@@ -48,6 +49,7 @@ from pypst.ltp.heap import HeapNode, HeapNodeId
 from pypst.ltp.prop_context import PropertyContext
 from pypst.ltp.table_context import TableContext
 from pypst.ltp.tree import HeapTree
+from pypst.messaging.message import MESSAGE_NODE_TYPES
 from pypst.messaging.store import Store
 from pypst.ndb.block import BlockReader
 from pypst.ndb.btree import BlockBTree, NodeBTree, read_density_list
@@ -160,7 +162,95 @@ def exercise(data: bytes, shape: BaseShape, limits: Limits = DEFAULT_LIMITS) -> 
         # cycle guard; then the two tables the walk does not follow.
         outcomes.append(_attempt("folder.walk", lambda: walk_folders(f, limits)))
         outcomes.append(_attempt("folder.tables", lambda: read_folder_tables(f, limits)))
+        # P09: every message-typed node the NBT holds, opened and read; then
+        # every attachment of every message that opened.
+        outcomes.append(_attempt("message.open", lambda: read_messages(f, limits)))
+        outcomes.append(_attempt("message.attachments", lambda: read_attachments(f, limits)))
     return outcomes
+
+
+# A corrupt store can name a great many nodes; the sweep only needs enough of
+# them to reach every branch of the message layer. The message cap has to
+# clear the FOURTH message of `javalibpst-dist-list.pst`, which is the one
+# that carries attachments and the one `attachment_lies` aims at — a tighter
+# cap turns that mutation SILENT, which is how this number was chosen. The
+# attachment cap is what keeps the cost bounded: each `data()` is a whole
+# payload read, per mutation, over thousands of mutations.
+MESSAGES_PER_SWEEP = 16
+ATTACHMENTS_PER_SWEEP = 4
+
+
+def _message_nodes(store: Store) -> list[NodeId]:
+    """Every NID in the node B-tree whose 5-bit type `Store.open_message` accepts, capped for the sweep.
+
+    Scanned rather than walked from the folder tree on purpose: a mutation
+    that RETYPES a node into a message (`corrupt.message_lies`) puts one in
+    the store that no contents table names, and the entry point has to reach
+    it.
+    """
+    out: list[NodeId] = []
+    for entry in store.nbt:
+        try:
+            id_type = entry.node.id_type
+        except PstError:
+            continue
+        if id_type in MESSAGE_NODE_TYPES:
+            out.append(entry.node)
+            if len(out) >= MESSAGES_PER_SWEEP:
+                break
+    return out
+
+
+def read_messages(f: io.BytesIO, limits: Limits) -> int:
+    """Open every message node and read everything P09 reads by name; the count that opened.
+
+    As `walk_folders`, the named accessors are read under
+    `contextlib.suppress(PstError)`: a message that legitimately lacks a
+    subject is not what this harness hunts. Opening is NOT suppressed — a
+    node that claims to be a message and is not must refuse somewhere.
+    """
+    store = Store(f, limits=limits)
+    opened = 0
+    for node in _message_nodes(store):
+        message = store.open_message(node)
+        opened += 1
+        for accessor in (
+            "message_class", "subject", "subject_raw", "subject_prefix", "normalized_subject",
+            "sender_name", "sender_email", "sender_smtp", "delivery_time", "client_submit_time",
+            "body_text", "body_html", "body_rtf", "transport_headers", "message_flags", "search_key",
+        ):
+            with contextlib.suppress(PstError):
+                getattr(message, accessor)
+        with contextlib.suppress(PstError):
+            message.body_rtf_decompressed()
+        with contextlib.suppress(PstError):
+            for _ in message.recipients():
+                pass
+    return opened
+
+
+def read_attachments(f: io.BytesIO, limits: Limits) -> int:
+    """Every attachment of every message that opens: its method, its bytes and its embedded message; the count.
+
+    Nothing is suppressed here. `corrupt.attachment_lies` makes a store
+    whose attachment table names a sub-node the message does not hold, and
+    that refusal has to reach the harness to be judged.
+    """
+    store = Store(f, limits=limits)
+    seen = 0
+    for node in _message_nodes(store):
+        try:
+            message = store.open_message(node)
+        except PstError:
+            continue  # judged by `message.open`, which does not suppress it
+        for attachment in message.attachments():
+            seen += 1
+            _ = (attachment.method, attachment.filename, attachment.long_filename, attachment.mime_tag)
+            attachment.data()
+            attachment.embedded_message()
+            if seen >= ATTACHMENTS_PER_SWEEP:
+                return seen
+    return seen
 
 
 def read_store(f: io.BytesIO, limits: Limits) -> int:

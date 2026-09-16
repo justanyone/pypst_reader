@@ -34,10 +34,20 @@ from pypst.limits import DEFAULT_LIMITS
 from pypst.ltp.heap import HeapId, HeapNode
 from pypst.ltp.prop_context import PropertyContext, PropertyRecord
 from pypst.ltp.prop_type import ObjectRef, PropType, PropValue, datetime_to_filetime
-from pypst.ltp.table_context import CellKind, CellRecord, ColumnDescriptor, TableContext
+from pypst.ltp.table_context import (
+    CellKind,
+    CellRecord,
+    ColumnDescriptor,
+    TableContext,
+    TableRow,
+)
 from pypst.ltp.tree import HeapTree
+from pypst.messaging import attachment as attachment_mod
 from pypst.messaging import folder as folder_mod
+from pypst.messaging import message as message_mod
+from pypst.messaging.attachment import Attachment
 from pypst.messaging.folder import Folder
+from pypst.messaging.message import Message
 from pypst.messaging.named_prop import PS_MAPI, PS_PUBLIC_STRINGS
 from pypst.messaging.store import Store
 from pypst.ndb.block import BlockReader, DataBlock, SubNodeLeafBlock
@@ -759,6 +769,435 @@ def dump_folders(path: Path) -> None:
 
 
 DUMPERS["folders"] = dump_folders
+
+
+# --- messages, recipients and attachments (P09) -------------------------------------------
+
+# The property types upstream's `PropertyType::try_from(u16)` accepts at the
+# pinned revision (ltp/prop_type.rs). `PtypObject` (0x000D) is NOT among them
+# although the enum declares the variant, and upstream's BTH leaf walk stops
+# at the first record it cannot decode, so upstream's view of a property
+# context ENDS at the first property whose type is outside this set — in
+# property-id order, because a BTH's leaves are sorted by key. That is why
+# every embedded-message attachment fails upstream with
+# `AttachmentMethodNotFound`: `PidTagAttachDataObject` (0x3701) is a
+# `PtypObject` and sorts before `PidTagAttachMethod` (0x3705).
+UPSTREAM_PROPERTY_TYPES = frozenset(
+    {
+        0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007, 0x000A, 0x000B,
+        0x0014, 0x001E, 0x001F, 0x0040, 0x0048, 0x0102,
+        0x1002, 0x1003, 0x1004, 0x1005, 0x1006, 0x1007, 0x1014, 0x101E, 0x101F,
+        0x1040, 0x1048, 0x1102,
+    }
+)
+
+
+def upstream_records(pc: PropertyContext) -> dict[int, PropertyRecord]:
+    """The records upstream's `PropertyContext::properties()` would see: ours, truncated where its walk stops.
+
+    A deliberate re-creation of an upstream limitation, in the dumper and
+    nowhere else — `pypst.messaging.attachment`'s module docstring
+    arbitrates the divergence. Without it `debug messages` would print the
+    embedded-message attachments the library can read and the goldens, which
+    upstream produced, could not be matched byte for byte.
+    """
+    out: dict[int, PropertyRecord] = {}
+    for prop_id, record in pc.records.items():  # ascending id: the BTH's own order
+        if int(record.prop_type) not in UPSTREAM_PROPERTY_TYPES:
+            break
+        out[prop_id] = record
+    return out
+
+
+def _filetime_debug(pc: PropertyContext, record: PropertyRecord) -> str | None:
+    """`Time(<ticks>)` straight from the stored 8 bytes, for a `PtypTime`; None for anything else.
+
+    `format_property_value` prints a time by converting the `datetime` back
+    to FILETIME, and `filetime_to_datetime` (P22) drops the sub-microsecond
+    tick that does not fit a `datetime` — so a store that wrote
+    `Time(131485947642894527)` would print `…520`. Three corpus messages
+    have such a delivery time, and upstream prints the `i64` it read. The
+    ticks are the fact; this reads them where the dumper needs them, and
+    `Message.delivery_filetime` is the same thing for a caller.
+    """
+    if record.prop_type is not PropType.SYSTIME or record.is_null:
+        return None
+    hnid = record.hnid
+    if hnid is None:
+        return None
+    raw = pc.heap.get_hnid(hnid)
+    if len(raw) != FILETIME_SIZE:
+        return None
+    return f"Time({int.from_bytes(raw, 'little', signed=True)})"
+
+
+FILETIME_SIZE = 8
+
+
+def _value_debug(pc: PropertyContext, records: dict[int, PropertyRecord], prop_id: int) -> str:
+    """`value_debug` in dump_messages.rs: `None`, or upstream's `Debug` for the decoded value."""
+    record = records.get(prop_id)
+    if record is None:
+        return "None"
+    ticks = _filetime_debug(pc, record)
+    if ticks is not None:
+        return ticks
+    return format_property_value(record.prop_type, pc.read(record))
+
+
+def _value_bytes(record: PropertyRecord, value: PropValue) -> tuple[bytes, str] | None:
+    """The raw bytes behind a body-like value and upstream's name for its variant, or None for anything else."""
+    if isinstance(value, bytes):
+        return value, "Binary"
+    if isinstance(value, str):
+        if record.prop_type is PropType.UNICODE:
+            return value.encode("utf-16-le"), "Unicode"
+        if record.prop_type is PropType.STRING8:
+            return value.encode(DUMP_CODEPAGE), "String8"
+    return None
+
+
+def _bytes_debug(pc: PropertyContext, records: dict[int, PropertyRecord], prop_id: int) -> str:
+    """`bytes_debug` in dump_messages.rs: `<n> bytes crc 0x… type=…`, the LENGTH and CRC of a body, never its text."""
+    record = records.get(prop_id)
+    if record is None:
+        return "None"
+    value = pc.read(record)
+    raw = _value_bytes(record, value)
+    if raw is None:
+        return format_property_value(record.prop_type, value)
+    data, kind = raw
+    return f"{len(data)} bytes crc 0x{zlib.crc32(data) & 0xFFFFFFFF:08X} type={kind}"
+
+
+# Upstream's `MessagingError` variants for the accessors the dumper calls,
+# as `_FOLDER_ERRORS` does for a folder's four.
+_MESSAGE_ERRORS: dict[int, tuple[str, str]] = {
+    message_mod.PID_TAG_MESSAGE_CLASS: ("MessageClassNotFound", "InvalidMessageClass"),
+}
+_ATTACHMENT_ERRORS: dict[int, tuple[str, str]] = {
+    attachment_mod.PID_TAG_ATTACH_METHOD: ("AttachmentMethodNotFound", "InvalidAttachmentMethod"),
+    attachment_mod.PID_TAG_ATTACH_SIZE: ("AttachmentSizeNotFound", "InvalidAttachmentSize"),
+}
+
+
+def _accessor(
+    records: dict[int, PropertyRecord],
+    errors: dict[int, tuple[str, str]],
+    prop_id: int,
+    render: Callable[[], str],
+) -> str:
+    """`result_debug` in dump_messages.rs, for one named accessor: its value, or upstream's `Error: …` in its place."""
+    try:
+        return render()
+    except PstError:
+        missing, invalid = errors[prop_id]
+        record = records.get(prop_id)
+        if record is None:
+            return _messaging_error(missing)
+        return _messaging_error(f"{invalid}({record.value_type.debug_name})")
+
+
+def message_accessor(message: Message, prop_id: int, render: Callable[[], str]) -> str:
+    """One message accessor's value, or the oracle's `Error: …` text in its place (`folder_accessor`'s twin)."""
+    return _accessor(upstream_records(message.properties), _MESSAGE_ERRORS, prop_id, render)
+
+
+def attachment_accessor(attachment: Attachment, prop_id: int, render: Callable[[], str]) -> str:
+    """One attachment accessor's value, or the oracle's `Error: …` text in its place."""
+    return _accessor(upstream_records(attachment.properties), _ATTACHMENT_ERRORS, prop_id, render)
+
+
+def _message_open_error(store: Store, node: NodeId, exc: PstError) -> str:
+    """Upstream's `Debug` for the refusal `Store::open_message` would have produced, when this port refused too.
+
+    Only the conditions upstream checks in the same order are re-rendered —
+    a NID whose type is not a message's, and a message node with no sub-node
+    tree, which `javalibpst-dist-list.pst` has one of. Anything else is this
+    port's own refusal and is printed as its own text, because inventing an
+    upstream variant name for it would be a lie.
+    """
+    try:
+        node_type = node.id_type
+    except PstError:
+        return f"Error: {exc}"
+    if node_type not in message_mod.MESSAGE_NODE_TYPES:
+        return _messaging_error(f"InvalidMessageEntryIdType({node_type.debug_name})")
+    try:
+        if store.nbt.find(node).sub_node is None:
+            return _messaging_error("MessageSubNodeTreeNotFound")
+    except PstError:
+        pass
+    return f"Error: {exc}"
+
+
+def _open_message_as_upstream(store: Store, node: NodeId) -> Message:
+    """Open a message and force everything upstream's `MessageInner::read` forces before it returns.
+
+    Upstream decodes every property and reads both sub-node tables while
+    opening, so a message this port would open lazily and refuse later is a
+    message upstream never returns at all. The dumper has to fail in the
+    same place to print the same lines; the library's laziness is the
+    divergence `pypst.messaging.message`'s docstring records.
+    """
+    message = store.open_message(node)
+    # `upstream_records`, not every record: a property upstream's walk never
+    # reaches cannot be what its open failed on.
+    for record in upstream_records(message.properties).values():
+        message.properties.read(record)
+    _ = (message.recipient_table, message.attachment_table)
+    return message
+
+
+def _cell_debug(table: TableContext, row: TableRow, prop_id: int, *, integer: bool = False) -> str:
+    """One cell of a table row by property id — `cell()` in dump_messages.rs, with `int_debug` for the two counts.
+
+    `None` when the table has no such column or the row has no value there,
+    which is upstream's `?` on both lookups; otherwise the value's `Debug`,
+    or a bare number when `integer` and the value is an Integer32.
+    """
+    index = next((i for i, column in enumerate(table.columns) if column.prop_id == prop_id), None)
+    if index is None or row.records[index] is None:
+        return "None"
+    column = table.columns[index]
+    value = row.get(prop_id)
+    if integer and isinstance(value, int) and not isinstance(value, bool) and column.prop_type is PropType.LONG:
+        return str(value)
+    return format_property_value(column.prop_type, value)
+
+
+def message_lines(message: Message, indent: int) -> list[str]:
+    """The twelve property lines `dump_message_properties` prints, at `indent` + 2."""
+    pad = " " * (indent + 2)
+    pc = message.properties
+    records = upstream_records(pc)
+    klass = message_accessor(message, message_mod.PID_TAG_MESSAGE_CLASS, lambda: _rust_str(message.message_class))
+    out = [f"{pad}Class: {klass}"]
+    for label, prop_id in (
+        ("Subject", message_mod.PID_TAG_SUBJECT),
+        ("Normalized Subject", message_mod.PID_TAG_NORMALIZED_SUBJECT),
+        ("Sender Name", message_mod.PID_TAG_SENDER_NAME),
+        ("Sender Email", message_mod.PID_TAG_SENDER_EMAIL_ADDRESS),
+        ("Sender SMTP", message_mod.PID_TAG_SENDER_SMTP_ADDRESS),
+        ("Delivery Time", message_mod.PID_TAG_MESSAGE_DELIVERY_TIME),
+        ("Client Submit Time", message_mod.PID_TAG_CLIENT_SUBMIT_TIME),
+    ):
+        out.append(f"{pad}{label}: {_value_debug(pc, records, prop_id)}")
+    for label, prop_id in (
+        ("Body Text", message_mod.PID_TAG_BODY),
+        ("Body HTML", message_mod.PID_TAG_HTML),
+        ("Body RTF", message_mod.PID_TAG_RTF_COMPRESSED),
+        ("Transport Headers", message_mod.PID_TAG_TRANSPORT_MESSAGE_HEADERS),
+    ):
+        out.append(f"{pad}{label}: {_bytes_debug(pc, records, prop_id)}")
+    return out
+
+
+class _MessageDumper:
+    """The walk `oracle/examples/dump_messages.rs` performs, printing as it goes and counting its refusals."""
+
+    def __init__(self, store: Store) -> None:
+        self.store = store
+        self.errors = 0
+        self.seen: set[NodeId] = set()
+
+    def error(self, indent: int, text: str) -> None:
+        """One counted `Error:` line — `Dumper::error`, whose count decides the example's exit status."""
+        print(f"{' ' * indent}{text}")
+        self.errors += 1
+
+    def message(self, node: NodeId, indent: int) -> None:
+        print(f"{' ' * indent}Message: {node}")
+        try:
+            message = _open_message_as_upstream(self.store, node)
+        except PstError as exc:
+            self.error(indent + 2, _message_open_error(self.store, node, exc))
+            return
+        for line in message_lines(message, indent):
+            print(line)
+        self.recipients(message, indent)
+        self.attachments(message, indent)
+
+    def recipients(self, message: Message, indent: int) -> None:
+        pad = " " * (indent + 2)
+        table = message.recipient_table
+        if table is None:
+            print(f"{pad}Recipients: None")
+            return
+        print(f"{pad}Recipients: {len(table)}")
+        for row in table.rows():
+            fields = " ".join(
+                f"{name}={_cell_debug(table, row, prop_id, integer=name == 'type')}"
+                for name, prop_id in (
+                    ("type", message_mod.PID_TAG_RECIPIENT_TYPE),
+                    ("name", message_mod.PID_TAG_DISPLAY_NAME),
+                    ("email", message_mod.PID_TAG_EMAIL_ADDRESS),
+                    ("smtp", message_mod.PID_TAG_SMTP_ADDRESS),
+                )
+            )
+            print(f"{' ' * (indent + 4)}Recipient: {fields}")
+
+    def attachments(self, message: Message, indent: int) -> None:
+        pad = " " * (indent + 2)
+        table = message.attachment_table
+        if table is None:
+            print(f"{pad}Attachments: None")
+            return
+        rows = list(table.rows())
+        print(f"{pad}Attachments: {len(rows)}")
+        for row in rows:
+            node = NodeId(row.id)
+            print(f"{' ' * (indent + 4)}Attachment: {node}")
+            fields = " ".join(
+                f"{name}={_cell_debug(table, row, prop_id, integer=name in ('method', 'size'))}"
+                for name, prop_id in (
+                    ("method", attachment_mod.PID_TAG_ATTACH_METHOD),
+                    ("filename", attachment_mod.PID_TAG_ATTACH_FILENAME),
+                    ("size", attachment_mod.PID_TAG_ATTACH_SIZE),
+                )
+            )
+            print(f"{' ' * (indent + 6)}Row: {fields}")
+            self.attachment(message, node, indent + 6)
+
+    def attachment(self, message: Message, node: NodeId, indent: int) -> None:
+        """One attachment's own property context, or the refusal upstream's `open_attachment` would have made."""
+        pad = " " * indent
+        try:
+            attachment = Attachment(message, node)
+            records = upstream_records(attachment.properties)
+            for record in records.values():
+                attachment.properties.read(record)
+        except PstError as exc:
+            self.error(indent, f"Error: {exc}")
+            return
+        refusal = _upstream_attachment_refusal(attachment, records)
+        if refusal is not None:
+            self.error(indent, _messaging_error(refusal))
+            return
+        print(f"{pad}Method: {attachment_accessor(attachment, attachment_mod.PID_TAG_ATTACH_METHOD, lambda: str(attachment.method_value))}")
+        pc = attachment.properties
+        for label, prop_id in (
+            ("Filename", attachment_mod.PID_TAG_ATTACH_FILENAME),
+            ("Long Filename", attachment_mod.PID_TAG_ATTACH_LONG_FILENAME),
+            ("Mime Tag", attachment_mod.PID_TAG_ATTACH_MIME_TAG),
+            ("Content Id", attachment_mod.PID_TAG_ATTACH_CONTENT_ID),
+        ):
+            print(f"{pad}{label}: {_value_debug(pc, records, prop_id)}")
+        print(f"{pad}Size: {attachment_accessor(attachment, attachment_mod.PID_TAG_ATTACH_SIZE, lambda: str(attachment.size))}")
+        try:
+            data = attachment.data()
+        except PstError as exc:
+            self.error(indent, f"Error: {exc}")
+            return
+        if data is None:
+            print(f"{pad}Data: None")
+        else:
+            print(f"{pad}Data: {len(data)} bytes crc 0x{zlib.crc32(data) & 0xFFFFFFFF:08X}")
+
+    def folder(self, node: NodeId, depth: int) -> None:
+        limits = self.store.limits
+        print(f"Folder: {node}")
+        if depth > limits.max_folder_depth:
+            self.error(2, f'"folder depth exceeds {limits.max_folder_depth}"')
+            return
+        if node in self.seen:
+            self.error(2, '"folder already visited (cycle in the hierarchy)"')
+            return
+        self.seen.add(node)
+        try:
+            folder = self.store.open_folder(node)
+            lines = folder_lines(folder)
+        except PstError as exc:
+            self.error(2, f"Error: {exc}")
+            return
+        # `folder_lines` prints the four properties, the associated count and
+        # then the two `… Table: None` lines; the messages go between them,
+        # which is where `dump_folder` prints them.
+        for line in lines[:_FOLDER_LINES_BEFORE_MESSAGES]:
+            print(line)
+        contents = folder_table(folder, NodeIdType.CONTENTS_TABLE)
+        if contents is not None:
+            for row in contents.rows():
+                self.message(NodeId(row.id), 2)
+        for line in lines[_FOLDER_LINES_BEFORE_MESSAGES:]:
+            print(line)
+        children = folder.subfolder_ids() if folder_table(folder, NodeIdType.HIERARCHY_TABLE) is not None else ()
+        for child in children:
+            self.folder(child, depth + 1)
+
+
+# `folder_lines`' first five lines are the four named properties and the
+# associated table's count; anything after them is a `… Table: None` line,
+# which `dump_folder` prints AFTER the folder's messages.
+_FOLDER_LINES_BEFORE_MESSAGES = 5
+
+
+def _upstream_attachment_refusal(attachment: Attachment, records: dict[int, PropertyRecord]) -> str | None:
+    """The `MessagingError` variant `AttachmentInner::read` would fail with, or None when it would succeed.
+
+    Upstream's order: the method, then the data property its arm needs.
+    Only the *view* is upstream's (`upstream_records`); the values are read
+    through the library, so a mistake here shows up as a golden diff.
+    """
+    pc = attachment.properties
+    record = records.get(attachment_mod.PID_TAG_ATTACH_METHOD)
+    if record is None:
+        return "AttachmentMethodNotFound"
+    method = pc.read(record)
+    if not isinstance(method, int) or isinstance(method, bool):
+        return f"InvalidAttachmentMethod({record.value_type.debug_name})"
+    if method not in _UPSTREAM_ATTACHMENT_METHODS:
+        return f"UnknownAttachmentMethod({method})"
+    if method not in _UPSTREAM_METHODS_WITH_DATA:
+        return None
+    data = records.get(attachment_mod.PID_TAG_ATTACH_DATA_BINARY)
+    if data is None:
+        return "AttachmentMessageObjectDataNotFound"
+    wanted = PropType.BINARY if method == attachment_mod.AttachMethod.BY_VALUE else PropType.OBJECT
+    if data.prop_type is not wanted:
+        return f"InvalidMessageObjectData({data.value_type.debug_name})"
+    return None
+
+
+# Upstream's `TryFrom<i32> for AttachmentMethod` has no arm for 3
+# (`afByReferenceResolve`), which [MS-OXCMSG] 2.2.2.9 defines and this port
+# accepts; the dumper needs upstream's set, not this port's.
+_UPSTREAM_ATTACHMENT_METHODS = frozenset({0, 1, 2, 4, 5, 6, 7})
+_UPSTREAM_METHODS_WITH_DATA = frozenset({1, 5, 6})
+
+
+def dump_messages(path: Path) -> None:
+    """`messages <file>`: the whole of `oracle/examples/dump_messages.rs` — folders, messages, recipients, attachments.
+
+    `debug folders` prints this dump's folder blocks; this prints all of it,
+    including the `Message:` blocks under each folder's contents table, the
+    recipient and attachment rows, each attachment's own property context,
+    and the `Errors: <n>` trailer. As the example does, a folder, message or
+    attachment that cannot be opened prints an indented `Error:` line, is
+    counted, and the walk goes on; an accessor that refuses prints its
+    refusal in place of the value and is not counted.
+
+    Two of the example's contracts are re-created here rather than taken
+    from the library, both so that the output still matches the goldens the
+    pinned Rust produced: `folder_table`'s swallow (P08), and
+    `upstream_records`, which truncates a property context where upstream's
+    BTH walk stops. The second is what prints
+    `Error: … AttachmentMethodNotFound` for the embedded-message
+    attachments that `pypst.messaging.attachment` can and upstream cannot
+    open — see that module's docstring.
+
+    Exit status is the example's: `PstError` (and so exit 1) when the
+    trailer is not `Errors: 0`, after the whole dump has been printed.
+    """
+    with Store.open(path, codepage=DUMP_CODEPAGE) as store:
+        dumper = _MessageDumper(store)
+        dumper.folder(NID_ROOT_FOLDER, 0)
+        print(f"Errors: {dumper.errors}")
+        if dumper.errors:
+            raise PstFormatError(f"{dumper.errors} object(s) in {path.name} could not be read")
+
+
+DUMPERS["messages"] = dump_messages
 
 
 def main(argv: list[str] | None = None) -> int:

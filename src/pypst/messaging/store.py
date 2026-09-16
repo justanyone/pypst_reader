@@ -29,10 +29,11 @@ record table. Named properties are read on first use, as upstream's
 `store.named_property_map()` is.
 
 **`root_folder` and `open_folder` were added by P08** (folders) and return
-`pypst.messaging.folder.Folder`; `open_message` is still P09's and is
-deliberately absent. `folder` imports this module, so the two accessors
-import it inside the call rather than at module scope — the cycle is real
-and is broken at the only point where it does not matter.
+`pypst.messaging.folder.Folder`; **`open_message` was added by P09** and
+returns `pypst.messaging.message.Message`. Both `folder` and `message`
+import this module, so the three accessors import them inside the call
+rather than at module scope — the cycle is real and is broken at the only
+points where it does not matter.
 
 **Deliberate divergences from upstream**, each chosen to fail closed or to
 fit Python's conventions:
@@ -100,6 +101,7 @@ from pypst.ndb.ids import (
 
 if TYPE_CHECKING:
     from pypst.messaging.folder import Folder
+    from pypst.messaging.message import Message
 
 __all__ = [
     "ENTRY_ID_FORMAT",
@@ -177,10 +179,6 @@ class Store:
     passes its own `BinaryIO` keeps ownership (`owns_file=False`, the
     default) and `close()` leaves it alone.
     """
-
-    # P09 adds `open_message`. It is not stubbed here:
-    # docs/INTERFACES.md § `pypst.messaging` carries its signature until
-    # the row that builds it lands.
 
     __slots__ = (
         "_bbt",
@@ -409,6 +407,25 @@ class Store:
         )
 
         return Folder.open(self, entry)
+
+    # --- messages (P09) ----------------------------------------------------------------
+
+    def open_message(self, entry: EntryId | NodeId, *, parent: Folder | None = None) -> Message:
+        """Upstream's `Store::open_message`: one message by EntryID (or bare NID).
+
+        `PstFormatError` for a NID whose type is none of `NormalMessage`,
+        `AssociatedMessage` and `Attachment` (upstream accepts all three),
+        and for an `EntryId` whose record key is another store's;
+        `PstNotFoundError` when the node B-tree does not hold the node.
+        `parent` is the folder the caller found the message in, remembered
+        on the message for the layers above (`pypst.messaging.message`'s
+        module docstring); it is never read back by this layer.
+        """
+        from pypst.messaging.message import (
+            Message,  # the import cycle, broken here (module docstring)
+        )
+
+        return Message.open(self, entry, parent=parent)
 
     # --- the named property map ------------------------------------------------------
 

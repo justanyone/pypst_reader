@@ -917,6 +917,267 @@ def _folder_value(lines: list[str], i: int, label: str) -> tuple[Any, int]:
         raise ValueError(f"line {i + 1}: `{label}:` is {text!r}, not an i32") from None
 
 
+# --- the message blocks inside a dump_messages walk (P09) --------------------------
+
+_MESSAGE_LINE = re.compile(r"^(\s*)Message: (NodeId \{ .+ \}|.+)$")
+_ATTACHMENT_LINE = re.compile(r"^\s*Attachment: (NodeId \{ .+ \})$")
+_RECIPIENT_LINE = re.compile(r"^\s*Recipient: type=(.*?) name=(.*?) email=(.*?) smtp=(.*)$")
+_ROW_LINE = re.compile(r"^\s*Row: method=(.*?) filename=(.*?) size=(.*)$")
+_BYTES_SUMMARY = re.compile(r"^(\d+) bytes crc 0x([0-9A-F]{8}) type=(String8|Unicode|Binary)$")
+_DATA_SUMMARY = re.compile(r"^(\d+) bytes crc 0x([0-9A-F]{8})$")
+_BARE_INT = re.compile(r"^-?\d+$")
+_NOT_OPENED = "Properties: not opened (embedded message is Rc<dyn Message>)"
+
+# `dump_message_properties`, in the order it prints: the eight `value_debug`
+# labels and then the four `bytes_debug` ones.
+MESSAGE_VALUE_LABELS = (
+    ("class", "Class"),
+    ("subject", "Subject"),
+    ("normalized_subject", "Normalized Subject"),
+    ("sender_name", "Sender Name"),
+    ("sender_email", "Sender Email"),
+    ("sender_smtp", "Sender SMTP"),
+    ("delivery_time", "Delivery Time"),
+    ("client_submit_time", "Client Submit Time"),
+)
+MESSAGE_BYTES_LABELS = (
+    ("body_text", "Body Text"),
+    ("body_html", "Body HTML"),
+    ("body_rtf", "Body RTF"),
+    ("transport_headers", "Transport Headers"),
+)
+ATTACHMENT_VALUE_LABELS = (
+    ("method", "Method"),
+    ("filename", "Filename"),
+    ("long_filename", "Long Filename"),
+    ("mime_tag", "Mime Tag"),
+    ("content_id", "Content Id"),
+    ("size", "Size"),
+)
+
+
+def dump_messages_value(text: str) -> Any:
+    """One printed value of a ``dump_messages`` walk, as a value.
+
+    ``None`` for the literal ``None``, an ``int`` for a bare number
+    (``int_debug``'s form, as `type=1` and `method=5` print), ``{"error":
+    <Debug text>}`` for an accessor that refused, and otherwise ``{"type":
+    <variant>, "value": <value>}`` from `parse_value` — so a caller compares
+    ``Unicode`` against ``String8`` as well as the text they hold.
+    """
+    if text == "None":
+        return None
+    m = _RESULT_ERROR.match(text)
+    if m:
+        return {"error": m.group(1)}
+    if _BARE_INT.match(text):
+        return int(text)
+    variant, value = parse_value(text)
+    return {"type": variant, "value": value}
+
+
+def _rust_string_value(text: str) -> Any:
+    """A Rust ``String`` as `result_debug` prints it: the literal, or ``{"error": …}`` when the accessor refused."""
+    m = _RESULT_ERROR.match(text)
+    if m:
+        return {"error": m.group(1)}
+    cur = _TextCursor(text)
+    value = cur.string()
+    cur.done()
+    return value
+
+
+def _bytes_summary(text: str, line_no: int, label: str) -> dict[str, Any] | None:
+    """``<n> bytes crc 0x… type=…`` as ``{"len", "crc", "type"}``; ``None`` for the literal ``None``."""
+    if text == "None":
+        return None
+    m = _BYTES_SUMMARY.match(text)
+    if m is None:
+        raise ValueError(f"line {line_no}: `{label}:` is {text!r}, not a byte summary")
+    return {"len": int(m.group(1)), "crc": int(m.group(2), 16), "type": m.group(3)}
+
+
+class _Block:
+    """A cursor over one indented block of a ``dump_messages`` dump."""
+
+    __slots__ = ("base", "i", "lines", "offset")
+
+    def __init__(self, lines: list[str], i: int, base: int, offset: int) -> None:
+        self.lines = lines
+        self.i = i
+        self.base = base
+        self.offset = offset  # the line number of lines[0] in the whole text, 1-based
+
+    def done(self) -> bool:
+        return self.i >= len(self.lines)
+
+    def at(self, indent: int) -> str | None:
+        """The current line's text when it is indented exactly `indent`, else None."""
+        if self.done():
+            return None
+        line = self.lines[self.i]
+        stripped = line.lstrip(" ")
+        if len(line) - len(stripped) != indent:
+            return None
+        return stripped
+
+    def take(self, indent: int, label: str) -> str:
+        text = self.at(indent)
+        if text is None or not text.startswith(f"{label}: "):
+            got = "end of block" if self.done() else self.lines[self.i]
+            raise ValueError(f"line {self.offset + self.i}: expected `{label}:`, got {got!r}")
+        self.i += 1
+        return text[len(label) + 2 :]
+
+
+def _parse_attachment(block: _Block, indent: int) -> dict[str, Any]:
+    """One ``Attachment:`` block: its row, then its own property context or the error that replaced it."""
+    line = block.lines[block.i]
+    m = _ATTACHMENT_LINE.match(line)
+    if m is None:
+        raise ValueError(f"line {block.offset + block.i}: expected `Attachment:`, got {line!r}")
+    block.i += 1
+    out: dict[str, Any] = {
+        "node": parse_node_id(m.group(1)),
+        "row": None,
+        "properties": None,
+        "data": None,
+        "message": None,
+        "error": None,
+        "not_opened": False,
+    }
+    inner = indent + 2
+    row = block.at(inner)
+    if row is None or not row.startswith("Row: "):
+        raise ValueError(f"line {block.offset + block.i}: expected `Row:` under an attachment")
+    rm = _ROW_LINE.match(row)
+    if rm is None:
+        raise ValueError(f"line {block.offset + block.i}: malformed `Row:` line {row!r}")
+    block.i += 1
+    out["row"] = {
+        "method": dump_messages_value(rm.group(1)),
+        "filename": dump_messages_value(rm.group(2)),
+        "size": dump_messages_value(rm.group(3)),
+    }
+    nxt = block.at(inner)
+    if nxt is None:
+        return out
+    if nxt == _NOT_OPENED:  # an embedded message's own attachments: the row only
+        block.i += 1
+        out["not_opened"] = True
+        return out
+    if nxt.startswith("Error: "):
+        block.i += 1
+        out["error"] = nxt.removeprefix("Error: ")
+        return out
+    props: dict[str, Any] = {}
+    for key, label in ATTACHMENT_VALUE_LABELS:
+        props[key] = dump_messages_value(block.take(inner, label))
+    data = block.take(inner, "Data")
+    if data == "None":
+        out["data"] = None
+    elif data == "Message":
+        out["data"] = "Message"
+    else:
+        dm = _DATA_SUMMARY.match(data)
+        if dm is None:
+            raise ValueError(f"line {block.offset + block.i}: `Data:` is {data!r}, not a byte summary")
+        out["data"] = {"len": int(dm.group(1)), "crc": int(dm.group(2), 16)}
+    out["properties"] = props
+    if block.at(inner) is not None and block.lines[block.i].lstrip(" ").startswith("Message: "):
+        out["message"] = _parse_message(block, inner)
+    return out
+
+
+def _parse_message(block: _Block, indent: int) -> dict[str, Any]:
+    """One ``Message:`` block at `indent` — the twelve property lines, the recipients and the attachments."""
+    line = block.lines[block.i]
+    m = _MESSAGE_LINE.match(line)
+    if m is None or len(m.group(1)) != indent:
+        raise ValueError(f"line {block.offset + block.i}: expected `Message:` at indent {indent}, got {line!r}")
+    block.i += 1
+    out: dict[str, Any] = {
+        "node": parse_node_id(m.group(2)),
+        "error": None,
+        "recipients": None,
+        "attachments": None,
+    }
+    inner = indent + 2
+    nxt = block.at(inner)
+    if nxt is not None and nxt.startswith("Error: "):
+        block.i += 1
+        out["error"] = nxt.removeprefix("Error: ")
+        return out
+    for key, label in MESSAGE_VALUE_LABELS:
+        text = block.take(inner, label)
+        # `Class:` is `result_debug(message_class())` — a Rust `String`, not a
+        # `PropertyValue` — so it is a bare string literal or an `Error:` text.
+        out[key] = _rust_string_value(text) if key == "class" else dump_messages_value(text)
+    for key, label in MESSAGE_BYTES_LABELS:
+        out[key] = _bytes_summary(block.take(inner, label), block.offset + block.i, label)
+    recipients = block.take(inner, "Recipients")
+    if recipients != "None":
+        try:
+            count = int(recipients)
+        except ValueError:
+            raise ValueError(f"line {block.offset + block.i}: `Recipients:` is {recipients!r}") from None
+        rows: list[dict[str, Any]] = []
+        while (text := block.at(inner + 2)) is not None and text.startswith("Recipient: "):
+            rm = _RECIPIENT_LINE.match(text)
+            if rm is None:
+                raise ValueError(f"line {block.offset + block.i}: malformed `Recipient:` line {text!r}")
+            block.i += 1
+            rows.append(
+                {
+                    "type": dump_messages_value(rm.group(1)),
+                    "name": dump_messages_value(rm.group(2)),
+                    "email": dump_messages_value(rm.group(3)),
+                    "smtp": dump_messages_value(rm.group(4)),
+                }
+            )
+        if len(rows) != count:
+            raise ValueError(f"line {block.offset + block.i}: `Recipients: {count}` with {len(rows)} rows")
+        out["recipients"] = rows
+    attachments = block.take(inner, "Attachments")
+    if attachments != "None":
+        try:
+            count = int(attachments)
+        except ValueError:
+            raise ValueError(f"line {block.offset + block.i}: `Attachments:` is {attachments!r}") from None
+        items: list[dict[str, Any]] = []
+        while (text := block.at(inner + 2)) is not None and text.startswith("Attachment: "):
+            items.append(_parse_attachment(block, inner + 2))
+        if len(items) != count:
+            raise ValueError(f"line {block.offset + block.i}: `Attachments: {count}` with {len(items)} rows")
+        out["attachments"] = items
+    return out
+
+
+def parse_message_block(lines: list[str], *, first_line: int = 1) -> dict[str, Any]:
+    """One ``Message:`` block of a ``dump_messages`` dump, read as values.
+
+    `lines` is the block as `parse_dump_messages` collects it: the
+    ``Message:`` line and every line indented under it, with their original
+    indentation. ``{"node", "class", "subject", "normalized_subject",
+    "sender_name", "sender_email", "sender_smtp", "delivery_time",
+    "client_submit_time", "body_text", "body_html", "body_rtf",
+    "transport_headers", "recipients", "attachments", "error"}`` — each
+    value as `dump_messages_value` reads it, each body as ``{"len", "crc",
+    "type"}``, ``recipients``/``attachments`` ``None`` when the message has
+    no such table and a list otherwise, and ``error`` the text of the one
+    ``Error:`` line that replaces the whole block when the message could not
+    be opened at all. ``ValueError`` names the offending line.
+    """
+    if not lines:
+        raise ValueError("an empty message block")
+    indent = len(lines[0]) - len(lines[0].lstrip(" "))
+    block = _Block(lines, 0, indent, first_line)
+    out = _parse_message(block, indent)
+    if not block.done():
+        raise ValueError(f"line {first_line + block.i}: {lines[block.i]!r} is left over in the message block")
+    return out
+
+
 def parse_dump_messages(text: str) -> dict[str, Any]:
     """``oracle/examples/dump_messages.rs``: the pre-order folder walk, plus the message blocks verbatim.
 
@@ -926,13 +1187,12 @@ def parse_dump_messages(text: str) -> dict[str, Any]:
          "unread_count": …, "has_subfolders": bool | {"error": …},
          "associated_count": int | None,          # None when `Associated Table: None`
          "contents_table": bool, "hierarchy_table": bool,   # False when `… Table: None`
-         "messages": [{"node": <node_id>, "lines": [str, …]}, …],
+         "messages": [<message>, …],          # `parse_message_block`, plus its raw "lines"
          "error": str | None}                     # the folder could not be opened at all
 
-    The message blocks are kept as their raw lines: P09 lands their parser
-    (``docs/INTERFACES.md`` § messaging), and P08 needs only that they are
-    delimited correctly so the folder walk either side of them is exact.
-    ``errors`` is the trailer, ``None`` when the text has none (a store the
+    Each message block is read by ``parse_message_block`` (P09) and keeps
+    its raw ``lines`` beside the parsed fields, so a caller can compare
+    either. ``errors`` is the trailer, ``None`` when the text has none (a store the
     example refused before the walk). Garbled input is ``ValueError`` naming
     the line; never a partial result.
     """
@@ -979,11 +1239,14 @@ def parse_dump_messages(text: str) -> dict[str, Any]:
         else:
             folder["associated_count"], i = _folder_value(lines, i, "Associated Count")
         while i < len(lines) and (m := _MESSAGE.match(lines[i])) is not None:
-            block = {"node": parse_node_id(m.group(1)), "lines": [lines[i]]}
+            start = i
+            raw = [lines[i]]
             i += 1
             while i < len(lines) and lines[i].startswith("    "):
-                block["lines"].append(lines[i])
+                raw.append(lines[i])
                 i += 1
+            block = parse_message_block(raw, first_line=start + 1)
+            block["lines"] = raw
             folder["messages"].append(block)
         if i < len(lines) and lines[i] == "  Contents Table: None":
             folder["contents_table"] = False

@@ -24,10 +24,12 @@ from tests.golden_parsers import (
     READ_DENSITY_LIST_LABELS,
     READ_HEADER_LABELS,
     dump_messages_folder_lines,
+    dump_messages_value,
     parse_block_id,
     parse_block_ref,
     parse_byte_index,
     parse_dump_messages,
+    parse_message_block,
     parse_node_id,
     parse_page_id,
     parse_page_ref,
@@ -904,3 +906,155 @@ def test_dump_messages_refuses_garbled_input(text: str, match: str) -> None:
     """Never a partial result: a shape the oracle cannot have printed is a `ValueError` naming the line."""
     with pytest.raises(ValueError, match=match):
         parse_dump_messages(text)
+
+
+# --- the message blocks, read as values (P09) ---------------------------------------
+
+
+_EMBEDDED_BLOCK = """\
+  Message: NodeId { NormalMessage: 0x10001 }
+    Class: "IPM.Note"
+    Subject: Unicode(UnicodeValue { "\\u{1}\\u{5}FW: hello" })
+    Normalized Subject: None
+    Sender Name: Unicode(UnicodeValue { "A Name" })
+    Sender Email: None
+    Sender SMTP: None
+    Delivery Time: Time(131485947642894527)
+    Client Submit Time: None
+    Body Text: 12 bytes crc 0x0000ABCD type=Unicode
+    Body HTML: None
+    Body RTF: None
+    Transport Headers: None
+    Recipients: 1
+      Recipient: type=1 name=Unicode(UnicodeValue { "A Name" }) email=None smtp=None
+    Attachments: 1
+      Attachment: NodeId { Attachment: 0x401 }
+        Row: method=5 filename=None size=11494
+        Method: 5
+        Filename: None
+        Long Filename: None
+        Mime Tag: None
+        Content Id: None
+        Size: 11494
+        Data: Message
+        Message: NodeId { NormalMessage: 0x10002 }
+          Class: "IPM.Note"
+          Subject: Unicode(UnicodeValue { "inner" })
+          Normalized Subject: None
+          Sender Name: None
+          Sender Email: None
+          Sender SMTP: None
+          Delivery Time: None
+          Client Submit Time: None
+          Body Text: None
+          Body HTML: None
+          Body RTF: None
+          Transport Headers: None
+          Recipients: None
+          Attachments: 1
+            Attachment: NodeId { Attachment: 0x402 }
+              Row: method=1 filename=None size=3
+              Properties: not opened (embedded message is Rc<dyn Message>)
+"""
+
+
+def test_parse_message_block_reads_every_field() -> None:
+    """The whole grammar in one block, embedded message included — the shape a fixed pin would produce."""
+    parsed = parse_message_block(_EMBEDDED_BLOCK.splitlines())
+    assert parsed["node"] == {"type": "NormalMessage", "index": 0x10001}
+    assert parsed["class"] == "IPM.Note"
+    assert parsed["subject"] == {"type": "Unicode", "value": "\x01\x05FW: hello"}
+    assert parsed["normalized_subject"] is None
+    assert parsed["delivery_time"] == {"type": "Time", "value": 131485947642894527}
+    assert parsed["client_submit_time"] is None
+    assert parsed["body_text"] == {"len": 12, "crc": 0xABCD, "type": "Unicode"}
+    assert parsed["body_html"] is None
+    assert parsed["error"] is None
+    (recipient,) = parsed["recipients"]
+    assert recipient["type"] == 1 and recipient["name"]["value"] == "A Name" and recipient["email"] is None
+    (attachment,) = parsed["attachments"]
+    assert attachment["node"] == {"type": "Attachment", "index": 0x401}
+    assert attachment["row"] == {"method": 5, "filename": None, "size": 11494}
+    assert attachment["properties"]["size"] == 11494 and attachment["properties"]["mime_tag"] is None
+    assert attachment["data"] == "Message"
+    inner = attachment["message"]
+    assert inner["node"] == {"type": "NormalMessage", "index": 0x10002}
+    assert inner["recipients"] is None
+    (inner_attachment,) = inner["attachments"]
+    assert inner_attachment["not_opened"] is True and inner_attachment["properties"] is None
+
+
+def test_parse_message_block_reads_a_block_that_is_only_an_error() -> None:
+    parsed = parse_message_block(
+        [
+            "  Message: NodeId { NormalMessage: 0x10001 }",
+            "    Error: Custom { kind: InvalidData, error: MessageSubNodeTreeNotFound }",
+        ]
+    )
+    assert parsed["error"] == "Custom { kind: InvalidData, error: MessageSubNodeTreeNotFound }"
+    assert parsed["recipients"] is None and parsed["attachments"] is None
+
+
+def test_parse_message_block_reads_an_attachment_that_would_not_open() -> None:
+    lines = _EMBEDDED_BLOCK.splitlines()[:18] + [
+        "        Error: Custom { kind: InvalidData, error: AttachmentMethodNotFound }"
+    ]
+    parsed = parse_message_block(lines)
+    (attachment,) = parsed["attachments"]
+    assert attachment["error"] == "Custom { kind: InvalidData, error: AttachmentMethodNotFound }"
+    assert attachment["properties"] is None and attachment["message"] is None
+
+
+@pytest.mark.parametrize(
+    "mangle",
+    [
+        lambda ls: ls[:2] + ls[3:],  # a missing label
+        lambda ls: [ls[0], ls[1].replace("Class", "Klass"), *ls[2:]],
+        lambda ls: [*ls[:13], "    Recipients: 2", *ls[14:]],  # a count that disagrees with the rows
+        lambda ls: [*ls[:9], "    Body Text: 12 bytes", *ls[10:]],  # a malformed byte summary
+        lambda ls: [*ls, "  Message: NodeId { NormalMessage: 0x3 }"],  # a line left over
+        lambda ls: [],
+    ],
+    ids=["missing label", "wrong label", "bad count", "bad summary", "leftover", "empty"],
+)
+def test_parse_message_block_raises_value_error_on_garbled_input(mangle) -> None:
+    with pytest.raises(ValueError):
+        parse_message_block(mangle(_EMBEDDED_BLOCK.splitlines()))
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("None", None),
+        ("5", 5),
+        ("-1", -1),
+        ('Unicode(UnicodeValue { "x" })', {"type": "Unicode", "value": "x"}),
+        ("Time(129133405290000000)", {"type": "Time", "value": 129133405290000000}),
+        ("Error: Custom { kind: InvalidData, error: X }", {"error": "Custom { kind: InvalidData, error: X }"}),
+    ],
+)
+def test_dump_messages_value_reads_each_printed_form(text: str, expected: object) -> None:
+    assert dump_messages_value(text) == expected
+
+
+@pytest.mark.parametrize("store", DUMP_MESSAGES_STORES, ids=DUMP_MESSAGES_IDS)
+def test_every_golden_message_block_parses_to_values(store: Path, golden) -> None:
+    """Every message the oracle printed, read as values — and the fields it must always carry."""
+    parsed = parse_dump_messages(golden(store, EXAMPLE_DUMP))
+    blocks = [m for f in parsed["folders"] for m in f["messages"]]
+    for block in blocks:
+        assert set(block["node"]) == {"type", "index"}
+        if block["error"] is not None:
+            continue
+        assert isinstance(block["class"], (str, dict))
+        for label in ("body_text", "body_html", "body_rtf", "transport_headers"):
+            value = block[label]
+            assert value is None or set(value) == {"len", "crc", "type"}
+        for label in ("delivery_time", "client_submit_time"):
+            assert block[label] is None or block[label]["type"] == "Time"
+        for recipient in block["recipients"] or ():
+            assert set(recipient) == {"type", "name", "email", "smtp"}
+        for attachment in block["attachments"] or ():
+            assert set(attachment["row"]) == {"method", "filename", "size"}
+    # The whole corpus, so a golden that loses its messages is a red test.
+    assert len(blocks) == sum(1 for ln in golden(store, EXAMPLE_DUMP).splitlines() if ln.strip().startswith("Message: "))

@@ -10,10 +10,11 @@ line by line, and is memory-safe against bytes an attacker chose.
 Status: EARLY. The encoding, CRC, id, header, page, B-tree, block, heap,
 BTH and property-context layers are ported and tested, and so is the message
 store on top of them: `pypst.open(path)` returns a `Store` whose name,
-record key, entry ids and named-property map can be read, and its folder
-tree walked: `store.root_folder.walk()` yields every `Folder` in the store,
-with the NIDs of the messages in each. Messages themselves (P09) are not
-built yet, so a folder's contents are ids and not objects — see
+record key, entry ids and named-property map can be read, its folder tree
+walked (`store.root_folder.walk()` yields every `Folder`), and every
+`Message` in a folder opened — its subject, sender, times and bodies, its
+`Recipient`s, and its `Attachment`s, embedded messages included. What is
+still missing is the `.eml` assembler (P10) — see
 docs/INTERFACES.md § "pypst — the top level" for the rest of the promise,
 docs/PORTING-PLAN.md for the order of work and MasterToDo.md for what is
 actually next.
@@ -40,24 +41,31 @@ from pypst.errors import (
     PstUnsupportedError,
 )
 from pypst.limits import DEFAULT_LIMITS, Limits
+from pypst.messaging.attachment import Attachment, AttachMethod
 from pypst.messaging.folder import Folder
+from pypst.messaging.message import Message, Recipient, RecipientType
 from pypst.messaging.store import EntryId, Store
 from pypst.messaging.store import open_store as open
 from pypst.ndb.header import Header, read_header
 
 __version__ = "0.0.1"
 
-__all__ = [
+__all__ = [  # noqa: RUF022 — plain `sorted()`, as the docstring says and test_contract pins
+    "AttachMethod",
+    "Attachment",
     "DEFAULT_LIMITS",
     "EntryId",
     "Folder",
     "Header",
     "Limits",
+    "Message",
     "PstError",
     "PstFormatError",
     "PstLimitError",
     "PstNotFoundError",
     "PstUnsupportedError",
+    "Recipient",
+    "RecipientType",
     "Store",
     "__version__",
     "open",

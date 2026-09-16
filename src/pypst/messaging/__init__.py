@@ -11,12 +11,33 @@ see any Outlook-specific property.
 `folder` (P08) is the tree over it: `Store.root_folder` opens
 `NID_ROOT_FOLDER` (0x122) and `Folder.walk()` yields every folder in the
 store, pre-order and cycle-guarded, each with its display name, its counts
-and the NIDs its three tables name. `message`/`attachment` (P09) are not
-built yet, so a folder hands back message ids rather than messages.
+and the NIDs its three tables name.
+
+`message` and `attachment` (P09) are the leaves: `Folder.messages()` and
+`Store.open_message()` give a `Message` — its property context and the thin
+accessors over it (class, subject, sender, times, the three body forms,
+the transport headers), its `recipients()` from the recipient table in its
+sub-node tree, and its `attachments()`, each its own sub-node with its own
+property context. An attachment's `data()` is its bytes and its
+`embedded_message()` is the whole message it carries, which upstream at the
+pinned revision cannot open at all (`attachment.py`'s docstring).
 """
 
+from pypst.messaging.attachment import Attachment, AttachMethod
 from pypst.messaging.folder import Folder
+from pypst.messaging.message import Message, Recipient, RecipientType
 from pypst.messaging.named_prop import NamedPropertyMap
 from pypst.messaging.store import EntryId, Store, open_store
 
-__all__ = ["EntryId", "Folder", "NamedPropertyMap", "Store", "open_store"]
+__all__ = [
+    "AttachMethod",
+    "Attachment",
+    "EntryId",
+    "Folder",
+    "Message",
+    "NamedPropertyMap",
+    "Recipient",
+    "RecipientType",
+    "Store",
+    "open_store",
+]
