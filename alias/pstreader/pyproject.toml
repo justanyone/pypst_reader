@@ -12,7 +12,7 @@
 
 [project]
 name = "pstreader"
-version = "0.1.0"
+version = "1.0.0"
 description = "Alias for pypstreader — a pure-Python, dependency-free reader for Outlook PST stores"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -20,7 +20,7 @@ license = { file = "LICENSE" }
 authors = [{ name = "Kevin J. Rice" }]
 keywords = ["pst", "outlook", "mbox", "eml", "mapi", "email", "forensics", "ediscovery"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: Legal Industry",
@@ -34,7 +34,7 @@ classifiers = [
     "Topic :: Security",
     "Topic :: Utilities",
 ]
-dependencies = ["pypstreader==0.1.0"]
+dependencies = ["pypstreader==1.0.0"]
 
 [project.scripts]
 pstreader = "pypstreader.pypstreader:main"

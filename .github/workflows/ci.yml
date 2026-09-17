@@ -1,5 +1,8 @@
-# pypstreader CI — every push. Fast on purpose: the unit suite must stay under a
-# minute so it is run, not skipped.
+# pypstreader CI — every push. The unit suite is split into two steps so a
+# failure surfaces fast: the non-slow lane is ~1 minute and runs first, the
+# slow lane (the contract sweep's 12k mutations and the debug-CLI subprocess
+# lane) is ~15 minutes and runs after it. Both must pass; ordering them this
+# way just means a broken build says so in the first minute.
 #
 # The differential (oracle) suite is NOT here. It needs a Rust build of
 # ~270 MB and a couple of minutes, and it is nightly work: nightly-oracle.yml
@@ -50,8 +53,17 @@ jobs:
         run: uv sync
       # `-m "not oracle"`: the Rust oracle is not built here. `private` tests
       # skip on their own — a CI runner has no mail stores, and must not.
-      - name: Unit suite
-        run: uv run pytest -q -m "not oracle"
+      #
+      # The interpreter here is whatever the runner resolves for the matrix
+      # version, and that is deliberate: the package claims to support 3.12,
+      # so it must pass on the OLDEST 3.12 the runner offers, not only on a
+      # developer's newer patch release. A test that depends on a CPython
+      # patch-level behaviour is a bug in the test — see `header_value()` in
+      # tests/test_eml.py for the one that taught us this.
+      - name: Unit suite — fast lane
+        run: uv run pytest -q -m "not oracle and not slow"
+      - name: Unit suite — slow lane
+        run: uv run pytest -q -m "slow and not oracle"
 
   # A mail store must never reach this repository. .gitignore and the
   # pre-commit hook both guard it locally; this is the guard that cannot be

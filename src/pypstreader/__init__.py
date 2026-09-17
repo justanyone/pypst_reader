@@ -54,7 +54,7 @@ from pypstreader.messaging.store import EntryId, Store
 from pypstreader.messaging.store import open_store as open
 from pypstreader.ndb.header import Header, read_header
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 
 __all__ = [  # noqa: RUF022 — plain `sorted()`, as the docstring says and test_contract pins
     "AttachMethod",

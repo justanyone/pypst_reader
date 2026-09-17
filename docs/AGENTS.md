@@ -21,13 +21,18 @@ could be a lint already is one.
   Rebase, never merge; `main` is linear.
 - Done means the `todo/` block's `status:` says `✅ <date>` **with evidence**
   (which fixtures, which oracle command, how many tests), and the
-  `MasterToDo.md` row moves to the Done table in the same commit.
+  `MasterToDo.md` row moves **out of that file and into
+  [`DoneFeatures.md`](../DoneFeatures.md)** in the same commit. `MasterToDo.md`
+  holds only open rows; `DoneFeatures.md` is the build record and is
+  append-only — a landed row is never edited there except to correct its
+  evidence.
 
 ## Files that are shared, and who may touch them
 
 | file | rule |
 |---|---|
 | `MasterToDo.md` | edit **only your row's line**; never reorder or renumber; new rows go at the end with the next free id. **When an orchestrator is landing rows** (it says so in your brief), do not touch this file at all — put the evidence in your `todo/` block and the orchestrator moves the row when it lands your branch |
+| `DoneFeatures.md` | append **only your own row**, moved verbatim from `MasterToDo.md` with its evidence, at the end of the table. Never rewrite or re-order somebody else's landed row |
 | `todo/T*.md` | edit only your block; add a new block at the end of the cluster file |
 | `docs/INTERFACES.md` | the contract between layers. Changing a signature another row depends on is a message to that row's agent *before* the change, and a note in the file's changelog |
 | `src/pypstreader/errors.py`, `limits.py` | additive only — add an exception or a constant; never rename one |
@@ -46,11 +51,14 @@ its own `.venv`. Never `cd` into another row's worktree or into the main tree.
 
 ## What runs in parallel
 
-The dependency graph is in `MasterToDo.md`'s lane table. The short version:
-the NDB chain (P01 → P02 → P03) is serial; the **leaf rows** (P21 RTF, P22
-property-type decoders, P23 id types, P11 limits, P12 corruption generator,
-P17–P20 test infrastructure, P28 spec vectors) touch no NDB code and can all
-run beside it. Two agents never hold the same module.
+The port's lane table is retired: every row it sequenced has landed (see
+[`DoneFeatures.md`](../DoneFeatures.md)), and the rows still open in
+`MasterToDo.md` are independent of each other. It is recorded here because the
+rule it encoded still holds for any future row: the NDB chain
+(P01 → P02 → P03) was serial, the **leaf rows** (P21 RTF, P22 property-type
+decoders, P23 id types, P11 limits, P12 corruption generator, P17–P20 test
+infrastructure, P28 spec vectors) touched no NDB code and ran beside it, and
+**two agents never hold the same module.**
 
 **The box is shared.** Memory, not the dependency graph, is the usual limit:
 on 2026-09-16 the kernel OOM killer took a VS Code window while this repo and

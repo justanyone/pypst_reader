@@ -6,7 +6,8 @@ No write support: this reads mail stores, it never produces one.
 
 ## Resume protocol
 
-1. `MasterToDo.md` — the one ranked list of unfinished work, and the lane table
+1. `MasterToDo.md` — the one ranked list of unfinished work
+   (`DoneFeatures.md` is what has already landed, and why it counts as done)
 2. `docs/AGENTS.md` — the multi-agent protocol: **claim the row before starting**
 3. `git log --oneline -15`
 4. `docs/INTERFACES.md` — the layer contracts you code against
@@ -24,7 +25,20 @@ Rust oracle's dump byte for byte on every corpus store. P10 landed the export
 (`to_eml`, `export_folder`, `export_mbox`) and P16 the command on top of it —
 `pypstreader store.pst` writes `store.mbox` — plus the rename from `pypst`
 (taken on PyPI) and the `pstreader` alias distribution in `alias/pstreader/`.
-What is left is the backlog in `MasterToDo.md`.
+
+**1.0.0 is released and production-marked.** The public API is stable and
+follows semantic versioning: a breaking change to the names in
+`docs/INTERFACES.md` means 2.0, not a minor bump. The build record — every row
+that landed, with the verification that closed it — is `DoneFeatures.md`;
+`MasterToDo.md` carries only what is still open, which is developer tooling
+and future scope, none of it blocking a user.
+
+One standing trap, learned the hard way in CI: **do not compare a parsed email
+header value against a constructed one without normalising it.** CPython
+changed whether `email` keeps the whitespace after a header's colon between
+3.12.3 and 3.12.13, so an exact comparison passes on a developer box and fails
+on the runner. The bytes written are identical either way; use
+`tests/test_eml.py`'s `header_value()`.
 
 Two decisions are already made and are not re-litigated in a row:
 **Unicode stores only** (ADR-0003; ANSI is refused and belongs to a sibling
@@ -108,6 +122,7 @@ reason. An unexplained divergence looks like a porting bug to the next reader.
 | `scripts/` | setup, oracle, and the standing lints |
 | `docs/adr/` | binding decisions and the research behind them |
 | `docs/TEST-PLAN.md`, `docs/AGENTS.md`, `docs/INTERFACES.md` | the test tiers, the multi-agent protocol, the layer contracts |
+| `MasterToDo.md`, `DoneFeatures.md` | what is open · what has landed, with its proof |
 | `docs/UPSTREAM.txt` | the upstream revision this port is verified against |
 
 ## Skills in this repo

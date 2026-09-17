@@ -4,11 +4,13 @@ A port of the **read path** of [microsoft/outlook-pst-rs](https://github.com/mic
 (MIT) into Python, with no dependencies outside the standard library — and a
 command that turns a PST into mail your tools already read.
 
-> **Status:** the read path is fully ported and verified against the Rust
-> oracle: `pypstreader.open()` opens a Unicode PST and walks folders, messages,
-> recipients and attachments — and exports them as `.eml` files or as
-> **mbox**, which is what the reader is for. Unicode (Outlook 2003 and later)
-> stores only; an ANSI store is refused, never guessed at.
+> **Status: 1.0.0 — production.** The read path is complete and verified
+> against the Rust oracle byte for byte on every fixture: `pypstreader.open()`
+> opens a Unicode PST and walks folders, messages, recipients and attachments —
+> and exports them as `.eml` files or as **mbox**, which is what the reader is
+> for. The public API above is stable; it follows semantic versioning from here,
+> and a breaking change means 2.0. Unicode (Outlook 2003 and later) stores only;
+> an ANSI store is refused, never guessed at.
 
 ## Install
 

@@ -1,6 +1,6 @@
 [project]
 name = "pypstreader"
-version = "0.1.0"
+version = "1.0.0"
 description = "A pure-Python, dependency-free reader for Outlook PST stores: walk folders and messages, export mbox and .eml"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -8,7 +8,7 @@ license = { file = "LICENSE" }  # MIT, in full, as the file says
 authors = [{ name = "Kevin J. Rice" }]
 keywords = ["pst", "outlook", "mbox", "eml", "mapi", "email", "forensics", "ediscovery"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: Legal Industry",

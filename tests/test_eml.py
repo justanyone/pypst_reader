@@ -130,8 +130,20 @@ def folders_with_messages(store: Store) -> list[Any]:
     return out
 
 
+def header_value(value: Any) -> str:
+    """A parsed header value, normalised so the comparison survives a CPython patch bump.
+
+    CPython changed whether the `email` parser keeps the whitespace that follows
+    a header's colon: 3.12.3 keeps it (`' <a@b>'`, or a `\t` when the value was
+    folded onto the next line), 3.12.13 strips it. The bytes this module writes
+    are byte-identical either way — only the accessor differs — so every
+    comparison of a PARSED value normalises rather than pinning an interpreter.
+    """
+    return str(value).strip()
+
+
 def headers_of(message: Any) -> list[tuple[str, str]]:
-    return [(name, str(value)) for name, value in message.items()]
+    return [(name, header_value(value)) for name, value in message.items()]
 
 
 def parts_of(message: Any) -> list[str]:
@@ -268,18 +280,18 @@ def test_transport_headers_are_passed_through_and_the_rest_is_marked(store_path:
             where = f"{store_path.stem} {message.node}"
             if raw:
                 source = email.parser.Parser(policy=POLICY).parsestr(raw, headersonly=True)
-                assert str(built["Message-ID"]) == str(source["Message-ID"]), where
+                assert header_value(built["Message-ID"]) == header_value(source["Message-ID"]), where
                 assert "Message-ID" not in synthesized(built), where
                 for name, value in source.items():
-                    got = [str(v) for v in built.get_all(name, [])]
-                    if name.lower() == "mime-version" or not str(value).strip():
+                    got = [header_value(v) for v in built.get_all(name, [])]
+                    if name.lower() == "mime-version" or not header_value(value):
                         continue  # "1.0" either way; an empty header carries nothing to pass through
                     if name.lower().startswith("content-"):
                         # The body here is re-assembled, so these describe a
                         # structure that is not the one being written.
-                        assert str(value) not in got, f"{where}: {name} describes the ORIGINAL body"
+                        assert header_value(value) not in got, f"{where}: {name} describes the ORIGINAL body"
                     else:
-                        assert str(value) in got, f"{where}: {name}"
+                        assert header_value(value) in got, f"{where}: {name}"
                 assert len(built.get_all("Content-Type", [])) == 1, where
                 assert len(built.get_all("MIME-Version", [])) == 1, where
                 if built.is_multipart():

@@ -1359,6 +1359,18 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
 
 ## Changelog
 
+- 2026-09-16 — **1.0.0, the first production release.** No API change: the
+  surface below is exactly what 0.1.0 shipped, promoted to stable because the
+  read path is complete and the whole corpus agrees with the oracle byte for
+  byte. From here the package follows semantic versioning — a breaking change
+  to the names above means 2.0. `Development Status` moved to
+  `5 - Production/Stable` in both distributions, and `pstreader` pins
+  `pypstreader==1.0.0`. Also in this release: the `.eml` header comparisons in
+  `tests/test_eml.py` no longer depend on a CPython patch level (CPython
+  changed whether the `email` parser keeps the whitespace after a header's
+  colon between 3.12.3 and 3.12.13; the bytes written are identical either way,
+  so the tests normalise the parsed value).
+
 - 2026-09-16 — P16 renamed the package to `pypstreader` throughout (import
   package, distribution, docs, lints, workflows, the `X-Pypst-*` headers and
   the `pypst.invalid` Message-ID domain), added `pypstreader.pypstreader` —
@@ -1366,7 +1378,7 @@ or a reason there before the suite is green again (docs/TEST-PLAN.md § T5).
   distribution under `alias/pstreader/`. `pypstreader.mbox._record` became
   public as `mbox_record`, with a `headers` argument, so the command can
   stamp `X-Pypstreader-Folder` onto a record without a second assembler.
-  `__version__` is `0.1.0`; the PyPI 0.0.1 releases of both names are
+  `__version__` was `0.1.0` here; the PyPI 0.0.1 releases of both names are
   placeholders. One literal was deliberately NOT renamed:
   `scripts/make_fixture.py`'s `"pypst synthetic fixture: {name}"` seed is
   hashed into `synth-basics.pst` and every golden captured over it.

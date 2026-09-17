@@ -62,7 +62,7 @@ from tests.test_eml import (
     _path,
 )
 
-VERSION = "0.1.0"
+VERSION = "1.0.0"
 ALIAS = REPO / "alias" / "pstreader"
 TIMEOUT = 300
 
@@ -157,6 +157,19 @@ def test_the_alias_pins_this_exact_version() -> None:
     assert meta["version"] == VERSION
     assert meta["dependencies"] == [f"pypstreader=={VERSION}"]
     assert meta["scripts"] == {"pstreader": "pypstreader.pypstreader:main"}
+
+
+def test_both_distributions_declare_production_status() -> None:
+    """1.0.0 says production in the metadata, or it does not say it at all.
+
+    `Development Status` is the one classifier a packaging index shows as a
+    promise about stability. It is asserted here because the README and the
+    changelog make the same claim in prose, and prose is not checkable.
+    """
+    for path in (REPO / "pyproject.toml", ALIAS / "pyproject.toml"):
+        classifiers = tomllib.loads(path.read_bytes().decode())["project"]["classifiers"]
+        status = [c for c in classifiers if c.startswith("Development Status ::")]
+        assert status == ["Development Status :: 5 - Production/Stable"], path
 
 
 def test_the_alias_re_exports_the_package(monkeypatch: pytest.MonkeyPatch) -> None:
